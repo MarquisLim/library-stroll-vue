@@ -12,19 +12,21 @@ class GalleryController extends Controller
 {
     public function index()
     {
-        $artworks = Artwork::where('is_published',true)->with('media','user')->take(30)->get();
-        $collections = Collection::where('user_id', Auth::id())->get(); // Если пользователь залогинен
-        return Inertia::render('Gallery/GalleryIndex',[
+        $artworks = Artwork::where('is_published',true)->with('media','user')->take(20)->get();
+        $collections = [];
+        if(Auth::check()){
+            $collections = Collection::where('user_id',Auth::id())->get();
+        }
+        return inertia('Gallery/GalleryIndex',[
             'artworks'=>$artworks,
             'collections'=>$collections
         ]);
     }
 
-
     public function loadMore(Request $request)
     {
         $page = $request->page ?? 2;
-        $perPage=30;
+        $perPage=20;
         $artworks = Artwork::where('is_published',true)->with('media','user')
             ->skip(($page-1)*$perPage)
             ->take($perPage)

@@ -1,10 +1,10 @@
 <template>
     <div class="modal modal-open">
-        <div class="modal-box bg-white text-black">
+        <div class="modal-box bg-gray-800 text-white">
             <h3 class="font-bold text-lg">Создать коллекцию</h3>
-            <input v-model="name" type="text" placeholder="Name" class="w-full mt-2 px-2 py-1 rounded border"/>
+            <input v-model="name" type="text" placeholder="Name" class="w-full mt-2 px-2 py-1 rounded border border-gray-600 bg-gray-700"/>
             <label class="flex items-center space-x-2 mt-2">
-                <input type="checkbox" v-model="isPrivate"/>
+                <input type="checkbox" v-model="isPrivate" class="checkbox checkbox-primary" />
                 <span>Приватная</span>
             </label>
             <div class="modal-action">
@@ -16,17 +16,19 @@
 </template>
 
 <script setup>
+import { ref } from 'vue'
 import axios from 'axios'
-const name = ref('')
-const isPrivate = ref(false)
+const emit = defineEmits(['close','created'])
+const name=ref('')
+const isPrivate=ref(false)
 
 function createCollection(){
     axios.post('/studio/create-collection',{
         name:name.value,
         is_private:isPrivate.value
-    }).then(res=>{
-        emit('created',res.data.collection)
+    }).then(res=> {
+        emit('created', res.data.collection)
         emit('close')
-    }).catch(err=>console.log(err))
+    }).catch(err => console.log(err))
 }
 </script>

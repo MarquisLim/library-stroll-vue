@@ -1,29 +1,44 @@
 <template>
-    <div class="absolute bg-white text-black p-4 rounded shadow z-50 top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-64">
-        <input type="text" placeholder="Поиск коллекций..." class="w-full px-2 py-1 rounded border mb-2" @input="filterCollections"/>
-        <div class="max-h-40 overflow-auto mb-2">
-            <div v-for="col in filteredCollections" :key="col.id" class="px-2 py-1 hover:bg-gray-200 cursor-pointer" @click="select(col)">
-                {{col.name}}
+    <div class="absolute z-50 p-4 rounded shadow"
+         :class="'bg-gray-800 text-white w-64'"
+         :style="{position:'absolute', top:position.top+'px', left:position.left+'px'}">
+        <input type="text" placeholder="Поиск коллекций..." class="w-full px-2 py-1 rounded border border-gray-600 bg-gray-700 mb-2" @input="filterCollections"/>
+        <div class="max-h-40 overflow-auto mb-2 bg-gray-700 rounded p-1">
+            <div v-for="col in filteredCollections" :key="col.id"
+                 class="flex items-center space-x-2 hover:bg-gray-600 px-2 py-1 cursor-pointer rounded">
+                <input type="checkbox" :value="col.id" v-model="selectedCols" :checked="selectedCols.includes(col.id)"/>
+                <span>{{col.name}}</span>
             </div>
         </div>
-        <button class="btn w-full mb-2" @click="$emit('createCollection')">Создать коллекцию</button>
-        <button class="btn" @click="$emit('close')">Отмена</button>
+        <button class="btn btn-primary w-full mb-2" @click="save">Сохранить</button>
+        <button class="btn w-full" @click="$emit('createCollection')">Создать коллекцию</button>
+        <button class="btn w-full mt-2 bg-gray-700 hover:bg-gray-600" @click="$emit('close')">Отмена</button>
     </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
-const props = defineProps({ collections:Array })
+import { ref, computed, defineEmits, defineProps } from 'vue'
+
+const props = defineProps({
+    collections: Array,
+    position: Object,
+    selectedCollections: Array
+})
+const emit = defineEmits(['close', 'selected', 'createCollection'])
+
 const filter = ref('')
-const filteredCollections = computed(()=>{
-    return props.collections.filter(c=>c.name.toLowerCase().includes(filter.value.toLowerCase()))
+// Если у нас есть уже выбранные коллекции (in_collections), инициализируем selectedCols ими
+const selectedCols = ref(props.selectedCollections ? [...props.selectedCollections] : [])
+
+const filteredCollections = computed(() => {
+    return props.collections.filter(c => c.name.toLowerCase().includes(filter.value.toLowerCase()))
 })
 
-function filterCollections(e){
-    filter.value=e.target.value
+function filterCollections(e) {
+    filter.value = e.target.value
 }
 
-function select(col){
-    emit('selected',col.id)
+function save() {
+    emit('selected', selectedCols.value)
 }
 </script>
