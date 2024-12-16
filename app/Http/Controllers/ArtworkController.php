@@ -34,26 +34,29 @@ class ArtworkController extends Controller
 
     public function like(Request $request, $id)
     {
-        if(!Auth::check()){
-            return response()->json(['error'=>'Not authorized'],403);
+        $user = Auth::user();
+        $artwork = Artwork::findOrFail($id);
+
+        // Проверяем, поставил ли пользователь уже лайк
+        $liked = $artwork->likes()->where('user_id', $user->id)->exists();
+
+        if($liked){
+            // Удаляем лайк
+            $artwork->likes()->where('user_id', $user->id)->delete();
+        } else {
+            // Добавляем лайк
+            $artwork->likes()->create(['user_id' => $user->id]);
         }
 
-        $artwork = Artwork::findOrFail($id);
-        $exists = $artwork->likes()->where('user_id',Auth::id())->exists();
-        if($exists){
-            $artwork->likes()->where('user_id',Auth::id())->delete();
-            // Отправить уведомление автору, что dislike?
-        } else {
-            $artwork->likes()->create(['user_id'=>Auth::id()]);
-            // Отправить уведомление автору о лайке
-            $author=$artwork->user;
-            if($author->id!==Auth::id()){
-                $author->notify(new ArtworkLikedNotification(Auth::user(),$artwork));
-            }
-        }
+        // Получаем обновлённое количество лайков
+        $likesCount = $artwork->likes()->count();
+
+        // Проверяем, поставил ли пользователь лайк после действия
+        $likedByUser = $artwork->likes()->where('user_id', $user->id)->exists();
+
         return response()->json([
-            'likes_count'=>$artwork->likes()->count(),
-            'liked'=>!$exists
+            'likes_count' => $likesCount,
+            'liked' => $likedByUser
         ]);
     }
 

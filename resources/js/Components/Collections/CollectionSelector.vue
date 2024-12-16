@@ -1,7 +1,7 @@
 <template>
     <div class="absolute z-50 p-4 rounded shadow"
          :class="'bg-gray-800 text-white w-64'"
-         :style="{position:'absolute', top:position.top+'px', left:position.left+'px'}">
+         :style="{ position: 'absolute', top: position.top - 100 + 'px', left: position.left + 'px' }">
         <input type="text" placeholder="Поиск коллекций..." class="w-full px-2 py-1 rounded border border-gray-600 bg-gray-700 mb-2" @input="filterCollections"/>
         <div class="max-h-40 overflow-auto mb-2 bg-gray-700 rounded p-1">
             <div v-for="col in filteredCollections" :key="col.id"
@@ -17,7 +17,7 @@
 </template>
 
 <script setup>
-import { ref, computed, defineEmits, defineProps } from 'vue'
+import { ref, computed, defineEmits, defineProps, watch } from 'vue'
 
 const props = defineProps({
     collections: Array,
@@ -27,8 +27,12 @@ const props = defineProps({
 const emit = defineEmits(['close', 'selected', 'createCollection'])
 
 const filter = ref('')
-// Если у нас есть уже выбранные коллекции (in_collections), инициализируем selectedCols ими
+// Инициализируем selectedCols с текущими коллекциями
 const selectedCols = ref(props.selectedCollections ? [...props.selectedCollections] : [])
+
+watch(() => props.selectedCollections, (newVal) => {
+    selectedCols.value = newVal ? [...newVal] : []
+})
 
 const filteredCollections = computed(() => {
     return props.collections.filter(c => c.name.toLowerCase().includes(filter.value.toLowerCase()))
@@ -42,3 +46,7 @@ function save() {
     emit('selected', selectedCols.value)
 }
 </script>
+
+<style scoped>
+/* Добавьте любые дополнительные стили при необходимости */
+</style>

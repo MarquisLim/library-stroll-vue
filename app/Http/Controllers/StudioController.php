@@ -21,7 +21,7 @@ class StudioController extends Controller
 
         $collections = Collection::where('user_id',Auth::id())->get();
 
-        return ['drafts'=>$drafts,'collections'=>$collections];
+        return ['drafts' => $drafts, 'collections' => $collections];
     }
 
     // Начальная загрузка страницы через Inertia
@@ -86,41 +86,35 @@ class StudioController extends Controller
 
     public function updateDraft(Request $request, $id)
     {
-        $artwork = Artwork::where('user_id', Auth::id())->findOrFail($id);
+        $draft=Artwork::where('user_id',Auth::id())->findOrFail($id);
+        $draft->title=$request->title;
+        $draft->description=$request->description;
+        $draft->is_adult=$request->is_adult ? true:false;
+        $draft->has_ai=$request->has_ai ? true:false;
+        $draft->is_private=$request->is_private ? true:false;
+        $draft->allow_download=$request->allow_download ? true:false;
+        $draft->allow_comments=$request->allow_comments ? true:false;
+        $draft->save();
 
-        $artwork->update([
-            'title'=>$request->title,
-            'description'=>$request->description,
-            'is_adult'=>$request->is_adult ? true : false,
-            'has_ai'=>$request->has_ai ? true : false,
-            'is_private'=>$request->is_private ? true : false,
-            'allow_download'=>$request->allow_download ? true : false,
-            'allow_comments'=>$request->allow_comments ? true : false,
-        ]);
-
-        $tags = $request->tags ?? [];
-        $tagIds = [];
-        foreach($tags as $t){
-            $tag = Tag::firstOrCreate(['name'=>$t]);
-            $tagIds[] = $tag->id;
+        // Теги
+        $tagsArr=array_map('trim',$request->tags??[]);
+        $tagIds=[];
+        foreach($tagsArr as $tName){
+            if($tName!==''){
+                $tag=Tag::firstOrCreate(['name'=>$tName]);
+                $tagIds[]=$tag->id;
+            }
         }
-        $artwork->tags()->sync($tagIds);
+        $draft->tags()->sync($tagIds);
 
-        $collectionIds = $request->collections ?? [];
-        $allCollection = Collection::firstOrCreate([
-            'user_id'=>Auth::id(),
-            'name'=>'Все'
-        ],['is_private'=>false]);
+        // Коллекции
+        $collections=$request->collections ?? [];
+        $all=Collection::firstOrCreate(['user_id'=>Auth::id(),'name'=>'Все'],['is_private'=>false]);
+        if(!in_array($all->id,$collections)) $collections[]=$all->id;
+        $draft->collections()->sync($collections);
 
-        if(!in_array($allCollection->id,$collectionIds)){
-            $collectionIds[]=$allCollection->id;
-        }
-        $artwork->collections()->sync($collectionIds);
-
-        return response()->json([
-            'message'=>'Черновик обновлен',
-            'artwork'=>$artwork->load('media','tags','collections')
-        ]);
+        $draft->load('media','tags','collections');
+        return response()->json(['message'=>'Draft updated','artwork'=>$draft]);
     }
 
     public function publish(Request $request, $id)

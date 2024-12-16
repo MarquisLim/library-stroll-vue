@@ -1,15 +1,15 @@
 <template>
     <div>
         <draggable
-            :list="localDrafts"
+            :list="drafts"
             item-key="id"
             @end="onEnd"
             class="space-y-2"
         >
             <template #item="{ element }">
                 <div
-                    class="relative p-2 bg-base-100 rounded shadow cursor-pointer"
-                    :class="selectedDraftId === element.id ? 'border-l-4 border-primary' : ''"
+                    class="relative p-2 bg-gray-800 rounded shadow cursor-pointer flex items-center"
+                    :class="selectedDraftId === element.id ? 'border-l-4 border-purple-500' : ''"
                     @click="selectDraft(element.id)"
                 >
                     <button
@@ -21,18 +21,18 @@
                     </button>
 
                     <img
-                        v-if="element.media && element.media.length>0"
-                        :src="element.media[0].original_url"
+                        v-if="element.media && element.media.length > 0"
+                        :src="element.media[0].original_url + '?v=' + element.media[0].updated_at"
                         class="h-10 w-10 object-cover inline-block mr-2 rounded-full"
                     />
                     <div
                         v-else
-                        class="h-10 w-10 inline-block mr-2 bg-gray-700 flex items-center justify-center text-white text-sm rounded-full"
+                        class="h-10 w-10 inline-block mr-2 bg-gray-600 flex items-center justify-center text-white text-sm rounded-full"
                     >
                         N/A
                     </div>
 
-                    <span>{{ element.title || 'Создать искусство' }}</span>
+                    <span class="text-white font-semibold">{{ element.title || 'Без названия' }}</span>
                 </div>
             </template>
         </draggable>
@@ -40,7 +40,6 @@
 </template>
 
 <script>
-import { ref, watch } from 'vue'
 import draggable from 'vuedraggable'
 
 export default {
@@ -56,14 +55,8 @@ export default {
         }
     },
     setup(props, { emit }) {
-        const localDrafts = ref([...props.drafts])
-
-        watch(() => props.drafts, (newVal) => {
-            localDrafts.value = [...newVal]
-        })
-
         function onEnd() {
-            const order = localDrafts.value.map(d => d.id)
+            const order = props.drafts.map(d => d.id)
             emit('reorder-drafts', order)
         }
 
@@ -75,7 +68,7 @@ export default {
             emit('confirmDeleteDraft', id)
         }
 
-        return { localDrafts, onEnd, selectDraft, confirmDeleteDraft }
+        return { onEnd, selectDraft, confirmDeleteDraft }
     }
 }
 </script>

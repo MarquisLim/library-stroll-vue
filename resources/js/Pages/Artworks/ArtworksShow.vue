@@ -2,7 +2,7 @@
     <AppLayout :title="artwork.title || 'Artwork'">
         <div class="max-w-7xl mx-auto p-4 bg-gray-900 text-white min-h-screen">
             <div class="flex items-center space-x-2 mb-4">
-                <button class="btn bg-black bg-opacity-50 hover:bg-opacity-80 rounded-full w-8 h-8 flex items-center justify-center" @click="goBack">
+                <button class="btn bg-black bg-opacity-50 hover:bg-opacity-80 rounded-full" @click="goBack">
                     <img src="/images/icons/back.svg" alt="back" class="w-4 h-4"/>
                 </button>
                 <h1 class="text-2xl font-bold">{{ artwork.title || 'Без названия' }}</h1>

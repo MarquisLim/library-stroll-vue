@@ -44,6 +44,7 @@ Route::middleware([
     Route::get('/artworks/{id}', [ArtworkController::class,'show'])->name('artworks.show');
     Route::post('/artworks/{id}/like',[ArtworkController::class,'like'])->name('artworks.like');
     Route::post('/artworks/{id}/add-to-collection',[ArtworkController::class,'addToCollection'])->name('artworks.addToCollection');
+    Route::get('/artworks/{id}/comments',[CommentController::class,'index'])->name('comments.index');
     Route::post('/artworks/{id}/comments',[CommentController::class,'store'])->name('comments.store');
     Route::post('/comments/{id}/reply',[CommentController::class,'reply'])->name('comments.reply');
 

@@ -34,9 +34,9 @@ class CommentController extends Controller
 
         // Уведомить автора о новом комментарии
         $author = $artwork->user;
-//        if($author->id!==Auth::id()){
-//            $author->notify(new CommentAddedNotification(Auth::user(), $artwork, $comment));
-//        }
+        if($author->id!==Auth::id()){
+            $author->notify(new CommentAddedNotification(Auth::user(), $artwork, $comment));
+        }
 
         return response()->json(['comment'=>$comment]);
     }

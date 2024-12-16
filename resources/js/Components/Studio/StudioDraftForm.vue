@@ -1,81 +1,104 @@
+<!-- StudioDraftForm.vue -->
 <template>
-    <div class="relative">
-        <button v-if="selectedDraftId && previewUrl" class="btn btn-success absolute top-4 right-4" @click="$emit('publish')">Опубликовать</button>
-
-        <!-- Зона для drag and drop -->
-        <div class="border-2 border-dashed border-gray-500 p-4 rounded text-center cursor-pointer"
+    <div class="flex flex-col md:flex-row gap-4 relative">
+        <!-- Левая колонка: drag and drop + превью -->
+        <div class="md:w-1/2 border-2 border-dashed border-gray-500 p-4 rounded text-center cursor-pointer relative"
              @drop.prevent="onDrop"
-             @dragover.prevent
-        >
+             @dragover.prevent>
             <p v-if="!previewUrl">Перетащите файл сюда или нажмите для выбора.</p>
             <input type="file" class="hidden" ref="fileInput" @change="onFileChange"/>
             <button class="btn btn-primary mt-2" @click="browseFile">Выбрать файл</button>
 
             <div v-if="previewUrl" class="mt-2 text-center">
-                <img v-if="fileType==='image'" :src="previewUrl" class="max-h-40 mx-auto" loading="lazy" />
-                <video v-else-if="fileType==='video'" :src="previewUrl" class="max-h-40 mx-auto" controls></video>
-                <img v-else :src="previewUrl" class="max-h-40 mx-auto" loading="lazy" />
+                <template v-if="fileType==='image'">
+                    <img :src="previewUrl" class="max-h-40 mx-auto" loading="lazy" alt="Preview Image"/>
+                </template>
+                <template v-else-if="fileType==='video'">
+                    <video :src="previewUrl" class="max-h-40 mx-auto" controls></video>
+                </template>
+                <template v-else>
+                    <img :src="previewUrl" class="max-h-40 mx-auto" loading="lazy" alt="Preview Other"/>
+                </template>
             </div>
+            <button v-if="selectedDraftId && previewUrl" class="btn btn-success absolute top-4 right-4" @click="$emit('publish')">Опубликовать</button>
         </div>
 
-        <div class="space-y-2 mt-4">
-            <label>Заголовок</label>
-            <input type="text" class="input input-bordered w-full" :disabled="isDisabled" :value="title" @input="e=>$emit('update:title',e.target.value)" />
-        </div>
+        <!-- Правая колонка: поля формы -->
+        <div class="md:w-1/2 flex flex-col space-y-4">
 
-        <div class="space-y-2">
-            <label>Описание</label>
-            <textarea class="textarea textarea-bordered w-full" :disabled="isDisabled" :value="description" @input="e=>$emit('update:description',e.target.value)"></textarea>
-        </div>
-
-        <div class="space-y-2">
-            <label class="flex items-center space-x-2">
-                <input type="checkbox" class="checkbox checkbox-primary" :disabled="isDisabled" :checked="is_adult" @change="e=>$emit('update:is_adult',e.target.checked)">
-                <span>Контент для взрослых</span>
-            </label>
-            <label class="flex items-center space-x-2">
-                <input type="checkbox" class="checkbox checkbox-primary" :disabled="isDisabled" :checked="has_ai" @change="e=>$emit('update:has_ai',e.target.checked)">
-                <span>Контент создан AI</span>
-            </label>
-            <label class="flex items-center space-x-2">
-                <input type="checkbox" class="checkbox checkbox-primary" :disabled="isDisabled" :checked="is_private" @change="e=>$emit('update:is_private',e.target.checked)">
-                <span>Приватный</span>
-            </label>
-            <label class="flex items-center space-x-2">
-                <input type="checkbox" class="checkbox checkbox-primary" :disabled="isDisabled" :checked="allow_download" @change="e=>$emit('update:allow_download',e.target.checked)">
-                <span>Разрешить скачивание</span>
-            </label>
-            <label class="flex items-center space-x-2">
-                <input type="checkbox" class="checkbox checkbox-primary" :disabled="isDisabled" :checked="allow_comments" @change="e=>$emit('update:allow_comments',e.target.checked)">
-                <span>Разрешить комментарии</span>
-            </label>
-        </div>
-
-        <div class="space-y-2">
-            <label>Теги</label>
-            <div :class="isDisabled?'opacity-50 pointer-events-none':''">
-                <tag-input :initialTags="tags" @tagsUpdated="t=> $emit('tagsUpdated',t)" />
+            <div class="space-y-2">
+                <label>Заголовок</label>
+                <input type="text" class="input input-bordered w-full bg-gray-700 text-white"
+                       :disabled="isDisabled" :value="title"
+                       @input="e=>$emit('update:title',e.target.value)" />
             </div>
-        </div>
 
-        <div class="space-y-2">
-            <label>Коллекции</label>
-            <div class="flex items-center space-x-2" :class="isDisabled?'opacity-50 pointer-events-none':''">
-                <select multiple class="select select-bordered w-full" :disabled="isDisabled" :value="selectedCollections" @change="updateCollections($event)">
-                    <option v-for="col in collections" :key="col.id" :value="col.id">{{ col.name }}</option>
-                </select>
-                <button class="btn btn-secondary" @click="$emit('update:showCollectionModal',true)" :disabled="isDisabled">+</button>
+            <div class="space-y-2">
+                <label>Описание</label>
+                <textarea class="textarea textarea-bordered w-full bg-gray-700 text-white"
+                          :disabled="isDisabled"
+                          :value="description"
+                          @input="e=>$emit('update:description',e.target.value)"></textarea>
             </div>
-        </div>
 
-        <collection-modal v-if="showCollectionModal" @close="$emit('update:showCollectionModal',false)" @created="c=>$emit('collectionCreated',c)" />
+            <div class="space-y-2">
+                <label class="flex items-center space-x-2">
+                    <input type="checkbox" class="checkbox checkbox-primary" :disabled="isDisabled" :checked="is_adult" @change="e=>$emit('update:is_adult',e.target.checked)">
+                    <span>Контент для взрослых</span>
+                </label>
+                <label class="flex items-center space-x-2">
+                    <input type="checkbox" class="checkbox checkbox-primary" :disabled="isDisabled" :checked="has_ai" @change="e=>$emit('update:has_ai',e.target.checked)">
+                    <span>Контент создан AI</span>
+                </label>
+                <label class="flex items-center space-x-2">
+                    <input type="checkbox" class="checkbox checkbox-primary" :disabled="isDisabled" :checked="is_private" @change="e=>$emit('update:is_private',e.target.checked)">
+                    <span>Приватный</span>
+                </label>
+                <label class="flex items-center space-x-2">
+                    <input type="checkbox" class="checkbox checkbox-primary" :disabled="isDisabled" :checked="allow_download" @change="e=>$emit('update:allow_download',e.target.checked)">
+                    <span>Разрешить скачивание</span>
+                </label>
+                <label class="flex items-center space-x-2">
+                    <input type="checkbox" class="checkbox checkbox-primary" :disabled="isDisabled" :checked="allow_comments" @change="e=>$emit('update:allow_comments',e.target.checked)">
+                    <span>Разрешить комментарии</span>
+                </label>
+            </div>
+
+            <div class="space-y-2">
+                <label>Теги</label>
+                <tag-input
+                    :initial-tags="tags"
+                    :suggestions="tagSuggestions"
+                    @tagsUpdated="t=> $emit('tagsUpdated',t)"
+                    @search="q=>$emit('searchTags',q)"
+                    @addTag="tagName=>$emit('addTag',tagName)"
+                />
+            </div>
+
+            <div class="space-y-2 relative">
+                <button class="btn btn-secondary" @click="$emit('update:showCollectionModal', true)" :disabled="isDisabled">
+                    Выбрать коллекции
+                </button>
+
+                <collection-modal
+                    v-if="showCollectionModal"
+                    :collections="collections"
+                    :selected-collections="selectedCollections"
+                    :position="{top:100,left:100}"
+                    @close="$emit('update:showCollectionModal',false)"
+                    @selected="vals=>$emit('update:selectedCollections',vals)"
+                    @createCollection="$emit('createCollection')"
+                />
+            </div>
+
+        </div>
     </div>
 </template>
 
 <script>
-import TagInput from '@/Components/Tags/TagInput.vue'
-import CollectionModal from '@/Components/Modals/CollectionModal.vue'
 import { ref } from 'vue'
+import TagInput from '@/Components/Tags/TagInput.vue'
+import CollectionModal from '@/Components/Collections/CollectionSelector.vue' // Убедитесь, что путь верный
 
 export default {
     components: { TagInput, CollectionModal },
@@ -94,7 +117,9 @@ export default {
         selectedCollections: Array,
         collections: Array,
         showCollectionModal: Boolean,
-        confirmingDraftDeletion: Boolean
+        confirmingDraftDeletion: Boolean,
+        tagSuggestions: Array,
+        collectionSuggestions: Array
     },
     computed: {
         isDisabled() {
@@ -108,7 +133,7 @@ export default {
     methods: {
         onFileChange(e) {
             const file = e.target.files[0]
-            if (file) {
+            if(file) {
                 this.$emit('uploadFile', file)
             }
         },
@@ -117,14 +142,14 @@ export default {
         },
         onDrop(e) {
             const file = e.dataTransfer.files[0]
-            if (file) {
+            if(file) {
                 this.$emit('uploadFile', file)
             }
-        },
-        updateCollections(e) {
-            const options = [...e.target.options].filter(o => o.selected).map(o => parseInt(o.value))
-            this.$emit('update:selectedCollections', options)
         }
     }
 }
 </script>
+
+<style scoped>
+/* Добавьте любые дополнительные стили при необходимости */
+</style>

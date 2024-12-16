@@ -21,7 +21,8 @@
                     />
                 </div>
 
-                <div class="w-2/3 relative grey bg-gray-900 p-4 rounded shadow">
+                <div class="w-2/3 relative bg-gray-800 p-4 rounded shadow">
+                    <!-- StudioDraftForm -->
                     <StudioDraftForm
                         :selectedDraftId="selectedDraftId"
                         :previewUrl="previewUrl"
@@ -60,8 +61,7 @@
                         @addCollection="addCollectionToSelected"
                     />
 
-                    <div class="text-gray-500 text-sm mt-2">
-                        <!-- Сохранение / Сохранено -->
+                    <div class="text-gray-400 text-sm mt-2">
                         <span v-if="successMessage && successMessage.includes('Сохранено')">{{ successMessage }}</span>
                         <span v-else-if="successMessage && successMessage.includes('Сохранение')">{{ successMessage }}</span>
                     </div>
@@ -71,9 +71,9 @@
 
         <!-- Модальное окно для создания искусства -->
         <div v-if="showCreateModal" class="modal modal-open">
-            <div class="modal-box bg-white text-black">
+            <div class="modal-box bg-gray-800 text-white">
                 <h3 class="font-bold text-lg">Создать искусство</h3>
-                <p class="my-2 text-gray-700">Загрузите файл для создания нового черновика:</p>
+                <p class="my-2 text-gray-300">Загрузите файл для создания нового черновика:</p>
                 <div class="border-2 border-dashed border-gray-500 p-4 rounded text-center"
                      @drop.prevent="onDropFileCreate"
                      @dragover.prevent
@@ -91,9 +91,9 @@
         </div>
 
         <div v-if="confirmingDraftDeletion" class="modal modal-open">
-            <div class="modal-box bg-white text-black">
+            <div class="modal-box bg-gray-800 text-white">
                 <h3 class="font-bold text-lg">Удалить черновик?</h3>
-                <p class="text-gray-700">Вы уверены что хотите удалить этот черновик?</p>
+                <p class="text-gray-300">Вы уверены что хотите удалить этот черновик?</p>
                 <div class="modal-action">
                     <button class="btn" @click="cancelDelete">Отмена</button>
                     <button class="btn btn-error" @click="destroyDraft">Удалить</button>
@@ -110,9 +110,9 @@
         </div>
 
         <!-- Индикатор загрузки -->
-        <div v-if="isUploading" class="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white text-black p-4 shadow rounded z-50">
+        <div v-if="isUploading" class="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-gray-800 text-white p-4 shadow rounded z-50">
             <p class="mb-2">Загрузка файла: {{ uploadProgress }}%</p>
-            <div class="w-64 bg-gray-300 rounded h-4">
+            <div class="w-64 bg-gray-700 rounded h-4">
                 <div class="bg-blue-500 h-4 rounded" :style="{width: uploadProgress+'%'}"></div>
             </div>
         </div>
@@ -127,7 +127,7 @@ import StudioDraftList from '@/Components/Studio/StudioDraftList.vue'
 import StudioDraftForm from '@/Components/Studio/StudioDraftForm.vue'
 import AppLayout from "@/Layouts/AppLayout.vue";
 
-const page = usePage();
+const page=usePage();
 
 const drafts = ref([...page.props.drafts])
 const collections = ref([...page.props.collections])
@@ -153,9 +153,11 @@ const successMessage = ref(null)
 const showCreateModal = ref(false)
 const tempFile = ref(null)
 
-const createFileInput = ref(null)
-
 let autoSaveTimeout = null
+
+const tagSuggestions = ref([])
+const collectionSuggestions = ref([])
+
 function scheduleAutoSave() {
     if(autoSaveTimeout) clearTimeout(autoSaveTimeout)
     autoSaveTimeout = setTimeout(performAutoSave, 1000)
@@ -216,6 +218,7 @@ function onDropFileCreate(e){
     const file = e.dataTransfer.files[0]
     if(file) tempFile.value=file
 }
+const createFileInput = ref(null)
 function browseFileCreate(){
     createFileInput.value.click()
 }
@@ -319,20 +322,17 @@ function reorderDrafts(newOrder){
 function collectionCreated(col){
     collections.value.push(col)
     successMessage.value='Коллекция создана'
-    setTimeout(()=>{successMessage.value=null},3000)
+    setTimeout(()=>successMessage.value=null,3000)
 }
 
-// Поиск тегов
-const tagSuggestions = ref([])
 function searchTags(query){
     axios.get('/studio/search-tags?query='+encodeURIComponent(query))
         .then(res=>{
-            tagSuggestions.value=res.data.tags
+            // tagSuggestions это массив строк (имена тегов)
+            tagSuggestions.value=res.data.tags.map(t=>t.name)
         }).catch(err=>console.log(err))
 }
 
-// Поиск коллекций
-const collectionSuggestions = ref([])
 function searchCollections(query){
     axios.get('/studio/search-collections?query='+encodeURIComponent(query))
         .then(res=>{
@@ -340,7 +340,6 @@ function searchCollections(query){
         }).catch(err=>console.log(err))
 }
 
-// Добавить тег из подсказок
 function addTag(tagName){
     if(!tags.value.includes(tagName)){
         tags.value.push(tagName)
@@ -348,7 +347,6 @@ function addTag(tagName){
     }
 }
 
-// Добавить коллекцию из подсказок
 function addCollectionToSelected(collectionId){
     if(!selectedCollections.value.includes(collectionId)){
         selectedCollections.value.push(collectionId)
