@@ -45,7 +45,6 @@ function toggleNotifications(){
             <!-- Left side: Logo, Home, Create -->
             <div class="flex items-center space-x-4">
                 <Link :href="route('gallery.index')" class="text-purple-400 font-bold text-xl flex items-center space-x-1">
-                    <img src="/images/icons/home.svg" alt="home" class="w-5 h-5"/>
                     <span>L.S</span>
                 </Link>
                 <Link :href="route('gallery.index')" class="hidden sm:inline-block text-white hover:text-purple-200">
