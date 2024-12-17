@@ -24,10 +24,22 @@
                     <!-- Описание артворка -->
                     <p>{{ artwork.description }}</p>
 
+                    <!-- Теги -->
+                    <div v-if="artwork.tags && artwork.tags.length > 0" class="flex flex-wrap gap-2">
+                        <div
+                            v-for="tag in artwork.tags"
+                            :key="tag.id"
+                            class="bg-purple-700 text-white px-2 py-1 rounded cursor-pointer hover:bg-purple-600"
+                            @click="goToTag(tag.name)"
+                        >
+                            #{{tag.name}}
+                        </div>
+                    </div>
+
                     <!-- Информация об авторе -->
                     <div class="flex items-center space-x-2">
                         <img class="h-8 w-8 rounded-full object-cover" :src="author.profile_photo_url" alt="Author" />
-                        <span class="font-semibold">{{ author.name }}</span>
+                        <Link :href="`/profile/${author.id}`" class="font-semibold text-blue-400 hover:underline">{{ author.name }}</Link>
                     </div>
 
                     <!-- Кнопки лайка, комментариев, просмотров и добавления в коллекции -->
@@ -58,7 +70,7 @@
                         </button>
                     </div>
 
-                    <!-- Комментарии -->
+                    <!-- Комментарии с пагинацией -->
                     <CommentsSection :artworkId="artwork.id" @updateCommentsCount="updateCommentsCount" />
                 </div>
             </div>
@@ -76,20 +88,17 @@
                     />
                 </div>
 
-                <!-- Кнопка "Загрузить еще" -->
-                <div v-if="hasMoreAuthorWorks" class="mt-4 flex justify-center">
-                    <button class="btn btn-secondary" @click="loadMoreAuthorWorks" :disabled="loadingAuthorWorks">
+                <div class="flex items-center justify-center w-full mt-4">
+                    <button  v-if="hasMoreAuthorWorks" class="btn btn-secondary" @click="loadAuthorWorks" :disabled="loadingAuthorWorks">
                         <span v-if="!loadingAuthorWorks">Загрузить еще</span>
                         <span v-else>Загрузка...</span>
                     </button>
                 </div>
 
-                <!-- Сообщение о конце списка -->
                 <div v-if="!hasMoreAuthorWorks && !loadingAuthorWorks && authorWorks.length > 0" class="mt-4 text-center text-gray-400">
                     Больше работ нет
                 </div>
 
-                <!-- Сообщение, если нет работ -->
                 <div v-if="!loadingAuthorWorks && authorWorks.length === 0" class="mt-4 text-center text-gray-400">
                     Нет других работ автора
                 </div>
@@ -123,12 +132,13 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
-import { usePage } from '@inertiajs/vue3'
+import { Link, usePage } from '@inertiajs/vue3'
 import AppLayout from "@/Layouts/AppLayout.vue"
 import CommentsSection from '@/Components/Comments/CommentsSection.vue'
 import ArtworkCard from '@/Components/Gallery/ArtworkCard.vue'
 import CollectionSelector from '@/Components/Collections/CollectionSelector.vue'
 import CreateCollectionModal from '@/Components/Collections/CreateCollectionModal.vue'
+import { Inertia } from '@inertiajs/inertia'
 
 const page = usePage()
 const artwork = ref(page.props.artwork)
@@ -156,27 +166,31 @@ onMounted(() => {
     loadAuthorWorks()
 })
 
-// Функция для загрузки дополнительных работ автора
+function goBack() {
+    window.history.back()
+}
+
+function goToTag(name) {
+    Inertia.get('/search', { q: name })
+}
+
 function loadAuthorWorks() {
     if (loadingAuthorWorks.value || !hasMoreAuthorWorks.value) return
     loadingAuthorWorks.value = true
     axios.get(`/author/${author.id}/works`, {
         params: {
             page: authorPage,
-            per_page: 12 // Количество работ, подгружаемых за раз
+            per_page: 12
         }
     })
         .then(res => {
             if (res.data.artworks && res.data.artworks.length > 0) {
                 res.data.artworks.forEach(aw => {
-                    // Убедитесь, что likes_count и liked_by_user присутствуют
                     aw.likes_count = aw.likes_count || 0
                     aw.liked_by_user = aw.liked_by_user || false
                 })
                 authorWorks.value.push(...res.data.artworks)
                 authorPage++
-
-                // Если количество подгруженных работ меньше per_page, значит больше нет
                 if (res.data.artworks.length < 12) {
                     hasMoreAuthorWorks.value = false
                 }
@@ -192,16 +206,9 @@ function loadAuthorWorks() {
         })
 }
 
-// Функция "Назад"
-function goBack() {
-    window.history.back()
-}
-
-// Функция лайка артворка
 function likeArtwork() {
     axios.post(`/artworks/${artwork.value.id}/like`)
         .then(res => {
-            console.log('Like response:', res.data)
             artwork.value.likes_count = res.data.likes_count
             artwork.value.liked_by_user = res.data.liked
             notificationMessage.value = res.data.liked ? 'Лайкнуто' : 'Лайк удален'
@@ -214,7 +221,6 @@ function likeArtwork() {
         })
 }
 
-// Открытие селектора коллекций для текущего артворка
 function openCollectionSelector(e) {
     selectedArt.value = artwork.value
     const rect = e.currentTarget.getBoundingClientRect()
@@ -222,19 +228,18 @@ function openCollectionSelector(e) {
     showCollectionSelectorFlag.value = true
 }
 
-// Открытие селектора коллекций из списка работ автора
 function openCollectionSelectorFromList(aw) {
     selectedArt.value = aw
-    // Позиционируем модальное окно в центре экрана
-    dropdownPosition.value = { top: window.scrollY + window.innerHeight / 2, left: window.scrollX + window.innerWidth / 2 }
+    dropdownPosition.value = {
+        top: window.scrollY + window.innerHeight / 2,
+        left: window.scrollX + window.innerWidth / 2
+    }
     showCollectionSelectorFlag.value = true
 }
 
-// Функция лайка из списка работ автора
 function likeArtFromList(art) {
     axios.post(`/artworks/${art.id}/like`)
         .then(res => {
-            console.log('Like response from list:', res.data)
             const idx = authorWorks.value.findIndex(a => a.id === art.id)
             if (idx >= 0) {
                 authorWorks.value[idx].likes_count = res.data.likes_count
@@ -250,14 +255,14 @@ function likeArtFromList(art) {
         })
 }
 
-// Сохранение артворка в коллекцию
 function saveArtToCollection(colIds) {
     axios.post(`/artworks/${selectedArt.value.id}/add-to-collection`, { collections: colIds })
         .then(res => {
             showCollectionSelectorFlag.value = false
             notificationMessage.value = 'Добавлено в коллекцию'
-            setTimeout(() => { notificationMessage.value = null }, 3000)
-            // Обновляем in_collections
+            setTimeout(() => {
+                notificationMessage.value = null
+            }, 3000)
             if (selectedArt.value.id === artwork.value.id) {
                 artwork.value.in_collections = res.data.in_collections
             } else {
@@ -270,16 +275,16 @@ function saveArtToCollection(colIds) {
         .catch(err => {
             console.error('Ошибка при добавлении в коллекцию:', err)
             notificationMessage.value = 'Ошибка при добавлении в коллекцию'
-            setTimeout(() => { notificationMessage.value = null }, 3000)
+            setTimeout(() => {
+                notificationMessage.value = null
+            }, 3000)
         })
 }
 
-// Открытие модального окна создания коллекции
 function createCollection() {
     showCreateCollectionModal.value = true
 }
 
-// Обработка события создания коллекции
 function collectionCreated(col) {
     collections.value.push(col)
     showCreateCollectionModal.value = false
@@ -287,27 +292,18 @@ function collectionCreated(col) {
     setTimeout(() => notificationMessage.value = null, 3000)
 }
 
-// Функция для установки продолжительности видео
 function setVideoDuration(event) {
     const duration = event.target.duration
     videoDuration.value = formatDuration(duration)
 }
 
-// Форматирование продолжительности видео в формат mm:ss
 function formatDuration(seconds) {
     const minutes = Math.floor(seconds / 60)
     const secs = Math.floor(seconds % 60)
     return `${minutes}:${secs < 10 ? '0' : ''}${secs}`
 }
 
-// Обновление количества комментариев после добавления нового
 function updateCommentsCount(newCount) {
-    console.log('updateCommentsCount called with:', newCount)
     artwork.value.comments_count = newCount
 }
 </script>
-
-<style scoped>
-/* Стили остаются без изменений */
-/* Добавьте любые дополнительные стили при необходимости */
-</style>

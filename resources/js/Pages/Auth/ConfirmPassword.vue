@@ -26,7 +26,7 @@ const submit = () => {
 </script>
 
 <template>
-    <Head title="Secure Area" />
+    <Head title="Безопасная зона" />
 
     <AuthenticationCard>
         <template #logo>
@@ -34,7 +34,7 @@ const submit = () => {
         </template>
 
         <div class="mb-4 text-sm text-gray-600">
-            This is a secure area of the application. Please confirm your password before continuing.
+            Это защищенная область приложения. Пожалуйста, подтвердите свой пароль, прежде чем продолжить.
         </div>
 
         <form @submit.prevent="submit">

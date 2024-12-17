@@ -2,19 +2,15 @@
     <div class="mt-4 bg-gray-800 p-4 rounded">
         <h3 class="font-bold text-lg mb-2">Комментарии</h3>
 
-        <!-- Список комментариев -->
         <div v-if="comments.length">
             <div v-for="comment in comments" :key="comment.id" class="mt-2 bg-gray-700 p-2 rounded">
-                <!-- Информация о комментаторе -->
                 <div class="flex items-center space-x-2">
                     <img class="h-6 w-6 rounded-full object-cover" :src="comment.user.profile_photo_url" alt="User Avatar" />
                     <span class="font-semibold">{{ comment.user.name }}</span>
                     <span class="text-gray-400 text-xs">{{ timeAgo(comment.created_at) }}</span>
                 </div>
-                <!-- Текст комментария -->
                 <p class="ml-8">{{ comment.text }}</p>
 
-                <!-- Ответы на комментарий -->
                 <div v-if="comment.replies && comment.replies.length" class="ml-8 mt-1">
                     <div v-for="reply in comment.replies" :key="reply.id" class="bg-gray-600 p-1 rounded mt-1">
                         <div class="flex items-center space-x-2">
@@ -28,6 +24,10 @@
             </div>
         </div>
         <div v-else class="text-gray-400">Нет комментариев. Будьте первым!</div>
+
+        <div v-if="hasMore" class="mt-4 flex justify-center">
+            <button class="btn btn-secondary w-full" @click="loadMore" :disabled="loading">Загрузить еще</button>
+        </div>
 
         <!-- Форма добавления комментария -->
         <div class="mt-4 flex space-x-2">
@@ -53,44 +53,49 @@ const props = defineProps({
         required: true
     }
 })
-
 const emit = defineEmits(['updateCommentsCount'])
 
 const comments = ref([])
 const newComment = ref('')
+const loading = ref(false)
+const hasMore = ref(true)
+let page = 1
 
-// Загрузка комментариев при монтировании
 onMounted(() => {
     loadComments()
 })
 
-// Функция для загрузки комментариев
 function loadComments() {
-    axios.get(`/artworks/${props.artworkId}/comments`)
+    if (loading.value || !hasMore.value) return
+    loading.value = true
+    axios.get(`/artworks/${props.artworkId}/comments`, { params: { page } })
         .then(res => {
-            comments.value = res.data.comments
-            // Эмитируем обновление количества комментариев
+            comments.value.push(...res.data.comments)
+            hasMore.value = res.data.hasMore
+            page++
             emit('updateCommentsCount', comments.value.length)
-        }).catch(err => {
-        console.error('Ошибка при загрузке комментариев:', err)
-    })
+        })
+        .catch(err => console.error('Ошибка при загрузке комментариев:', err))
+        .finally(() => {
+            loading.value = false
+        })
 }
 
-// Функция для отправки нового комментария
+function loadMore() {
+    loadComments()
+}
+
 function postComment() {
     if (!newComment.value.trim()) return
     axios.post(`/artworks/${props.artworkId}/comments`, { text: newComment.value })
         .then(res => {
             comments.value.unshift(res.data.comment)
             newComment.value = ''
-            // Эмитируем обновление количества комментариев
             emit('updateCommentsCount', comments.value.length)
-        }).catch(err => {
-        console.error('Ошибка при отправке комментария:', err)
-    })
+        })
+        .catch(err => console.error('Ошибка при отправке комментария:', err))
 }
 
-// Функция для отображения времени в формате "X мин назад"
 function timeAgo(dateStr) {
     const date = new Date(dateStr)
     const now = new Date()
@@ -114,7 +119,6 @@ function timeAgo(dateStr) {
     return 'только что'
 }
 
-// Функция для правильного склонения слов
 function pluralize(count, singular) {
     const forms = {
         'год': ['год', 'года', 'лет'],
@@ -130,7 +134,3 @@ function pluralize(count, singular) {
     return form5
 }
 </script>
-
-<style scoped>
-/* Добавьте любые дополнительные стили при необходимости */
-</style>

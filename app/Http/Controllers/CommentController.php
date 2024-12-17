@@ -9,18 +9,29 @@ use Illuminate\Support\Facades\Auth;
 
 class CommentController extends Controller
 {
-    public function index($artworkId)
+    public function index($artworkId, Request $request)
     {
+        $perPage = 5;
+        $page = (int)$request->get('page', 1);
+
         $artwork = Artwork::findOrFail($artworkId);
-        $comments = Comment::where('commentable_id', $artworkId)
+
+        $query = Comment::where('commentable_id', $artworkId)
             ->where('commentable_type', Artwork::class)
             ->whereNull('parent_id')
             ->with(['user', 'replies.user'])
-            ->orderBy('created_at', 'desc')
-            ->get();
+            ->orderBy('created_at', 'desc');
 
-        return response()->json(['comments' => $comments]);
+        $total = $query->count();
+        $comments = $query->skip(($page - 1) * $perPage)->take($perPage)->get();
+
+        return response()->json([
+            'comments' => $comments,
+            'total' => $total,
+            'hasMore' => $page * $perPage < $total
+        ]);
     }
+
 
     /**
      * Добавление нового комментария.

@@ -140,20 +140,19 @@ class StudioController extends Controller
 
     public function createCollection(Request $request)
     {
-        $request->validate([
-            'name'=>'required|string|max:255'
+        $data = $request->validate([
+            'name' => 'required|string|max:255',
+            'is_private' => 'boolean'
         ]);
 
-        $col = new Collection();
-        $col->user_id = Auth::id();
-        $col->name = $request->name;
-        $col->is_private = $request->is_private ?? false;
-        $col->save();
+        $data['user_id'] = Auth::id();
+        $collection = Collection::create($data);
 
-        return response()->json([
-            'message'=>'Коллекция создана',
-            'collection'=>$col
-        ]);
+        // Принудительно назначаем пустой список артов и счетчик 0
+        $collection->setRelation('artworks', collect([]));
+        $collection->artworks_count = 0;
+
+        return response()->json(['collection' => $collection]);
     }
 
     public function reorderDrafts(Request $request)

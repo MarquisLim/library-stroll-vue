@@ -12,18 +12,15 @@ class ArtworkController extends Controller
 {
     public function show($id)
     {
-        $artwork = Artwork::with('media', 'user')
-            ->withCount('comments') // Добавлено для получения comments_count
+        $artwork = Artwork::with(['media','user','tags','likes','collections'])
+            ->withCount('comments','likes')
             ->findOrFail($id);
 
-        // Увеличение количества просмотров
+        // Увеличение просмотров
         $artwork->increment('views_count');
         $artwork->refresh();
 
-        // Определение, поставил ли пользователь лайк
         $artwork->liked_by_user = Auth::check() ? $artwork->likes()->where('user_id', Auth::id())->exists() : false;
-
-        // Определение, находится ли артворк в коллекциях пользователя
         $artwork->in_collections = Auth::check()
             ? $artwork->collections()->where('user_id', Auth::id())->pluck('id')->toArray()
             : [];
@@ -74,7 +71,7 @@ class ArtworkController extends Controller
 
         $artwork = Artwork::findOrFail($id);
         $collections = $request->collections ?? [];
-        $artwork->collections()->syncWithoutDetaching($collections);
+        $artwork->collections()->sync($collections);
 
         return response()->json(['message'=>'Added to collection','in_collections'=>$artwork->collections()->where('user_id',Auth::id())->pluck('id')]);
     }
@@ -82,11 +79,12 @@ class ArtworkController extends Controller
     public function authorWorks(Request $request, $id)
     {
         $page = $request->page ?? 1;
-        $perPage = 10;
+        $perPage = $request->per_page ?? 12; // Используем значение per_page из запроса или 12 по умолчанию
 
         $artworks = Artwork::where('user_id', $id)
             ->where('is_published', true)
             ->with(['media', 'user'])
+            ->withCount('likes')
             ->orderBy('created_at', 'desc')
             ->skip(($page - 1) * $perPage)
             ->take($perPage)
@@ -101,6 +99,7 @@ class ArtworkController extends Controller
 
         return response()->json(['artworks' => $artworks]);
     }
+
 
 
 }

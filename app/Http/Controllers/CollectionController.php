@@ -2,9 +2,53 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Collection;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class CollectionController extends Controller
 {
-    //
+    public function show(Collection $collection)
+    {
+        $userId = Auth::id();
+
+        $collection->load([
+            'user',
+            'artworks' => function ($query) {
+                $query->with([
+                    'user',
+                    'media',
+                    'likes',
+                    'collections'
+                ])->withCount('likes'); // Добавляем подсчет лайков
+            }
+        ]);
+
+        $collection->artworks = $collection->artworks->map(function($art) use ($userId) {
+            $art->liked_by_user = $userId ? $art->likes->where('user_id',$userId)->isNotEmpty():false;
+            $art->in_collections = $userId ? $art->collections->pluck('id')->toArray():[];
+            return $art;
+        });
+
+        // Загрузим коллекции текущего пользователя, чтобы были видны в селекторе
+        $userCollections = [];
+        if($userId) {
+            $userCollections = Collection::where('user_id', $userId)->select('id','name')->get();
+        }
+
+        return inertia('Collections/Show', [
+            'collection' => [
+                'id' => $collection->id,
+                'name' => $collection->name,
+                'created_at' => $collection->created_at,
+                'artworks_count' => $collection->artworks->count(),
+            ],
+            'author' => $collection->user->only('id','name','profile_photo_url'),
+            'artworks' => $collection->artworks,
+            'userCollections' => $userCollections // передаем в props
+        ]);
+    }
+
+
+
 }
