@@ -31,7 +31,7 @@ class Artwork extends Model implements HasMedia
 
     public function comments()
     {
-        return $this->morphMany(Comment::class,'commentable');
+        return $this->morphMany(Comment::class, 'commentable')->whereNull('parent_id');
     }
 
     public function likes()

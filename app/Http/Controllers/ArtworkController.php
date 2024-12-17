@@ -12,23 +12,29 @@ class ArtworkController extends Controller
 {
     public function show($id)
     {
-        $artwork = Artwork::with('media','user')->findOrFail($id);
-        // increment views
+        $artwork = Artwork::with('media', 'user')
+            ->withCount('comments') // Добавлено для получения comments_count
+            ->findOrFail($id);
+
+        // Увеличение количества просмотров
         $artwork->increment('views_count');
         $artwork->refresh();
 
-        $artwork->liked_by_user = Auth::check() ? $artwork->likes()->where('user_id',Auth::id())->exists() : false;
+        // Определение, поставил ли пользователь лайк
+        $artwork->liked_by_user = Auth::check() ? $artwork->likes()->where('user_id', Auth::id())->exists() : false;
+
+        // Определение, находится ли артворк в коллекциях пользователя
         $artwork->in_collections = Auth::check()
-            ? $artwork->collections()->where('user_id',Auth::id())->pluck('id')->toArray()
+            ? $artwork->collections()->where('user_id', Auth::id())->pluck('id')->toArray()
             : [];
 
         $author = $artwork->user;
-        $collections = Auth::check() ? Collection::where('user_id',Auth::id())->get() : [];
+        $collections = Auth::check() ? Collection::where('user_id', Auth::id())->get() : [];
 
-        return inertia('Artworks/ArtworksShow',[
-            'artwork'=>$artwork,
-            'author'=>$author,
-            'collections'=>$collections,
+        return Inertia::render('Artworks/ArtworksShow', [
+            'artwork' => $artwork,
+            'author' => $author,
+            'collections' => $collections,
         ]);
     }
 
@@ -76,20 +82,24 @@ class ArtworkController extends Controller
     public function authorWorks(Request $request, $id)
     {
         $page = $request->page ?? 1;
-        $perPage=10;
-        $artworks = Artwork::where('user_id',$id)
-            ->where('is_published',true)
-            ->with('media','user')
-            ->skip(($page-1)*$perPage)
+        $perPage = 10;
+
+        $artworks = Artwork::where('user_id', $id)
+            ->where('is_published', true)
+            ->with(['media', 'user'])
+            ->orderBy('created_at', 'desc')
+            ->skip(($page - 1) * $perPage)
             ->take($perPage)
             ->get();
-        if(Auth::check()){
-            foreach($artworks as $a){
-                $a->liked_by_user=$a->likes()->where('user_id',Auth::id())->exists();
-                $a->in_collections=$a->collections()->where('user_id',Auth::id())->pluck('id')->toArray();
+
+        if (Auth::check()) {
+            foreach ($artworks as $a) {
+                $a->liked_by_user = $a->likes()->where('user_id', Auth::id())->exists();
+                $a->in_collections = $a->collections()->where('user_id', Auth::id())->pluck('id')->toArray();
             }
         }
-        return response()->json(['artworks'=>$artworks]);
+
+        return response()->json(['artworks' => $artworks]);
     }
 
 
