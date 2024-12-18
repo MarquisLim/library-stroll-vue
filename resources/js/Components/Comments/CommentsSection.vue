@@ -96,6 +96,7 @@ function postComment() {
         .catch(err => console.error('Ошибка при отправке комментария:', err))
 }
 
+
 function timeAgo(dateStr) {
     const date = new Date(dateStr)
     const now = new Date()

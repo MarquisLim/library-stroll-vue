@@ -10,10 +10,10 @@
             <button class="btn btn-primary mt-2" @click="browseFile">Выбрать файл</button>
 
             <div v-if="previewUrl" class="mt-2 text-center">
-                <template v-if="fileType==='image'">
+                <template v-if="fileType === 'image'">
                     <img :src="previewUrl" class="max-h-40 mx-auto" loading="lazy" alt="Preview Image"/>
                 </template>
-                <template v-else-if="fileType==='video'">
+                <template v-else-if="fileType === 'video'">
                     <video :src="previewUrl" class="max-h-40 mx-auto" controls></video>
                 </template>
                 <template v-else>
@@ -30,7 +30,7 @@
                 <label>Заголовок</label>
                 <input type="text" class="input input-bordered w-full bg-gray-700 text-white"
                        :disabled="isDisabled" :value="title"
-                       @input="e=>$emit('update:title',e.target.value)" />
+                       @input="e => $emit('update:title', e.target.value)" />
             </div>
 
             <div class="space-y-2">
@@ -38,28 +38,28 @@
                 <textarea class="textarea textarea-bordered w-full bg-gray-700 text-white"
                           :disabled="isDisabled"
                           :value="description"
-                          @input="e=>$emit('update:description',e.target.value)"></textarea>
+                          @input="e => $emit('update:description', e.target.value)"></textarea>
             </div>
 
             <div class="space-y-2">
                 <label class="flex items-center space-x-2">
-                    <input type="checkbox" class="checkbox checkbox-primary" :disabled="isDisabled" :checked="is_adult" @change="e=>$emit('update:is_adult',e.target.checked)">
+                    <input type="checkbox" class="checkbox checkbox-primary" :disabled="isDisabled" :checked="is_adult" @change="e => $emit('update:is_adult', e.target.checked)">
                     <span>Контент для взрослых</span>
                 </label>
                 <label class="flex items-center space-x-2">
-                    <input type="checkbox" class="checkbox checkbox-primary" :disabled="isDisabled" :checked="has_ai" @change="e=>$emit('update:has_ai',e.target.checked)">
+                    <input type="checkbox" class="checkbox checkbox-primary" :disabled="isDisabled" :checked="has_ai" @change="e => $emit('update:has_ai', e.target.checked)">
                     <span>Контент создан AI</span>
                 </label>
                 <label class="flex items-center space-x-2">
-                    <input type="checkbox" class="checkbox checkbox-primary" :disabled="isDisabled" :checked="is_private" @change="e=>$emit('update:is_private',e.target.checked)">
+                    <input type="checkbox" class="checkbox checkbox-primary" :disabled="isDisabled" :checked="is_private" @change="e => $emit('update:is_private', e.target.checked)">
                     <span>Приватный</span>
                 </label>
                 <label class="flex items-center space-x-2">
-                    <input type="checkbox" class="checkbox checkbox-primary" :disabled="isDisabled" :checked="allow_download" @change="e=>$emit('update:allow_download',e.target.checked)">
+                    <input type="checkbox" class="checkbox checkbox-primary" :disabled="isDisabled" :checked="allow_download" @change="e => $emit('update:allow_download', e.target.checked)">
                     <span>Разрешить скачивание</span>
                 </label>
                 <label class="flex items-center space-x-2">
-                    <input type="checkbox" class="checkbox checkbox-primary" :disabled="isDisabled" :checked="allow_comments" @change="e=>$emit('update:allow_comments',e.target.checked)">
+                    <input type="checkbox" class="checkbox checkbox-primary" :disabled="isDisabled" :checked="allow_comments" @change="e => $emit('update:allow_comments', e.target.checked)">
                     <span>Разрешить комментарии</span>
                 </label>
             </div>
@@ -69,9 +69,9 @@
                 <tag-input
                     :initial-tags="tags"
                     :suggestions="tagSuggestions"
-                    @tagsUpdated="t=> $emit('tagsUpdated',t)"
-                    @search="q=>$emit('searchTags',q)"
-                    @addTag="tagName=>$emit('addTag',tagName)"
+                    @tagsUpdated="t => $emit('tagsUpdated', t)"
+                    @search="q => $emit('searchTags', q)"
+                    @addTag="tagName => $emit('addTag', tagName)"
                 />
             </div>
 
@@ -84,10 +84,10 @@
                     v-if="showCollectionModal"
                     :collections="collections"
                     :selected-collections="selectedCollections"
-                    :position="{top:100,left:100}"
-                    @close="$emit('update:showCollectionModal',false)"
-                    @selected="vals=>$emit('update:selectedCollections',vals)"
-                    @collectionCreated="$emit('createCollection')"
+                    :position="{ top: 100, left: 100 }"
+                    @close="$emit('update:showCollectionModal', false)"
+                    @selected="vals => $emit('update:selectedCollections', vals)"
+                    @createCollection="$emit('createCollection')"
                 />
             </div>
 

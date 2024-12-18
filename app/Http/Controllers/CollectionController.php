@@ -49,6 +49,20 @@ class CollectionController extends Controller
         ]);
     }
 
+    public function getCollectionsWithMedia()
+    {
+        $collections = Collection::with(['artworks.media'])->get();
 
+        $collections = $collections->map(function ($collection) {
+            $firstMedia = optional($collection->artworks->first()?->getFirstMedia())->getUrl();
+            return [
+                'id' => $collection->id,
+                'name' => $collection->name,
+                'image' => $firstMedia // URL первой медиа-записи или null
+            ];
+        });
+
+        return response()->json($collections);
+    }
 
 }

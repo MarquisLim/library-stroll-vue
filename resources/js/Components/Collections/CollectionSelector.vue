@@ -6,8 +6,8 @@
         <div class="max-h-40 overflow-auto mb-2 bg-gray-700 rounded p-1">
             <div v-for="col in filteredCollections" :key="col.id"
                  class="flex items-center space-x-2 hover:bg-gray-600 px-2 py-1 cursor-pointer rounded">
-                <input type="checkbox" :value="col.id" v-model="selectedCols" :checked="selectedCols.includes(col.id)"/>
-                <span>{{col.name}}</span>
+                <input type="checkbox" :value="col.id" v-model="selectedCols" :checked="selectedCols.includes(col.id)" class="checkbox checkbox-primary" />
+                <span class="flex-1 text-white font-medium">{{ col.name }}</span>
             </div>
         </div>
         <button class="btn btn-primary w-full mb-2" @click="save">Сохранить</button>
@@ -49,4 +49,24 @@ function save() {
 
 <style scoped>
 /* Добавьте любые дополнительные стили при необходимости */
+.checkbox {
+    margin-right: 0.5rem;
+    transform: scale(1.2);
+}
+
+.text-white {
+    color: #ffffff;
+}
+
+.bg-gray-600:hover {
+    background-color: #4b5563;
+}
+
+.font-medium {
+    font-weight: 500;
+}
+
+.rounded {
+    border-radius: 0.375rem;
+}
 </style>

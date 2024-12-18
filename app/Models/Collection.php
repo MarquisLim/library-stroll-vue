@@ -17,4 +17,5 @@ class Collection extends Model
     {
         return $this->belongsToMany(Artwork::class,'artwork_collection');
     }
+
 }

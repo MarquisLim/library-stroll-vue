@@ -16,6 +16,7 @@ Route::get('/gallery/load-more',[GalleryController::class,'loadMore'])->name('ga
 Route::get('/artworks/{id}', [ArtworkController::class,'show'])->name('artworks.show');
 Route::get('/author/{id}/works',[ArtworkController::class,'authorWorks'])->name('author.works');
 Route::get('/search/suggestions',[SearchController::class,'suggestions'])->name('search.suggestions');
+Route::get('/artworks/{id}/comments',[CommentController::class,'index'])->name('comments.index');
 Route::get('/search',[SearchController::class,'index'])->name('search.index');
 
 Route::get('/profile/{user}', [ProfileController::class, 'show'])->name('user.profile.show');
@@ -39,14 +40,18 @@ Route::middleware([
     Route::post('/studio/reorder-drafts',[StudioController::class,'reorderDrafts'])->name('studio.reorderDrafts');
     Route::get('/studio/search-tags',[StudioController::class,'searchTags'])->name('studio.searchTags');
     Route::get('/studio/search-collections',[StudioController::class,'searchCollections'])->name('studio.searchCollections');
+    Route::get('/collections/media', [CollectionController::class, 'getCollectionsWithMedia'])->name('collections.media');
 
     Route::post('/artworks/{id}/like',[ArtworkController::class,'like'])->name('artworks.like');
     Route::post('/artworks/{id}/add-to-collection',[ArtworkController::class,'addToCollection'])->name('artworks.addToCollection');
-    Route::get('/artworks/{id}/comments',[CommentController::class,'index'])->name('comments.index');
     Route::post('/artworks/{id}/comments',[CommentController::class,'store'])->name('comments.store');
     Route::post('/comments/{id}/reply',[CommentController::class,'reply'])->name('comments.reply');
 
     Route::post('/collections',[CollectionController::class,'store'])->name('collections.store');
     Route::post('/collections/{id}',[CollectionController::class,'update'])->name('collections.update');
     Route::delete('/collections/{id}',[CollectionController::class,'destroy'])->name('collections.destroy');
+});
+
+Route::middleware('auth:sanctum')->get('/test', function () {
+    return response()->json(['message' => 'Authenticated!']);
 });

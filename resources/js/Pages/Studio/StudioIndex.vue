@@ -1,3 +1,4 @@
+<!-- StudioDraft.vue -->
 <template>
     <AppLayout title="Studio">
         <template #header>
@@ -8,7 +9,7 @@
 
         <div class="p-4 bg-gray-900 min-h-screen text-white">
             <div class="flex space-x-4">
-                <div class="w-1/3">
+                <div class="w-1/4">
                     <div class="mb-4 text-right">
                         <button class="btn btn-purple" @click="showCreateModal=true">Создать искусство</button>
                     </div>
@@ -21,7 +22,7 @@
                     />
                 </div>
 
-                <div class="w-2/3 relative bg-gray-800 p-4 rounded shadow">
+                <div class="w-3/4 relative bg-gray-800 p-4 rounded shadow">
                     <!-- StudioDraftForm -->
                     <StudioDraftForm
                         :selectedDraftId="selectedDraftId"
@@ -59,6 +60,7 @@
                         @searchCollections="searchCollections"
                         @addTag="addTag"
                         @addCollection="addCollectionToSelected"
+                        @createCollection="openCreateCollectionModal"
                     />
 
                     <div class="text-gray-400 text-sm mt-2">
@@ -90,6 +92,7 @@
             </div>
         </div>
 
+        <!-- Модальное окно для удаления черновика -->
         <div v-if="confirmingDraftDeletion" class="modal modal-open">
             <div class="modal-box bg-gray-800 text-white">
                 <h3 class="font-bold text-lg">Удалить черновик?</h3>
@@ -100,6 +103,13 @@
                 </div>
             </div>
         </div>
+
+        <!-- Модальное окно для создания коллекции -->
+        <CreateCollectionModal
+            v-if="showCreateCollectionModal"
+            @close="showCreateCollectionModal = false"
+            @created="collectionCreated"
+        />
 
         <!-- Ошибки и сообщения -->
         <div class="fixed bottom-0 left-0 m-4 space-y-2 w-64 z-50">
@@ -126,8 +136,9 @@ import axios from 'axios'
 import StudioDraftList from '@/Components/Studio/StudioDraftList.vue'
 import StudioDraftForm from '@/Components/Studio/StudioDraftForm.vue'
 import AppLayout from "@/Layouts/AppLayout.vue";
+import CreateCollectionModal from '@/Components/Collections/CreateCollectionModal.vue'
 
-const page=usePage();
+const page = usePage();
 
 const drafts = ref([...page.props.drafts])
 const collections = ref([...page.props.collections])
@@ -153,6 +164,8 @@ const successMessage = ref(null)
 const showCreateModal = ref(false)
 const tempFile = ref(null)
 
+const showCreateCollectionModal = ref(false)
+
 let autoSaveTimeout = null
 
 const tagSuggestions = ref([])
@@ -166,15 +179,15 @@ function scheduleAutoSave() {
 function performAutoSave(){
     if(selectedDraftId.value && previewUrl.value){
         axios.post(`/studio/update-draft/${selectedDraftId.value}`,{
-            title:title.value,
-            description:description.value,
-            is_adult:is_adult.value,
-            has_ai:has_ai.value,
-            is_private:is_private.value,
-            allow_download:allow_download.value,
-            allow_comments:allow_comments.value,
-            tags:tags.value,
-            collections:selectedCollections.value
+            title: title.value,
+            description: description.value,
+            is_adult: is_adult.value,
+            has_ai: has_ai.value,
+            is_private: is_private.value,
+            allow_download: allow_download.value,
+            allow_comments: allow_comments.value,
+            tags: tags.value,
+            collections: selectedCollections.value
         }).then(res=>{
             successMessage.value='Сохранено'
             updateDraftInLocal(res.data.artwork)
@@ -187,7 +200,7 @@ function performAutoSave(){
 }
 
 function selectDraft(draftId){
-    const draft = drafts.value.find(d=>d.id===draftId)
+    const draft = drafts.value.find(d => d.id === draftId)
     if(draft){
         selectedDraftId.value = draftId
         title.value = draft.title || ''
@@ -197,9 +210,9 @@ function selectDraft(draftId){
         is_private.value = !!draft.is_private
         allow_download.value = !!draft.allow_download
         allow_comments.value = !!draft.allow_comments
-        tags.value = draft.tags ? draft.tags.map(t=>t.name) : []
-        selectedCollections.value = draft.collections ? draft.collections.map(c=>c.id) : []
-        previewUrl.value = (draft.media && draft.media.length>0) ? draft.media[0].original_url : null
+        tags.value = draft.tags ? draft.tags.map(t => t.name) : []
+        selectedCollections.value = draft.collections ? draft.collections.map(c => c.id) : []
+        previewUrl.value = (draft.media && draft.media.length > 0) ? draft.media[0].original_url : null
         fileType.value = determineFileType(previewUrl.value)
     } else {
         resetFields()
@@ -216,7 +229,7 @@ function determineFileType(url){
 
 function onDropFileCreate(e){
     const file = e.dataTransfer.files[0]
-    if(file) tempFile.value=file
+    if(file) tempFile.value = file
 }
 const createFileInput = ref(null)
 function browseFileCreate(){
@@ -228,93 +241,93 @@ function onFileChangeCreate(e){
 }
 function createArtFromFile(){
     if(!tempFile.value) return
-    isUploading.value=true
-    uploadProgress.value=0
-    const formData=new FormData()
-    formData.append('file',tempFile.value)
-    axios.post('/studio/upload-file',formData,{
-        onUploadProgress:(event)=>{
-            uploadProgress.value=Math.round((event.loaded/event.total)*100)
+    isUploading.value = true
+    uploadProgress.value = 0
+    const formData = new FormData()
+    formData.append('file', tempFile.value)
+    axios.post('/studio/upload-file', formData, {
+        onUploadProgress: (event) => {
+            uploadProgress.value = Math.round((event.loaded / event.total) * 100)
         }
-    }).then(res=>{
-        isUploading.value=false
-        uploadProgress.value=0
-        successMessage.value=res.data.message
+    }).then(res => {
+        isUploading.value = false
+        uploadProgress.value = 0
+        successMessage.value = res.data.message
         updateDraftInLocal(res.data.artwork)
         selectDraft(res.data.artwork.id)
-        showCreateModal.value=false
-        tempFile.value=null
-        setTimeout(()=>{successMessage.value=null},3000)
-    }).catch(err=>{
-        isUploading.value=false
-        uploadProgress.value=0
+        showCreateModal.value = false
+        tempFile.value = null
+        setTimeout(() => { successMessage.value = null }, 3000)
+    }).catch(err => {
+        isUploading.value = false
+        uploadProgress.value = 0
         handleError(err)
     })
 }
 
 function confirmDeleteDraft(id){
-    selectedDraftId.value=id
-    confirmingDraftDeletion.value=true
+    selectedDraftId.value = id
+    confirmingDraftDeletion.value = true
 }
 function cancelDelete(){
-    confirmingDraftDeletion.value=false
+    confirmingDraftDeletion.value = false
 }
 function destroyDraft(){
     axios.delete(`/studio/draft/${selectedDraftId.value}`)
-        .then(res=>{
-            successMessage.value=res.data.message
-            drafts.value = drafts.value.filter(d=>d.id!==selectedDraftId.value)
-            selectedDraftId.value=null
+        .then(res => {
+            successMessage.value = res.data.message
+            drafts.value = drafts.value.filter(d => d.id !== selectedDraftId.value)
+            selectedDraftId.value = null
             resetFields()
-            confirmingDraftDeletion.value=false
-            setTimeout(()=>{successMessage.value=null},3000)
+            confirmingDraftDeletion.value = false
+            setTimeout(() => { successMessage.value = null }, 3000)
         })
         .catch(handleError)
 }
 
 function publishDraft(){
     axios.post(`/studio/publish/${selectedDraftId.value}`)
-        .then(res=>{
-            successMessage.value=res.data.message
-            drafts.value=drafts.value.filter(d=>d.id!==selectedDraftId.value)
-            selectedDraftId.value=null
+        .then(res => {
+            successMessage.value = res.data.message
+            drafts.value = drafts.value.filter(d => d.id !== selectedDraftId.value)
+            selectedDraftId.value = null
             resetFields()
-            setTimeout(()=>{successMessage.value=null},3000)
+            setTimeout(() => { successMessage.value = null }, 3000)
         })
         .catch(handleError)
 }
 
 function uploadFile(file){
-    isUploading.value=true
-    uploadProgress.value=0
-    const formData=new FormData()
-    formData.append('file',file)
+    isUploading.value = true
+    uploadProgress.value = 0
+    const formData = new FormData()
+    formData.append('file', file)
     if(selectedDraftId.value){
         formData.append('draftId', selectedDraftId.value)
     }
     axios.post('/studio/upload-file', formData, {
-        onUploadProgress:(event)=>{
-            uploadProgress.value = Math.round((event.loaded/event.total)*100)
+        onUploadProgress: (event) => {
+            uploadProgress.value = Math.round((event.loaded / event.total) * 100)
         }
-    }).then(res=>{
-        isUploading.value=false
-        uploadProgress.value=0
-        successMessage.value=res.data.message
+    }).then(res => {
+        isUploading.value = false
+        uploadProgress.value = 0
+        successMessage.value = res.data.message
         updateDraftInLocal(res.data.artwork)
         selectDraft(res.data.artwork.id)
-        setTimeout(()=>{successMessage.value=null},3000)
-    }).catch(err=>{
-        isUploading.value=false
-        uploadProgress.value=0
+        setTimeout(() => { successMessage.value = null }, 3000)
+    }).catch(err => {
+        isUploading.value = false
+        uploadProgress.value = 0
         handleError(err)
     })
 }
 
 function reorderDrafts(newOrder){
-    axios.post('/studio/reorder-drafts',{draft_order:newOrder})
-        .then(res=>{
-            successMessage.value=res.data.message
-            setTimeout(()=>{successMessage.value=null},3000)
+    axios.post('/studio/reorder-drafts', { draft_order: newOrder })
+        .then(res => {
+            successMessage.value = res.data.message
+            setTimeout(() => { successMessage.value = null }, 3000)
         })
         .catch(handleError)
 }
@@ -328,18 +341,18 @@ function collectionCreated(col) {
 }
 
 function searchTags(query){
-    axios.get('/studio/search-tags?query='+encodeURIComponent(query))
-        .then(res=>{
+    axios.get('/studio/search-tags?query=' + encodeURIComponent(query))
+        .then(res => {
             // tagSuggestions это массив строк (имена тегов)
-            tagSuggestions.value=res.data.tags.map(t=>t.name)
-        }).catch(err=>console.log(err))
+            tagSuggestions.value = res.data.tags.map(t => t.name)
+        }).catch(err => console.log(err))
 }
 
 function searchCollections(query){
-    axios.get('/studio/search-collections?query='+encodeURIComponent(query))
-        .then(res=>{
-            collectionSuggestions.value=res.data.collections
-        }).catch(err=>console.log(err))
+    axios.get('/studio/search-collections?query=' + encodeURIComponent(query))
+        .then(res => {
+            collectionSuggestions.value = res.data.collections
+        }).catch(err => console.log(err))
 }
 
 function addTag(tagName){
@@ -356,43 +369,47 @@ function addCollectionToSelected(collectionId){
     }
 }
 
-function updateTitle(val){title.value=val; scheduleAutoSave();}
-function updateDescription(val){description.value=val; scheduleAutoSave();}
-function updateIsAdult(val){is_adult.value=val; scheduleAutoSave();}
-function updateHasAi(val){has_ai.value=val; scheduleAutoSave();}
-function updateIsPrivate(val){is_private.value=val; scheduleAutoSave();}
-function updateAllowDownload(val){allow_download.value=val; scheduleAutoSave();}
-function updateAllowComments(val){allow_comments.value=val; scheduleAutoSave();}
-function tagsUpdated(newTags){tags.value=newTags; scheduleAutoSave();}
-function updateSelectedCollections(val){selectedCollections.value=val; scheduleAutoSave();}
+function updateTitle(val){ title.value = val; scheduleAutoSave(); }
+function updateDescription(val){ description.value = val; scheduleAutoSave(); }
+function updateIsAdult(val){ is_adult.value = val; scheduleAutoSave(); }
+function updateHasAi(val){ has_ai.value = val; scheduleAutoSave(); }
+function updateIsPrivate(val){ is_private.value = val; scheduleAutoSave(); }
+function updateAllowDownload(val){ allow_download.value = val; scheduleAutoSave(); }
+function updateAllowComments(val){ allow_comments.value = val; scheduleAutoSave(); }
+function tagsUpdated(newTags){ tags.value = newTags; scheduleAutoSave(); }
+function updateSelectedCollections(val){ selectedCollections.value = val; scheduleAutoSave(); }
+
+function openCreateCollectionModal() {
+    showCreateCollectionModal.value = true
+}
 
 function resetFields(){
-    title.value=''
-    description.value=''
-    is_adult.value=false
-    has_ai.value=false
-    is_private.value=false
-    allow_download.value=true
-    allow_comments.value=true
-    tags.value=[]
-    selectedCollections.value=[]
-    previewUrl.value=null
-    fileType.value=null
+    title.value = ''
+    description.value = ''
+    is_adult.value = false
+    has_ai.value = false
+    is_private.value = false
+    allow_download.value = true
+    allow_comments.value = true
+    tags.value = []
+    selectedCollections.value = []
+    previewUrl.value = null
+    fileType.value = null
 }
 
 function updateDraftInLocal(artwork){
-    const idx = drafts.value.findIndex(d=>d.id===artwork.id)
-    if(idx>=0){
-        drafts.value.splice(idx,1,artwork)
+    const idx = drafts.value.findIndex(d => d.id === artwork.id)
+    if(idx >= 0){
+        drafts.value.splice(idx, 1, artwork)
     } else {
         drafts.value.push(artwork)
     }
 }
 
 function handleError(err){
-    errorMessages.value=[]
-    successMessage.value=null
-    if(err.response && err.response.status===422){
+    errorMessages.value = []
+    successMessage.value = null
+    if(err.response && err.response.status === 422){
         const errs = err.response.data.errors
         for(let field in errs){
             errorMessages.value.push(...errs[field])
@@ -402,6 +419,10 @@ function handleError(err){
     } else {
         errorMessages.value.push('Произошла ошибка')
     }
-    setTimeout(()=>{errorMessages.value=[]},5000)
+    setTimeout(() => { errorMessages.value = [] }, 5000)
 }
 </script>
+
+<style scoped>
+/* Добавьте любые дополнительные стили при необходимости */
+</style>

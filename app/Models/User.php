@@ -87,4 +87,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(Like::class);
     }
+
+    public function replies()
+    {
+        return $this->hasMany(User::class, 'parent_id');
+    }
 }
