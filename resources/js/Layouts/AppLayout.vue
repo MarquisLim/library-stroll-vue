@@ -80,7 +80,7 @@ function onSearchKey(e) {
                 <Link :href="route('gallery.index')"
                       class="text-purple-400 font-bold text-4xl flex items-center space-x-1">
                     <!--                    <span>L.S</span>logo.svg-->
-                    <img src="/logo.svg" class="w-25 h-25"/>
+                    <img src="/logo.png" class="w-25 h-25"/>
                 </Link>
 
                 <!-- Home, Create на десктопе -->
