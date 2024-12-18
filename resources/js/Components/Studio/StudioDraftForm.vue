@@ -87,7 +87,7 @@
                     :position="{top:100,left:100}"
                     @close="$emit('update:showCollectionModal',false)"
                     @selected="vals=>$emit('update:selectedCollections',vals)"
-                    @createCollection="$emit('createCollection')"
+                    @collectionCreated="$emit('createCollection')"
                 />
             </div>
 
@@ -98,7 +98,7 @@
 <script>
 import { ref } from 'vue'
 import TagInput from '@/Components/Tags/TagInput.vue'
-import CollectionModal from '@/Components/Collections/CollectionSelector.vue' // Убедитесь, что путь верный
+import CollectionModal from '@/Components/Collections/CollectionSelector.vue'
 
 export default {
     components: { TagInput, CollectionModal },

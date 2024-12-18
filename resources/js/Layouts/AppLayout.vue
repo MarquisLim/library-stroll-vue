@@ -79,7 +79,7 @@ function onSearchKey(e) {
             <div class="flex justify-ceentr sm:justify-start">
                 <Link :href="route('gallery.index')"
                       class="text-purple-400 font-bold text-4xl flex items-center space-x-1">
-<!--                    <span>L.S</span>logo.svg-->
+                    <!--                    <span>L.S</span>logo.svg-->
                     <img src="/logo.svg" class="w-25 h-25"/>
                 </Link>
 
@@ -97,7 +97,7 @@ function onSearchKey(e) {
             </div>
 
             <!-- Поиск в центре navbar (только на десктопе) -->
-            <div class="hidden sm:flex flex-1 justify-center">
+            <div class="hidden sm:flex flex-1 justify-center mr-72">
                 <div class="relative w-1/2 max-w-sm">
                     <input
                         v-model="searchQuery"

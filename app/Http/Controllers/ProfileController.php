@@ -14,9 +14,15 @@ class ProfileController extends Controller
     public function show(User $user)
     {
         $userId = Auth::id();
+        $isOwner = $userId === $user->id; // Определяем, является ли текущий пользователь владельцем профиля
 
+        // Фильтрация артворков
         $artworks = Artwork::where('user_id', $user->id)
-            ->with(['user','media','likes','collections'])
+            ->when(!$isOwner, function ($query) {
+                $query->where('is_published', '!=', 0)
+                    ->where('is_private', false); // Учитываем поле is_private только для других пользователей
+            })
+            ->with(['user', 'media', 'likes', 'collections'])
             ->withCount('likes')
             ->get()
             ->map(function($art) use ($userId) {
@@ -25,24 +31,29 @@ class ProfileController extends Controller
                 return $art;
             });
 
+        // Фильтрация коллекций
         $collections = Collection::where('user_id', $user->id)
+            ->when(!$isOwner, function ($query) {
+                $query->where('is_private', false); // Учитываем поле is_private только для других пользователей
+            })
             ->withCount('artworks')
             ->with(['artworks.media' => function($q) {
-                $q->limit(3);
+                $q->limit(3); // Ограничиваем количество медиа
             }])
             ->get();
+
+        // Коллекции текущего авторизованного пользователя
         $userCollections = Auth::check() ? Collection::where('user_id', Auth::id())->get() : [];
 
-        $isOwner = $userId === $user->id;
-
         return inertia('Profile/ProfileShow', [
-            'profileUser' => $user->only('id','name','profile_photo_url','created_at'),
+            'profileUser' => $user->only('id', 'name', 'profile_photo_url', 'created_at'),
             'artworks' => $artworks,
             'collections' => $collections,
             'isOwner' => $isOwner,
             'userCollections' => $userCollections
         ]);
     }
+
 
     public function likes(User $user)
     {

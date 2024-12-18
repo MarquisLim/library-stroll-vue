@@ -1,11 +1,5 @@
 <template>
     <AppLayout title="Галерея">
-        <template #header>
-            <h2 class="font-semibold text-xl text-gray-100 leading-tight">
-                Галерея
-            </h2>
-        </template>
-
         <!-- Контейнер со скроллом -->
         <div
             ref="scrollContainer"

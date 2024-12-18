@@ -17,17 +17,17 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        $tagsList = ['котики','искусство','пейзаж','фантастика','авторское','портрет','аниме','абстракция','3D','фото'];
+        $tagsList = ['котики','искусство','пейзаж','фантастика','авторское','портрет','абстракция','3D','фото'];
         foreach($tagsList as $t){
             Tag::firstOrCreate(['name'=>$t]);
         }
 
         User::factory(20)->create(['password'=>bcrypt('123456zaza')])->each(function($user){
             // Создаем коллекцию "Все" для каждого пользователя
-            Collection::create([
-                'user_id'=>$user->id,
-                'name'=>'Все',
-                'is_private'=>false
+            $allCollection = Collection::create([
+                'user_id' => $user->id,
+                'name' => 'Все',
+                'is_private' => false
             ]);
 
             // Загрузим 5-10 работ с котиками
@@ -49,6 +49,8 @@ class DatabaseSeeder extends Seeder
                     // Привяжем случайные теги
                     $allTags=Tag::inRandomOrder()->limit(rand(1,5))->pluck('id');
                     $art->tags()->sync($allTags);
+
+                    $art->collections()->attach($allCollection->id);
 
                     // Просмотры, лайки можно рандомно
                     $art->views_count=rand(10,500);

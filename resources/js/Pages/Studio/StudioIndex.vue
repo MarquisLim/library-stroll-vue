@@ -319,10 +319,12 @@ function reorderDrafts(newOrder){
         .catch(handleError)
 }
 
-function collectionCreated(col){
+function collectionCreated(col) {
     collections.value.push(col)
-    successMessage.value='Коллекция создана'
-    setTimeout(()=>successMessage.value=null,3000)
+    successMessage.value = 'Коллекция создана'
+    setTimeout(() => {
+        successMessage.value = null
+    }, 3000)
 }
 
 function searchTags(query){
