@@ -19,6 +19,7 @@ class ArtworkController extends Controller
         // Увеличение просмотров
         $artwork->increment('views_count');
         $artwork->refresh();
+        $artwork->loadCount('comments', 'likes');
 
         $artwork->liked_by_user = Auth::check() ? $artwork->likes()->where('user_id', Auth::id())->exists() : false;
         $artwork->in_collections = Auth::check()
@@ -99,7 +100,4 @@ class ArtworkController extends Controller
 
         return response()->json(['artworks' => $artworks]);
     }
-
-
-
 }
