@@ -13,20 +13,31 @@ class UpdatePasswordTest extends TestCase
 
     public function test_password_can_be_updated(): void
     {
-        $this->actingAs($user = User::factory()->create());
+        $user = User::factory()->create([
+            'password' => Hash::make('password') // Jetstream требует зашифрованный пароль
+        ]);
 
-        $this->put('/user/password', [
+        $this->actingAs($user);
+
+        $response = $this->put('/user/password', [
             'current_password' => 'password',
             'password' => 'new-password',
             'password_confirmation' => 'new-password',
         ]);
 
+        $response->assertStatus(200); // Проверяем успешный ответ
+
+        // Проверяем, что пароль обновлён
         $this->assertTrue(Hash::check('new-password', $user->fresh()->password));
     }
 
     public function test_current_password_must_be_correct(): void
     {
-        $this->actingAs($user = User::factory()->create());
+        $user = User::factory()->create([
+            'password' => Hash::make('password') // Jetstream требует зашифрованный пароль
+        ]);
+
+        $this->actingAs($user);
 
         $response = $this->put('/user/password', [
             'current_password' => 'wrong-password',
@@ -34,14 +45,19 @@ class UpdatePasswordTest extends TestCase
             'password_confirmation' => 'new-password',
         ]);
 
-        $response->assertSessionHasErrors();
+        $response->assertSessionHasErrors('current_password'); // Проверяем ошибку
 
+        // Проверяем, что пароль не изменился
         $this->assertTrue(Hash::check('password', $user->fresh()->password));
     }
 
     public function test_new_passwords_must_match(): void
     {
-        $this->actingAs($user = User::factory()->create());
+        $user = User::factory()->create([
+            'password' => Hash::make('password') // Jetstream требует зашифрованный пароль
+        ]);
+
+        $this->actingAs($user);
 
         $response = $this->put('/user/password', [
             'current_password' => 'password',
@@ -49,8 +65,9 @@ class UpdatePasswordTest extends TestCase
             'password_confirmation' => 'wrong-password',
         ]);
 
-        $response->assertSessionHasErrors();
+        $response->assertSessionHasErrors('password'); // Проверяем ошибку
 
+        // Проверяем, что пароль не изменился
         $this->assertTrue(Hash::check('password', $user->fresh()->password));
     }
 }

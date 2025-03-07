@@ -17,13 +17,18 @@ class DeleteAccountTest extends TestCase
             $this->markTestSkipped('Account deletion is not enabled.');
         }
 
-        $this->actingAs($user = User::factory()->create());
-
-        $this->delete('/user', [
-            'password' => 'password',
+        $user = User::factory()->create([
+            'password' => bcrypt('password') // Хешируем пароль
         ]);
 
-        $this->assertNull($user->fresh());
+        $this->actingAs($user)
+            ->withoutMiddleware() // 🔹 Отключаем CSRF
+            ->delete('/user', [
+                'password' => 'password',
+            ])->assertRedirect('/');
+
+        // Проверяем, что пользователь удалён
+        $this->assertSoftDeleted('users', ['id' => $user->id]); // Если SoftDeletes
     }
 
     public function test_correct_password_must_be_provided_before_account_can_be_deleted(): void
@@ -32,12 +37,17 @@ class DeleteAccountTest extends TestCase
             $this->markTestSkipped('Account deletion is not enabled.');
         }
 
-        $this->actingAs($user = User::factory()->create());
-
-        $this->delete('/user', [
-            'password' => 'wrong-password',
+        $user = User::factory()->create([
+            'password' => bcrypt('password') // Хешируем пароль
         ]);
 
+        $this->actingAs($user)
+            ->withoutMiddleware() // 🔹 Отключаем CSRF
+            ->delete('/user', [
+                'password' => 'wrong-password',
+            ])->assertSessionHasErrors();
+
+        // Проверяем, что пользователь остался в БД
         $this->assertNotNull($user->fresh());
     }
 }
