@@ -2,7 +2,7 @@
     <div class="modal modal-open">
         <div class="modal-box bg-gray-800 text-white">
             <h3 class="font-bold text-lg">Создать коллекцию</h3>
-            <input v-model="name" type="text" placeholder="Name" class="w-full mt-2 px-2 py-1 rounded border border-gray-600 bg-gray-700"/>
+            <input v-model="name" type="text" placeholder="Название" class="w-full mt-2 px-2 py-1 rounded border border-gray-600 bg-gray-700"/>
             <label class="flex items-center space-x-2 mt-2">
                 <input type="checkbox" v-model="isPrivate" class="checkbox checkbox-primary" />
                 <span>Приватная</span>

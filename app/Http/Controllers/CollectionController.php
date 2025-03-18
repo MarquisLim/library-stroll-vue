@@ -65,4 +65,40 @@ class CollectionController extends Controller
         return response()->json($collections);
     }
 
+    public function update(Request $request, $id)
+    {
+        $collection = Collection::findOrFail($id);
+
+        // Проверяем права (коллекцию может редактировать только её владелец)
+        if ($collection->user_id !== Auth::id()) {
+            return response()->json(['error' => 'Forbidden'], 403);
+        }
+
+        $data = $request->validate([
+            'name' => 'required|string|max:255',
+            'is_private' => 'boolean',
+        ]);
+
+        $collection->update($data);
+
+        return response()->json([
+            'message' => 'Коллекция обновлена',
+            'collection' => $collection,
+        ]);
+    }
+
+    public function destroy(Request $request, $id)
+    {
+        $collection = Collection::findOrFail($id);
+
+        if ($collection->user_id !== Auth::id()) {
+            return response()->json(['error' => 'Forbidden'], 403);
+        }
+
+        $collection->delete();
+
+        return response()->json(['message' => 'Коллекция удалена']);
+    }
+
+
 }

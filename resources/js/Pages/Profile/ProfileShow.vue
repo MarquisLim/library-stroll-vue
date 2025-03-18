@@ -21,6 +21,8 @@
                         v-for="collection in collections"
                         :key="collection.id"
                         :collection="collection"
+                        @edit="openEditModal"
+                        @remove="confirmDeleteModal"
                     />
                 </div>
             </div>
@@ -67,7 +69,6 @@
                     />
                 </div>
             </div>
-
             <!-- Компоненты для добавления в коллекцию, уведомления и т.п. -->
             <CollectionSelector
                 v-if="showCollectionSelectorFlag"
@@ -82,6 +83,20 @@
                 v-if="showCreateCollectionModal"
                 @close="showCreateCollectionModal=false"
                 @created="collectionCreated"
+            />
+            <EditCollectionModal
+                v-if="showEditModal"
+                :initial-collection="editingCollection"
+                @close="showEditModal = false"
+                @saved="handleUpdate"
+            />
+
+            <!-- Модальное окно подтверждения удаления -->
+            <ConfirmDeleteModal
+                v-if="showDeleteModal"
+                :collection="deletingCollection"
+                @close="showDeleteModal = false"
+                @confirmed="handleDestroy"
             />
             <div v-if="notificationMessage" class="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-80 text-white px-4 py-2 rounded">
                 {{ notificationMessage }}
@@ -98,6 +113,8 @@ import ArtworkCard from '@/Components/Gallery/ArtworkCard.vue'
 import CollectionCard from '@/Components/Collections/CollectionCard.vue'
 import CollectionSelector from '@/Components/Collections/CollectionSelector.vue'
 import CreateCollectionModal from '@/Components/Collections/CreateCollectionModal.vue'
+import EditCollectionModal from '@/Components/Collections/EditCollectionModal.vue'
+import ConfirmDeleteModal from '@/Components/Collections/ConfirmDeleteModal.vue'
 import axios from 'axios'
 
 const page = usePage()
@@ -105,6 +122,10 @@ const profileUser = page.props.profileUser
 const artworks = page.props.artworks || []
 const collections = page.props.collections || []
 const isOwner = page.props.isOwner || false
+const editingCollection = ref(null)
+const deletingCollection = ref(null)
+const showEditModal = ref(false)
+const showDeleteModal = ref(false)
 
 // Если хотите всегда показывать коллекции текущего залогиненного пользователя в селекторе:
 const userCollections = ref(page.props.userCollections || [])
@@ -141,6 +162,11 @@ function openCollectionSelector({ art, event }) {
     showCollectionSelectorFlag.value = true
 }
 
+function openEditModal(collection) {
+    editingCollection.value = { ...collection } // делаем копию
+    showEditModal.value = true
+}
+
 function saveArtToCollection(colIds) {
     axios.post(`/artworks/${selectedArt.value.id}/add-to-collection`, { collections: colIds })
         .then(res => {
@@ -156,6 +182,41 @@ function saveArtToCollection(colIds) {
                 likedArtworks.value[idxLiked].in_collections = res.data.in_collections
             }
         }).catch(err => console.log(err))
+}
+
+function handleUpdate(updatedData) {
+    // Вызываем API для обновления
+    axios.post(`/collections/${editingCollection.value.id}`, {
+        name: updatedData.name,
+        is_private: updatedData.is_private
+    })
+        .then(res => {
+            showEditModal.value = false
+            // Найдём коллекцию и обновим локально
+            const idx = collections.findIndex(c => c.id === editingCollection.value.id)
+            if (idx >= 0) {
+                collections[idx] = { ...collections[idx], ...res.data.collection }
+            }
+        })
+        .catch(err => console.log(err))
+}
+
+function confirmDeleteModal(collection) {
+    deletingCollection.value = collection
+    showDeleteModal.value = true
+}
+
+function handleDestroy() {
+    axios.delete(`/collections/${deletingCollection.value.id}`)
+        .then(res => {
+            showDeleteModal.value = false
+            // Удаляем локально
+            const idx = collections.findIndex(c => c.id === deletingCollection.value.id)
+            if (idx >= 0) {
+                collections.splice(idx, 1)
+            }
+        })
+        .catch(err => console.log(err))
 }
 
 function createCollection() {

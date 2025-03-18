@@ -1,3 +1,5 @@
+document.documentElement.setAttribute("data-theme", "dark");
+
 import './bootstrap';
 import '../css/app.css';
 

@@ -1,65 +1,124 @@
 <!-- StudioDraftForm.vue -->
 <template>
-    <div class="flex flex-col md:flex-row gap-4 relative">
+    <!-- На маленьких экранах блоки идут друг за другом, на средних и выше — в две колонки -->
+    <div class="flex flex-col md:flex-row gap-4">
         <!-- Левая колонка: drag and drop + превью -->
-        <div class="md:w-1/2 border-2 border-dashed border-gray-500 p-4 rounded text-center cursor-pointer relative"
-             @drop.prevent="onDrop"
-             @dragover.prevent>
+        <div
+            class="w-full md:w-1/2 border-2 border-dashed border-gray-500 p-4 rounded text-center cursor-pointer"
+            @drop.prevent="onDrop"
+            @dragover.prevent
+        >
             <p v-if="!previewUrl">Перетащите файл сюда или нажмите для выбора.</p>
             <input type="file" class="hidden" ref="fileInput" @change="onFileChange"/>
             <button class="btn btn-primary mt-2" @click="browseFile">Выбрать файл</button>
 
-            <div v-if="previewUrl" class="mt-2 text-center">
+            <!-- Превью файла (картинка или видео) -->
+            <div v-if="previewUrl" class="mt-4 text-center">
                 <template v-if="fileType === 'image'">
-                    <img :src="previewUrl" class="max-h-40 mx-auto" loading="lazy" alt="Preview Image"/>
+                    <img
+                        :src="previewUrl"
+                        class="max-h-100 mx-auto"
+                        loading="lazy"
+                        alt="Preview Image"
+                    />
                 </template>
                 <template v-else-if="fileType === 'video'">
-                    <video :src="previewUrl" class="max-h-40 mx-auto" controls></video>
+                    <video
+                        :src="previewUrl"
+                        class="max-h-100 mx-auto"
+                        controls
+                    ></video>
                 </template>
                 <template v-else>
-                    <img :src="previewUrl" class="max-h-40 mx-auto" loading="lazy" alt="Preview Other"/>
+                    <img
+                        :src="previewUrl"
+                        class="max-h-100 mx-auto"
+                        loading="lazy"
+                        alt="Preview Other"
+                    />
                 </template>
             </div>
-            <button v-if="selectedDraftId && previewUrl" class="btn btn-success absolute top-4 right-4" @click="$emit('publish')">Опубликовать</button>
+
+            <!-- Кнопка «Опубликовать» (отображается только при наличии draftId и previewUrl) -->
+            <div v-if="selectedDraftId && previewUrl" class="mt-4">
+                <button class="btn btn-success w-full md:w-auto" @click="$emit('publish')">
+                    Опубликовать
+                </button>
+            </div>
         </div>
 
         <!-- Правая колонка: поля формы -->
-        <div class="md:w-1/2 flex flex-col space-y-4">
-
+        <div class="w-full md:w-1/2 flex flex-col space-y-4">
             <div class="space-y-2">
                 <label>Заголовок</label>
-                <input type="text" class="input input-bordered w-full bg-gray-700 text-white"
-                       :disabled="isDisabled" :value="title"
-                       @input="e => $emit('update:title', e.target.value)" />
+                <input
+                    type="text"
+                    class="input input-bordered w-full bg-gray-700 text-white"
+                    :disabled="isDisabled"
+                    :value="title"
+                    @input="e => $emit('update:title', e.target.value)"
+                />
             </div>
 
             <div class="space-y-2">
                 <label>Описание</label>
-                <textarea class="textarea textarea-bordered w-full bg-gray-700 text-white"
-                          :disabled="isDisabled"
-                          :value="description"
-                          @input="e => $emit('update:description', e.target.value)"></textarea>
+                <textarea
+                    class="textarea textarea-bordered w-full bg-gray-700 text-white"
+                    :disabled="isDisabled"
+                    :value="description"
+                    @input="e => $emit('update:description', e.target.value)"
+                ></textarea>
             </div>
 
             <div class="space-y-2">
                 <label class="flex items-center space-x-2">
-                    <input type="checkbox" class="checkbox checkbox-primary" :disabled="isDisabled" :checked="is_adult" @change="e => $emit('update:is_adult', e.target.checked)">
+                    <input
+                        type="checkbox"
+                        class="checkbox checkbox-primary"
+                        :disabled="isDisabled"
+                        :checked="is_adult"
+                        @change="e => $emit('update:is_adult', e.target.checked)"
+                    />
                     <span>Контент для взрослых</span>
                 </label>
                 <label class="flex items-center space-x-2">
-                    <input type="checkbox" class="checkbox checkbox-primary" :disabled="isDisabled" :checked="has_ai" @change="e => $emit('update:has_ai', e.target.checked)">
+                    <input
+                        type="checkbox"
+                        class="checkbox checkbox-primary"
+                        :disabled="isDisabled"
+                        :checked="has_ai"
+                        @change="e => $emit('update:has_ai', e.target.checked)"
+                    />
                     <span>Контент создан AI</span>
                 </label>
                 <label class="flex items-center space-x-2">
-                    <input type="checkbox" class="checkbox checkbox-primary" :disabled="isDisabled" :checked="is_private" @change="e => $emit('update:is_private', e.target.checked)">
+                    <input
+                        type="checkbox"
+                        class="checkbox checkbox-primary"
+                        :disabled="isDisabled"
+                        :checked="is_private"
+                        @change="e => $emit('update:is_private', e.target.checked)"
+                    />
                     <span>Приватный</span>
                 </label>
                 <label class="flex items-center space-x-2">
-                    <input type="checkbox" class="checkbox checkbox-primary" :disabled="isDisabled" :checked="allow_download" @change="e => $emit('update:allow_download', e.target.checked)">
+                    <input
+                        type="checkbox"
+                        class="checkbox checkbox-primary"
+                        :disabled="isDisabled"
+                        :checked="allow_download"
+                        @change="e => $emit('update:allow_download', e.target.checked)"
+                    />
                     <span>Разрешить скачивание</span>
                 </label>
                 <label class="flex items-center space-x-2">
-                    <input type="checkbox" class="checkbox checkbox-primary" :disabled="isDisabled" :checked="allow_comments" @change="e => $emit('update:allow_comments', e.target.checked)">
+                    <input
+                        type="checkbox"
+                        class="checkbox checkbox-primary"
+                        :disabled="isDisabled"
+                        :checked="allow_comments"
+                        @change="e => $emit('update:allow_comments', e.target.checked)"
+                    />
                     <span>Разрешить комментарии</span>
                 </label>
             </div>
@@ -76,7 +135,11 @@
             </div>
 
             <div class="space-y-2 relative">
-                <button class="btn btn-secondary" @click="$emit('update:showCollectionModal', true)" :disabled="isDisabled">
+                <button
+                    class="btn btn-secondary"
+                    @click="$emit('update:showCollectionModal', true)"
+                    :disabled="isDisabled"
+                >
                     Выбрать коллекции
                 </button>
 
@@ -90,7 +153,6 @@
                     @createCollection="$emit('createCollection')"
                 />
             </div>
-
         </div>
     </div>
 </template>
@@ -133,7 +195,7 @@ export default {
     methods: {
         onFileChange(e) {
             const file = e.target.files[0]
-            if(file) {
+            if (file) {
                 this.$emit('uploadFile', file)
             }
         },
@@ -142,7 +204,7 @@ export default {
         },
         onDrop(e) {
             const file = e.dataTransfer.files[0]
-            if(file) {
+            if (file) {
                 this.$emit('uploadFile', file)
             }
         }
@@ -151,5 +213,5 @@ export default {
 </script>
 
 <style scoped>
-/* Добавьте любые дополнительные стили при необходимости */
+/* Дополнительные стили, если необходимо */
 </style>

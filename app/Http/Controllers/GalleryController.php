@@ -27,6 +27,10 @@ class GalleryController extends Controller
             ->map(function($artwork) use ($userId) {
                 $artwork->liked_by_user = $userId ? $artwork->likes->where('user_id', $userId)->isNotEmpty() : false;
                 $artwork->in_collections = $userId ? $artwork->collections->pluck('id')->toArray() : [];
+                $artwork->media->map(function($mediaItem) {
+                    $mediaItem->thumbnail_url = $mediaItem->getUrl('thumb');
+                    return $mediaItem;
+                });
                 return $artwork;
             });
 
@@ -44,7 +48,7 @@ class GalleryController extends Controller
     public function loadMore(Request $request)
     {
         $page = $request->page ?? 2;
-        $perPage = 20;
+        $perPage = 40;
         $userId = Auth::id();
 
         $artworks = Artwork::where('is_published', true)

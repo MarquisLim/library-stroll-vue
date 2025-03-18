@@ -20,7 +20,11 @@
         "vue": "^3.3.13"
     },
     "dependencies": {
+        "@capacitor/android": "^7.1.0",
+        "@capacitor/cli": "^7.1.0",
+        "@capacitor/core": "^7.1.0",
         "@inertiajs/inertia": "^0.11.1",
+        "@yeger/vue-masonry-wall": "^5.0.18",
         "daisyui": "^4.12.22",
         "vue3-tags-input": "^1.0.12",
         "vuedraggable": "^4.1.0"

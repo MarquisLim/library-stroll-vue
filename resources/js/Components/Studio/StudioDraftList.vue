@@ -1,4 +1,6 @@
 <template>
+    <!-- Внутри просто используем flex/space-y, сам список будет вести себя адаптивно
+         в рамках родительского контейнера. -->
     <div>
         <draggable
             :list="drafts"
@@ -32,7 +34,9 @@
                         N/A
                     </div>
 
-                    <span class="text-white font-semibold">{{ element.title || 'Без названия' }}</span>
+                    <span class="text-white font-semibold">
+                        {{ element.title || 'Без названия' }}
+                    </span>
                 </div>
             </template>
         </draggable>
@@ -72,3 +76,7 @@ export default {
     }
 }
 </script>
+
+<style scoped>
+/* Дополнительные стили при необходимости */
+</style>
