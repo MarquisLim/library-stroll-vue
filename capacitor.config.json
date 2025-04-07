@@ -1,5 +1,8 @@
 {
-  "appId": "com.example.myapp",
-  "appName": "MyApp",
-  "webDir": "public"
+    "appId": "com.library.stroll",
+    "appName": "Library Stroll",
+    "webDir": "public/build",
+    "server": {
+        "url": "http://34.44.66.31:81"
+    }
 }

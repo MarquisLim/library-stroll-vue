@@ -5,6 +5,7 @@
 /public/storage
 /storage/*.key
 /storage/pail
+/android
 /vendor
 .env
 .env.backup
@@ -22,3 +23,5 @@ yarn-error.log
 /.vscode
 /.zed
 public_html
+/storage/media-library/temp/*
+!/storage/media-library/temp/.gitignore
