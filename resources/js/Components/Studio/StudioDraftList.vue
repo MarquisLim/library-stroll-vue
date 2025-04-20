@@ -24,9 +24,12 @@
 
                     <img
                         v-if="element.media && element.media.length > 0"
-                        :src="element.media[0].original_url + '?v=' + element.media[0].updated_at"
+                        :src="element.type === 'video' && element.thumb_url
+                              ? element.thumb_url
+                              : element.media[0].original_url + '?v=' + element.media[0].updated_at"
                         class="h-10 w-10 object-cover inline-block mr-2 rounded-full"
                     />
+
                     <div
                         v-else
                         class="h-10 w-10 inline-block mr-2 bg-gray-600 flex items-center justify-center text-white text-sm rounded-full"

@@ -21,7 +21,7 @@ class GalleryController extends Controller
                     $q->where('user_id', $userId);
                 }
             }])
-            ->withCount('likes') // Добавляем likes_count
+            ->withCount('likes')
             ->take(20)
             ->get()
             ->map(function($artwork) use ($userId) {

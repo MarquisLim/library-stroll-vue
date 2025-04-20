@@ -2,11 +2,18 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\UploadArtworkRequest;
+use App\Jobs\ProcessVideoPreviewJob;
 use App\Models\Artwork;
 use App\Models\Collection;
 use App\Models\Tag;
+use FFMpeg\Coordinate\TimeCode;
+use FFMpeg\FFMpeg;
+use FFMpeg\FFProbe;
+use FFMpeg\Format\Video\X264;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class StudioController extends Controller
@@ -49,44 +56,36 @@ class StudioController extends Controller
         ]);
     }
 
-    public function uploadFile(Request $request)
+    public function uploadFile(UploadArtworkRequest $request)
     {
-        $request->validate([
-            'file'=>'required|file|max:20480|mimes:jpg,jpeg,png,gif,mp4,mov,avi,webm'
-        ],[
-            'file.mimes'=>'Неверный формат файла (jpg,jpeg,png,gif,mp4,mov,avi,webm)',
-            'file.max'=>'Слишком большой файл. Максимум 20 МБ.',
-        ]);
+        $artwork = Artwork::firstOrNew([
+            'id' => $request->draftId,
+            'user_id' => auth()->id(),
+        ], ['is_published'=>false]);
+        $artwork->save();
+        $artwork->clearMediaCollection('artworks');
 
-        if($request->draftId){
-            $artwork = Artwork::where('user_id',Auth::id())->findOrFail($request->draftId);
-            $artwork->clearMediaCollection('artworks');
-        } else {
-            $artwork = new Artwork();
-            $artwork->user_id = Auth::id();
-            $artwork->is_published = false;
-            $artwork->save();
-
-            $allCollection = Collection::firstOrCreate([
-                'user_id'=>Auth::id(),
-                'name'=>'Все'
-            ], ['is_private'=>false]);
-            $artwork->collections()->attach($allCollection->id);
-        }
-
-        $artwork->addMedia($request->file('file'))
+        $media = $artwork
+            ->addMedia($request->file('file'))
             ->usingFileName(Str::random(10).'.'.$request->file('file')->getClientOriginalExtension())
             ->toMediaCollection('artworks');
 
+        $artwork->type = explode('/', $media->mime_type)[0];
+        $artwork->save();
+
+        if ($artwork->type === 'video') {
+            ProcessVideoPreviewJob::dispatch($media);
+        }
+
         return response()->json([
             'message'=>'Файл загружен',
-            'artwork'=>$artwork->load('media','tags','collections')
+            'artwork'=>$artwork->load('media','tags','collections')->append(['thumb_url','preview_url','video_duration_formatted']),
         ]);
     }
 
     public function updateDraft(Request $request, $id)
     {
-        $draft=Artwork::where('user_id',Auth::id())->findOrFail($id);
+        $draft= Artwork::where('user_id',Auth::id())->findOrFail($id);
         $draft->title=$request->title;
         $draft->description=$request->description;
         $draft->is_adult=$request->is_adult ? true:false;

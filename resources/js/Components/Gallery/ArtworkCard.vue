@@ -2,33 +2,43 @@
     <div
         class="relative group mb-2 break-inside-avoid cursor-pointer transition-opacity duration-500 ease-in-out transform hover:scale-105 appear"
         @click="goToArtwork"
+        @mouseenter="hover = true"
+        @mouseleave="hover = false"
     >
         <div class="w-full h-0 pb-[100%] relative"> <!-- Фиксированное соотношение сторон (квадрат) -->
             <!-- Изображение -->
             <img
                 v-if="!isVideo"
-                :src="`${art.media[0]?.original_url}?v=${art.media[0]?.updated_at}`"
+                :src="thumbOrOriginal"
                 class="absolute top-0 left-0 w-full h-full object-cover rounded"
                 loading="lazy"
-                @load="handleImageLoad"
-                alt="Artwork Image"
+                :alt="art.title"
             />
 
             <!-- Видео -->
-            <div v-else class="absolute top-0 left-0 w-full h-full">
+            <template v-else class="absolute top-0 left-0 w-full h-full">
+                <video
+                    v-if="hover && previewExists"
+                    :src="previewSrc"
+                    class="absolute inset-0 w-full h-full object-cover rounded"
+                    muted autoplay loop playsinline
+                ></video>
                 <!-- Показ первого кадра видео -->
                 <img
-                    :src="`${art.media[0]?.thumbnail_url}?v=${art.media[0]?.updated_at}`"
+                    v-else
+                    :src="thumbOrOriginal"
                     class="absolute top-0 left-0 w-full h-full object-cover rounded"
                     loading="lazy"
-                    alt="Video Thumbnail"
+                    :alt="art.title"
                 />
 
-                <!-- Продолжительность видео -->
-                <span class="absolute bottom-2 right-2 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded flex items-center">
-                    {{ videoDuration }}
+                <span
+                    v-if="isVideo && !hover && art.video_duration_formatted"
+                    class="absolute bottom-2 right-2 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded flex items-center"
+                >
+                    ⏱ {{ art.video_duration_formatted }}
                 </span>
-            </div>
+            </template >
         </div>
 
         <!-- Overlay при hover -->
@@ -74,21 +84,34 @@
 </template>
 
 <script setup>
-import { defineProps, defineEmits, ref } from 'vue'
+import { defineProps, defineEmits, computed, ref } from 'vue'
 
 const props = defineProps({
     art: Object
 })
+const hover = ref(false)
 
 const emit = defineEmits(['save', 'like'])
 
 const collectionAnim = ref('')
 const likeAnim = ref('')
-const videoDuration = ref('')
 
-const isVideo = ref(false)
+const isVideo = computed(() => props.art.type === 'video')
 
-// Определение, является ли арт видео
+const previewExists = computed(() => !!props.art.preview_url)  // ← ИЗМЕНИЛ
+
+const thumbOrOriginal = computed(() => {
+    const m = props.art.media[0]
+    if (!m) return null
+    if (props.art.thumb_url) {
+        return `${props.art.thumb_url}?v=${m.updated_at}`
+    }
+    return `${m.original_url}?v=${m.updated_at}`
+})
+const previewSrc = computed(() => {
+    if (!previewExists.value) return null
+    return `${props.art.preview_url}?v=${props.art.media[0].updated_at}`
+})
 if (props.art.media[0]?.type === 'video') {
     isVideo.value = true
 }
@@ -124,15 +147,6 @@ function resetButton(button) {
     } else if(button === 'like'){
         likeAnim.value = ''
     }
-}
-
-function handleImageLoad(event) {
-    // Можно добавить дополнительные действия при загрузке изображения
-}
-
-function setVideoDuration(event) {
-    const duration = event.target.duration
-    videoDuration.value = formatDuration(duration)
 }
 
 function formatDuration(seconds) {
