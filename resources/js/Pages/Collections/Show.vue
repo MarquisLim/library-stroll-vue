@@ -1,152 +1,147 @@
 <template>
-    <AppLayout :title="collection.name + ' - Коллекция'">
-        <div class="min-h-screen text-white p-4 relative">
-            <!-- Кнопка назад -->
-            <div class="absolute top-4 left-4 z-50">
-                <button class="bg-black bg-opacity-50 hover:bg-opacity-80 rounded-full p-2 flex items-center justify-center"
-                        @click="goBack">
-                    <img src="/images/icons/back.svg" alt="back" class="w-4 h-4" />
+    <AppLayout :title="`${collection.name} – Коллекция`">
+        <div class="min-h-screen bg-gray-900 text-white">
+            <div class="relative overflow-hidden bg-gray-800">
+
+                <!-- Background Image -->
+                <div class="absolute top-0 left-1/2 -translate-x-1/2
+              flex gap-4 opacity-8 pointer-events-none">
+                    <img v-for="(a,i) in artworks.slice(0,5)"
+                         :key="i"
+                         :src="a.thumb_url || a.media[0]?.original_url
+                         || '/images/icons/collection-placeholder.svg'"
+                         class="w-40 h-56 object-cover rounded-lg shadow-lg"
+                         :style="`transform: rotate(${(i-2)*10}deg)`">
+                </div>
+
+                <!-- Dark Bg -->
+                <div class="absolute inset-0 bg-gradient-to-b from-black/70 to-black/90"></div>
+
+                <!-- Content -->
+                <div class="relative z-10 flex flex-col md:flex-row items-center max-w-5xl mx-auto px-6 py-14 md:py-20">
+
+                    <!-- Main Img for Collection -->
+                    <img
+                        :src="artworks[0]?.thumb_url || artworks[0]?.media[0]?.original_url
+                         || '/images/icons/collection-placeholder.svg'"
+                        class="w-40 h-40 object-cover rounded-lg shadow-lg flex-shrink-0 mb-6 md:mb-0"
+                    >
+
+                    <!-- Info -->
+                    <div class="md:ml-8 flex-1 text-center md:text-left">
+
+                      <span class="uppercase tracking-widest text-purple-400 text-xs">
+                        Коллекция
+                      </span>
+
+                        <h1 class="text-3xl sm:text-4xl font-bold leading-tight mt-1">
+                            {{ collection.name }}
+                        </h1>
+
+                        <p class="text-sm text-gray-300 mt-2">
+                            {{ collection.artworks_count }} работ &nbsp;·&nbsp;
+                            создано {{ new Date(collection.created_at).toLocaleDateString() }}
+                        </p>
+
+                        <!-- Author -->
+                        <div class="flex items-center justify-center md:justify-start mt-4">
+                            <img :src="author.profile_photo_url"
+                                 class="w-10 h-10 rounded-full object-cover mr-3">
+                            <Link :href="`/profile/${author.id}`"
+                                  class="text-blue-400 hover:underline text-sm">
+                                {{ author.name }}
+                            </Link>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- back-button -->
+                <button @click="goBack"
+                        class="absolute top-4 left-4 bg-black/50 hover:bg-black/80 p-2 rounded-full z-20">
+                    <img src="/images/icons/back.svg" alt="" class="h-4 w-4">
                 </button>
             </div>
 
-            <!-- Центрирование контента -->
-            <div class="flex flex-col items-center text-center pt-10">
-                <!-- Блок коллекции в закругленном квадрате -->
-                <div class="bg-purple-900 rounded-lg p-4 flex flex-col items-center w-64">
-                    <!-- Закругленная картинка-аватар коллекции -->
-                    <div class="w-24 h-24 mb-4 rounded-full overflow-hidden bg-purple-600 flex items-center justify-center">
-                        <template v-if="artworks.length && artworks[0].media && artworks[0].media.length">
-                            <img :src="artworks[0].media[0].original_url" alt="Collection Avatar" class="w-full h-full object-cover" />
-                        </template>
-                        <template v-else>
-                            <!-- Заглушка, если нет медиа -->
-                            <img src="/images/icons/collection-placeholder.svg" alt="Placeholder" class="w-full h-full object-cover" />
-                        </template>
-                    </div>
-
-                    <h1 class="text-2xl font-bold mb-2">{{ collection.name }}</h1>
-                    <h2 class="text-lg font-semibold mb-1">{{ author.name }}</h2>
-                    <p class="text-gray-200 text-sm mb-1">
-                        Работ: {{ collection.artworks_count }}
-                    </p>
-                    <p class="text-gray-300 text-sm">
-                        Создано: {{ new Date(collection.created_at).toLocaleDateString() }}
-                    </p>
-                </div>
+            <!-- masonry -->
+            <div class="p-4">
+                <MasonryGrid :items="artworks">
+                    <template #default="{ item }">
+                        <ArtworkCard
+                            :art="item"
+                            @save="openCollectionSelector"
+                            @like="likeArt"
+                        />
+                    </template>
+                </MasonryGrid>
             </div>
 
-            <!-- Список работ в коллекции -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mt-10 relative z-10">
-                <ArtworkCard
-                    v-for="art in artworks"
-                    :key="art.id"
-                    :art="art"
-                    @save="openCollectionSelector"
-                    @like="likeArt"
-                />
-            </div>
+            <!-- selector / create-modal / toast -->
+            <CollectionSelector v-if="showSelector"
+                                :collections="userCollections"
+                                :position="dropdownPos"
+                                :selected-collections="selectedArt.in_collections"
+                                @close="showSelector=false"
+                                @selected="saveArtToCollection"
+                                @createCollection="showCreateCol=true"/>
 
-            <!-- Модальные окна и всплывающие элементы -->
-            <CollectionSelector
-                v-if="showCollectionSelectorFlag"
-                :collections="userCollections"
-                :position="dropdownPosition"
-                :selected-collections="selectedArt.in_collections"
-                @close="showCollectionSelectorFlag=false"
-                @selected="saveArtToCollection"
-                @createCollection="createCollection"
-                class="z-50"
-            />
+            <CreateCollectionModal v-if="showCreateCol"
+                                   @close="showCreateCol=false"
+                                   @created="c => userCollections.push(c)" />
 
-            <CreateCollectionModal
-                v-if="showCreateCollectionModal"
-                @close="showCreateCollectionModal=false"
-                @created="collectionCreated"
-                class="z-50"
-            />
-
-            <div v-if="notificationMessage"
-                 class="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-80 text-white px-4 py-2 rounded z-50">
-                {{ notificationMessage }}
+            <div v-if="toast"
+                 class="fixed bottom-4 left-1/2 -translate-x-1/2 bg-black/80 px-4 py-2 rounded">
+                {{ toast }}
             </div>
         </div>
     </AppLayout>
 </template>
-
 <script setup>
-import { ref } from 'vue'
-import { usePage } from '@inertiajs/vue3'
-import AppLayout from '@/Layouts/AppLayout.vue'
-import ArtworkCard from '@/Components/Gallery/ArtworkCard.vue'
+import { ref, computed, onMounted } from 'vue'
+import { usePage, Link }            from '@inertiajs/vue3'
+import { useArtworkActions }  from '@/stores/useArtworkActions'
+
+import AppLayout         from '@/Layouts/AppLayout.vue'
+import MasonryGrid       from '@/Components/MasonryGrid.vue'
+import ArtworkCard       from '@/Components/Gallery/ArtworkCard.vue'
 import CollectionSelector from '@/Components/Collections/CollectionSelector.vue'
 import CreateCollectionModal from '@/Components/Collections/CreateCollectionModal.vue'
 import axios from 'axios'
 
-const page = usePage()
-const collection = page.props.collection
-const author = page.props.author
-const artworks = page.props.artworks || []
+/* ---------- данные ---------- */
+const { props } = usePage()
+const collection   = props.collection
+const author       = props.author
+const artworks     = ref(props.artworks || [])
+const userCollections = ref(props.userCollections || [])
 
-// Теперь userCollections не пуст, т.к. мы его передали из контроллера
-const userCollections = ref(page.props.userCollections || [])
+const { openSelector, toggleLike, setCollections } = useArtworkActions()
+onMounted(()=> setCollections(userCollections.value))
 
-const showCollectionSelectorFlag = ref(false)
-const showCreateCollectionModal = ref(false)
-const selectedArt = ref(null)
-const dropdownPosition = ref({ top:0, left:0 })
-const notificationMessage = ref(null)
+/* ---------- модалки ---------- */
+const showSelector  = ref(false)
+const showCreateCol = ref(false)
+const dropdownPos   = ref({top:0,left:0})
+const selectedArt   = ref(null)
+const toast         = ref(null)
 
-function goBack() {
-    window.history.back()
-}
+/* ---------- методы ---------- */
+function goBack(){ history.back() }
 
-function openCollectionSelector({ art, event }) {
-    selectedArt.value = art
-    const rect = event.currentTarget.getBoundingClientRect()
-    dropdownPosition.value = { top: rect.bottom + window.scrollY, left: rect.left + window.scrollX }
-    showCollectionSelectorFlag.value = true
-}
 
-function saveArtToCollection(colIds) {
-    axios.post(`/artworks/${selectedArt.value.id}/add-to-collection`, { collections: colIds })
-        .then(res => {
-            showCollectionSelectorFlag.value = false
-            notificationMessage.value = 'Добавлено в коллекцию'
-            setTimeout(() => notificationMessage.value = null, 3000)
-            const idx = artworks.findIndex(a => a.id === selectedArt.value.id)
-            if(idx >= 0) {
-                artworks[idx].in_collections = res.data.in_collections
-            }
-        }).catch(err => console.log(err))
-}
 
-function createCollection() {
-    showCreateCollectionModal.value = true
-}
-
-function collectionCreated(col) {
-    userCollections.value.push(col)
-    showCreateCollectionModal.value = false
-    notificationMessage.value = 'Коллекция создана'
-    setTimeout(() => notificationMessage.value = null, 3000)
-}
-
-function likeArt(art) {
-    axios.post(`/artworks/${art.id}/like`)
-        .then(res => {
-            const idx = artworks.findIndex(a => a.id === art.id)
-            if (idx >= 0) {
-                artworks[idx].likes_count = res.data.likes_count
-                artworks[idx].liked_by_user = res.data.liked
-            }
-            notificationMessage.value = res.data.liked ? 'Лайкнуто' : 'Лайк удален'
-            setTimeout(() => notificationMessage.value = null, 3000)
-        }).catch(err => console.log(err))
-}
 </script>
 
 <style scoped>
-.z-50 {
-    z-index: 50;
+@keyframes avatar-pulse {
+    0%,100% { transform: scale(1);   opacity: .8 }
+    50%     { transform: scale(1.08);opacity: 0  }
 }
+/* подключаем через “arbitrary” tailwind-class */
+.animate-avatar-pulse {
+    animation: avatar-pulse 2.8s ease-in-out infinite;
+}
+/* мягкая тень для превью-веера; можно убрать, если не нужно */
+.shadow-lg { box-shadow: 0 12px 25px rgba(0,0,0,.35); }
+
 </style>
+

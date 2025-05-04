@@ -80,10 +80,18 @@ class ArtworkController extends Controller
     public function authorWorks(Request $request, $id)
     {
         $page = $request->page ?? 1;
-        $perPage = $request->per_page ?? 12; // Используем значение per_page из запроса или 12 по умолчанию
+        $perPage = $request->per_page ?? 12;
+        $excludeArtworkId = $request->exclude_artwork_id;
 
-        $artworks = Artwork::where('user_id', $id)
+        $query = Artwork::where('user_id', $id)
             ->where('is_published', true)
+            ->where('is_private', false);
+
+        if ($excludeArtworkId) {
+            $query->where('id', '!=', $excludeArtworkId);
+        }
+
+        $artworks = $query
             ->with(['media', 'user'])
             ->withCount('likes')
             ->orderBy('created_at', 'desc')

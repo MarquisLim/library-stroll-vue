@@ -137,23 +137,6 @@ class StudioController extends Controller
         return response()->json(['message'=>'Черновик удален']);
     }
 
-    public function createCollection(Request $request)
-    {
-        $data = $request->validate([
-            'name' => 'required|string|max:255',
-            'is_private' => 'boolean'
-        ]);
-
-        $data['user_id'] = Auth::id();
-        $collection = Collection::create($data);
-
-        // Принудительно назначаем пустой список артов и счетчик 0
-        $collection->setRelation('artworks', collect([]));
-        $collection->artworks_count = 0;
-
-        return response()->json(['collection' => $collection]);
-    }
-
     public function reorderDrafts(Request $request)
     {
         $order = $request->draft_order ?? [];

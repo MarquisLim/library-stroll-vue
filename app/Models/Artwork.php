@@ -77,8 +77,6 @@ class Artwork extends Model implements HasMedia
         // Image
         if (str_starts_with($media->mime_type, 'image/')) {
             $this->addMediaConversion('thumb')
-                ->width(400)
-                ->height(400)
                 ->nonQueued();
         }
 
@@ -87,8 +85,6 @@ class Artwork extends Model implements HasMedia
             $randomSecond = rand(1, 20);
             $this->addMediaConversion('thumb')
                 ->extractVideoFrameAtSecond($randomSecond)
-                ->width(400)
-                ->height(400)
                 ->nonQueued();
         }
     }

@@ -31,7 +31,7 @@ export default {
     },
     methods:{
         createCollection(){
-            Inertia.post(route('studio.createCollection'), {
+            Inertia.post(route('createCollection'), {
                 name: this.name,
                 is_private: this.is_private
             }, {

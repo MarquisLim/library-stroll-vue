@@ -65,6 +65,22 @@ class CollectionController extends Controller
         return response()->json($collections);
     }
 
+    public function create(Request $request)
+    {
+        $data = $request->validate([
+            'name' => 'required|string|max:255',
+            'is_private' => 'boolean'
+        ]);
+
+        $data['user_id'] = Auth::id();
+        $collection = Collection::create($data);
+
+        $collection->setRelation('artworks', collect([]));
+        $collection->artworks_count = 0;
+
+        return response()->json(['collection' => $collection]);
+    }
+
     public function update(Request $request, $id)
     {
         $collection = Collection::findOrFail($id);

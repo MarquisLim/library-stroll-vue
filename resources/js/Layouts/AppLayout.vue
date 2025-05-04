@@ -237,6 +237,7 @@ function onSearchKey(e) {
         <main class="flex-1">
             <slot />
         </main>
+        <GlobalModals />
     </div>
 </template>
 

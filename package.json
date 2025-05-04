@@ -26,6 +26,10 @@
         "@inertiajs/inertia": "^0.11.1",
         "@yeger/vue-masonry-wall": "^5.0.18",
         "daisyui": "^4.12.22",
+        "imagesloaded": "^5.0.0",
+        "masonry-layout": "^4.2.2",
+        "pinia": "^3.0.2",
+        "swiper": "^11.2.6",
         "vue3-tags-input": "^1.0.12",
         "vuedraggable": "^4.1.0"
     }

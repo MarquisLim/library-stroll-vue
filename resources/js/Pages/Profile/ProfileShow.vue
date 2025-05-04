@@ -1,258 +1,169 @@
 <template>
-    <AppLayout :title="`${profileUser.name} - Профиль`">
+    <AppLayout :title="`${profileUser.name} – Профиль`">
         <div class="p-4 bg-gray-900 text-white min-h-screen">
-            <!-- Информация о пользователе -->
-            <div class="flex flex-col items-center text-center mb-4">
-                <img :src="profileUser.profile_photo_url" alt="Avatar" class="w-40 h-40 rounded-full object-cover mb-2">
-                <h1 class="text-2xl font-bold mb-1">{{ profileUser.name }}</h1>
-                <p class="text-gray-400 text-sm mb-1">
+
+            <!-- ───────── аватар и имя ───────── -->
+            <div class="flex flex-col items-center text-center mb-6">
+                <img :src="profileUser.profile_photo_url" class="w-40 h-40 rounded-full object-cover mb-2" />
+                <h1 class="text-2xl font-bold">{{ profileUser.name }}</h1>
+                <p class="text-gray-400 text-sm">
                     Присоединился: {{ new Date(profileUser.created_at).toLocaleDateString() }}
                 </p>
-                <div v-if="isOwner">
-                    <Link :href="route('profile.show')" class="text-blue-400 hover:underline">Настройки профиля</Link>
-                </div>
+
+                <Link v-if="isOwner" :href="route('profile.show')" class="text-blue-400 hover:underline mt-1">
+                    Настройки профиля
+                </Link>
             </div>
 
-            <!-- Коллекции (слайдер) -->
-            <div class="mb-4">
-                <h2 class="text-xl font-semibold mb-2">Коллекции</h2>
-                <div class="overflow-x-auto flex space-x-4 pb-2">
-                    <CollectionCard
-                        v-for="collection in collections"
-                        :key="collection.id"
-                        :collection="collection"
-                        @edit="openEditModal"
-                        @remove="confirmDeleteModal"
-                    />
-                </div>
+            <!-- ───────── коллекции (слайдер) ───────── -->
+            <h2 class="text-xl font-semibold mb-2">Коллекции</h2>
+
+            <Swiper
+                :modules="[Navigation, Pagination, Mousewheel]"
+                :slides-per-view="'auto'"
+                :space-between="16"
+                navigation
+                mousewheel
+                class="mb-8"
+            >
+            <SwiperSlide v-for="col in collections" :key="col.id" class="!w-auto">
+                <CollectionCard
+                    :collection="col"
+                    @edit="openEditModal"
+                    @remove="confirmDeleteModal"
+                    :is-owner="isOwner"
+                />
+            </SwiperSlide>
+            </Swiper>
+
+            <!-- ───────── вкладки ───────── -->
+            <div class="flex justify-center space-x-4 mb-4">
+                <button @click="currentTab='created'"
+                        :class="tabClass('created')">Созданные</button>
+                <button @click="currentTab='liked'; loadLikedArtworks()"
+                        :class="tabClass('liked')">Лайкнутые</button>
             </div>
 
-            <!-- Вкладки: Созданные | Лайкнутые -->
-            <div class="mb-4 flex justify-center space-x-4">
-                <button
-                    @click="currentTab='created'"
-                    :class="currentTab==='created' ? 'border-b-2 border-blue-500 text-blue-400' : 'text-gray-400'"
-                    class="pb-2"
-                >
-                    Созданные
-                </button>
-                <button
-                    @click="currentTab='liked'; loadLikedArtworks()"
-                    :class="currentTab==='liked' ? 'border-b-2 border-blue-500 text-blue-400' : 'text-gray-400'"
-                    class="pb-2"
-                >
-                    Лайкнутые
-                </button>
-            </div>
+            <!-- ───────── созданные ───────── -->
+            <MasonryGrid v-if="currentTab==='created'" :items="artworks">
+                <template #default="{ item }">
+                    <ArtworkCard :art="item"/>
+                </template>
+            </MasonryGrid>
 
-            <!-- Содержимое вкладок -->
-            <div v-if="currentTab==='created'">
-                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
-                    <ArtworkCard
-                        v-for="art in artworks"
-                        :key="art.id"
-                        :art="art"
-                        @save="openCollectionSelector"
-                        @like="likeArt"
-                    />
-                </div>
-            </div>
+            <!-- ───────── лайкнутые ───────── -->
             <div v-else-if="currentTab==='liked'">
-                <div v-if="loadingLikes" class="text-center py-4">Загрузка лайкнутых работ...</div>
-                <div v-else class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
-                    <ArtworkCard
-                        v-for="art in likedArtworks"
-                        :key="art.id"
-                        :art="art"
-                        @save="openCollectionSelector"
-                        @like="likeArt"
-                    />
-                </div>
+               <p v-if="loadingLikes" class="text-center py-4">Загрузка лайкнутых работ…</p>
+               <MasonryGrid v-else :items="likedArtworks">
+                 <template #default="{ item }">
+                   <ArtworkCard :art="item"/>
+                 </template>
+               </MasonryGrid>
             </div>
-            <!-- Компоненты для добавления в коллекцию, уведомления и т.п. -->
-            <CollectionSelector
-                v-if="showCollectionSelectorFlag"
-                :collections="userCollections"
-                :position="dropdownPosition"
-                :selected-collections="selectedArt.in_collections"
-                @close="showCollectionSelectorFlag=false"
-                @selected="saveArtToCollection"
-                @createCollection="createCollection"
-            />
-            <CreateCollectionModal
-                v-if="showCreateCollectionModal"
-                @close="showCreateCollectionModal=false"
-                @created="collectionCreated"
-            />
+
+            <!-- ───────── модалки редакт/удал ───────── -->
             <EditCollectionModal
                 v-if="showEditModal"
                 :initial-collection="editingCollection"
-                @close="showEditModal = false"
+                @close="showEditModal=false"
                 @saved="handleUpdate"
             />
 
-            <!-- Модальное окно подтверждения удаления -->
             <ConfirmDeleteModal
                 v-if="showDeleteModal"
                 :collection="deletingCollection"
-                @close="showDeleteModal = false"
+                @close="showDeleteModal=false"
                 @confirmed="handleDestroy"
             />
-            <div v-if="notificationMessage" class="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-80 text-white px-4 py-2 rounded">
-                {{ notificationMessage }}
-            </div>
         </div>
     </AppLayout>
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { usePage, Link } from '@inertiajs/vue3'
-import AppLayout from "@/Layouts/AppLayout.vue"
-import ArtworkCard from '@/Components/Gallery/ArtworkCard.vue'
-import CollectionCard from '@/Components/Collections/CollectionCard.vue'
-import CollectionSelector from '@/Components/Collections/CollectionSelector.vue'
-import CreateCollectionModal from '@/Components/Collections/CreateCollectionModal.vue'
+import { ref, onMounted }           from 'vue'
+import { usePage, Link }            from '@inertiajs/vue3'
+import { Inertia }                  from '@inertiajs/inertia'
+import axios                        from 'axios'
+
+import AppLayout           from '@/Layouts/AppLayout.vue'
+import ArtworkCard         from '@/Components/Gallery/ArtworkCard.vue'
+import MasonryGrid         from '@/Components/MasonryGrid.vue'
+import CollectionCard      from '@/Components/Collections/CollectionCard.vue'
 import EditCollectionModal from '@/Components/Collections/EditCollectionModal.vue'
-import ConfirmDeleteModal from '@/Components/Collections/ConfirmDeleteModal.vue'
-import axios from 'axios'
+import ConfirmDeleteModal  from '@/Components/Collections/ConfirmDeleteModal.vue'
 
-const page = usePage()
-const profileUser = page.props.profileUser
-const artworks = page.props.artworks || []
-const collections = page.props.collections || []
-const isOwner = page.props.isOwner || false
-const editingCollection = ref(null)
+import { Swiper, SwiperSlide } from 'swiper/vue'
+import 'swiper/css'
+import 'swiper/css/navigation'
+import 'swiper/css/pagination'
+import { Navigation, Pagination, Mousewheel } from 'swiper/modules'
+
+/* ---------- Pinia ---------- */
+import { useArtworkActions } from '@/stores/useArtworkActions'
+const actions = useArtworkActions()
+const { toggleLike, openSelector, setCollections,
+    addNewCollection } = actions   // addNewCollection пригодится после сохранения
+
+/* ---------- данные сервера ---------- */
+const { props }   = usePage()
+const profileUser = props.profileUser
+const artworks    = props.artworks      || []
+const collections = ref(props.collections || [])   // локальные для слайдера
+const isOwner     = props.isOwner       || false
+
+/* передаём все коллекции текущего юзера в Pinia
+   (нужны селектору коллекций) */
+if (props.userCollections) setCollections(props.userCollections)
+
+/* ---------- вкладки ---------- */
+const currentTab     = ref('created')
+const likedArtworks  = ref([])
+const loadingLikes   = ref(false)
+
+function loadLikedArtworks () {
+    if (likedArtworks.value.length || loadingLikes.value) return
+    loadingLikes.value = true
+    axios.get(`/profile/${profileUser.id}/likes`)
+        .then(res => likedArtworks.value = res.data)
+        .finally   (() => loadingLikes.value = false)
+}
+function tabClass(tab){
+    return currentTab.value===tab
+        ? 'border-b-2 border-blue-500 text-blue-400 pb-2'
+        : 'text-gray-400 pb-2'
+}
+
+/* ---------- коллекции: редакт / удал ---------- */
+const editingCollection  = ref(null)
 const deletingCollection = ref(null)
-const showEditModal = ref(false)
-const showDeleteModal = ref(false)
+const showEditModal      = ref(false)
+const showDeleteModal    = ref(false)
 
-// Если хотите всегда показывать коллекции текущего залогиненного пользователя в селекторе:
-const userCollections = ref(page.props.userCollections || [])
+function openEditModal(col){ editingCollection.value = {...col}; showEditModal.value = true }
 
-const currentTab = ref('created')
-const likedArtworks = ref([])
-const loadingLikes = ref(false)
-
-function loadLikedArtworks() {
-    if(likedArtworks.value.length === 0){
-        loadingLikes.value = true
-        axios.get(`/profile/${profileUser.id}/likes`)
-            .then(res => {
-                likedArtworks.value = res.data
-                loadingLikes.value = false
-            })
-            .catch(err => {
-                console.log(err)
-                loadingLikes.value = false
-            })
-    }
-}
-
-const showCollectionSelectorFlag = ref(false)
-const showCreateCollectionModal = ref(false)
-const selectedArt = ref(null)
-const dropdownPosition = ref({ top:0,left:0 })
-const notificationMessage = ref(null)
-
-function openCollectionSelector({ art, event }) {
-    selectedArt.value = art
-    const rect = event.currentTarget.getBoundingClientRect()
-    dropdownPosition.value = { top: rect.bottom + window.scrollY, left: rect.left + window.scrollX }
-    showCollectionSelectorFlag.value = true
-}
-
-function openEditModal(collection) {
-    editingCollection.value = { ...collection } // делаем копию
-    showEditModal.value = true
-}
-
-function saveArtToCollection(colIds) {
-    axios.post(`/artworks/${selectedArt.value.id}/add-to-collection`, { collections: colIds })
-        .then(res => {
-            showCollectionSelectorFlag.value = false
-            notificationMessage.value = 'Добавлено в коллекцию'
-            setTimeout(() => notificationMessage.value = null, 3000)
-            const idx = artworks.findIndex(a => a.id === selectedArt.value.id)
-            if (idx >= 0) {
-                artworks[idx].in_collections = res.data.in_collections
-            }
-            const idxLiked = likedArtworks.value.findIndex(a => a.id === selectedArt.value.id)
-            if(idxLiked >= 0) {
-                likedArtworks.value[idxLiked].in_collections = res.data.in_collections
-            }
-        }).catch(err => console.log(err))
-}
-
-function handleUpdate(updatedData) {
-    // Вызываем API для обновления
-    axios.post(`/collections/${editingCollection.value.id}`, {
-        name: updatedData.name,
-        is_private: updatedData.is_private
-    })
-        .then(res => {
+function handleUpdate(updated){
+    // PUT/PATCH на сервер
+    axios.post(`/collections/${editingCollection.value.id}`, updated)
+        .then(({data})=>{
+            const i = collections.value.findIndex(c=>c.id===editingCollection.value.id)
+            if(i>-1) collections.value[i] = {...collections.value[i], ...data.collection}
             showEditModal.value = false
-            // Найдём коллекцию и обновим локально
-            const idx = collections.findIndex(c => c.id === editingCollection.value.id)
-            if (idx >= 0) {
-                collections[idx] = { ...collections[idx], ...res.data.collection }
-            }
         })
-        .catch(err => console.log(err))
 }
 
-function confirmDeleteModal(collection) {
-    deletingCollection.value = collection
-    showDeleteModal.value = true
-}
+function confirmDeleteModal(col){ deletingCollection.value = col; showDeleteModal.value = true }
 
-function handleDestroy() {
+function handleDestroy(){
     axios.delete(`/collections/${deletingCollection.value.id}`)
-        .then(res => {
+        .then(()=>{
+            collections.value = collections.value.filter(c=>c.id!==deletingCollection.value.id)
             showDeleteModal.value = false
-            // Удаляем локально
-            const idx = collections.findIndex(c => c.id === deletingCollection.value.id)
-            if (idx >= 0) {
-                collections.splice(idx, 1)
-            }
         })
-        .catch(err => console.log(err))
 }
 
-function createCollection() {
-    showCreateCollectionModal.value = true
+/* ---------- лайк слайдера (если вдруг нужен) ---------- */
+function likeArtLocal(art){
+    toggleLike(art)
 }
 
-function collectionCreated(col) {
-    // col уже содержит artworks=[]
-    userCollections.value.push(col)
-    showCreateCollectionModal.value = false
-    notificationMessage.value = 'Коллекция создана'
-    setTimeout(() => notificationMessage.value = null, 3000)
-}
-
-function likeArt(art) {
-    axios.post(`/artworks/${art.id}/like`)
-        .then(res => {
-            const updateArtwork = (list) => {
-                const index = list.findIndex(a => a.id === art.id)
-                if (index >= 0) {
-                    list[index].likes_count = res.data.likes_count
-                    list[index].liked_by_user = res.data.liked
-                }
-            }
-            updateArtwork(artworks)
-            updateArtwork(likedArtworks.value)
-            notificationMessage.value = res.data.liked ? 'Лайкнуто' : 'Лайк удален'
-            setTimeout(() => notificationMessage.value = null, 3000)
-        }).catch(err => console.log(err))
-}
 </script>
-
-
-<style scoped>
-/* Стили можно дополнять */
-.overflow-x-auto {
-    overflow-x: auto;
-}
-</style>

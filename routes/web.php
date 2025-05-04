@@ -36,7 +36,6 @@ Route::middleware([
     Route::post('/studio/update-draft/{id}',[StudioController::class,'updateDraft'])->name('studio.updateDraft');
     Route::post('/studio/publish/{id}',[StudioController::class,'publish'])->name('studio.publish');
     Route::delete('/studio/draft/{id}',[StudioController::class,'destroyDraft'])->name('studio.destroyDraft');
-    Route::post('/studio/create-collection',[StudioController::class,'createCollection'])->name('studio.createCollection');
     Route::post('/studio/reorder-drafts',[StudioController::class,'reorderDrafts'])->name('studio.reorderDrafts');
     Route::get('/studio/search-tags',[StudioController::class,'searchTags'])->name('studio.searchTags');
     Route::get('/studio/search-collections',[StudioController::class,'searchCollections'])->name('studio.searchCollections');
@@ -50,6 +49,7 @@ Route::middleware([
     Route::post('/collections',[CollectionController::class,'store'])->name('collections.store');
     Route::post('/collections/{id}',[CollectionController::class,'update'])->name('collections.update');
     Route::delete('/collections/{id}',[CollectionController::class,'destroy'])->name('collections.destroy');
+    Route::post('/collection/create',[CollectionController::class,'create'])->name('createCollection');
 });
 
 Route::middleware('auth:sanctum')->get('/test', function () {

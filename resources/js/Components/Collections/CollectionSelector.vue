@@ -17,35 +17,39 @@
 </template>
 
 <script setup>
-import { ref, computed, defineEmits, defineProps, watch } from 'vue'
+import { ref, computed, defineProps, defineEmits, watch } from 'vue'
+import { storeToRefs } from 'pinia'
+import { useArtworkActions } from '@/stores/useArtworkActions'
 
 const props = defineProps({
-    collections: Array,
     position: Object,
     selectedCollections: Array
 })
 const emit = defineEmits(['close', 'selected', 'createCollection'])
 
-const filter = ref('')
-// Инициализируем selectedCols с текущими коллекциями
+const { collections } = storeToRefs(useArtworkActions())
+
+const filter       = ref('')
 const selectedCols = ref(props.selectedCollections ? [...props.selectedCollections] : [])
 
-watch(() => props.selectedCollections, (newVal) => {
-    selectedCols.value = newVal ? [...newVal] : []
+watch(() => props.selectedCollections,
+    v => selectedCols.value = v ? [...v] : [])
+
+/* 🚩 реагируем на добавление новой коллекции */
+watch(collections, () => {
+    filter.value = ''                 // сбрасываем поиск
 })
 
-const filteredCollections = computed(() => {
-    return props.collections.filter(c => c.name.toLowerCase().includes(filter.value.toLowerCase()))
-})
+const filteredCollections = computed(() =>
+    collections.value.filter(c =>
+        c.name.toLowerCase().includes(filter.value.toLowerCase()))
+)
 
-function filterCollections(e) {
-    filter.value = e.target.value
-}
-
-function save() {
-    emit('selected', selectedCols.value)
-}
+function filterCollections(e) { filter.value = e.target.value }
+function save()               { emit('selected', selectedCols.value) }
 </script>
+
+
 
 <style scoped>
 /* Добавьте любые дополнительные стили при необходимости */

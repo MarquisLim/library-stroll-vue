@@ -1,165 +1,111 @@
 <template>
-    <AppLayout :title="query ? `Поиск: ${query}` : 'Поиск'">
+    <AppLayout :title="query ? `Поиск – ${query}` : 'Поиск'">
         <div class="p-4 bg-gray-900 text-white min-h-screen">
-            <h1 class="text-2xl font-bold mb-4">Результаты поиска по запросу: "{{ query }}"</h1>
 
-            <div v-if="!query.trim() && recommended.length">
-                <h2 class="text-xl font-semibold mb-2">Рекомендуемые</h2>
-                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
-                    <ArtworkCard
-                        v-for="aw in recommended"
-                        :key="aw.id"
-                        :art="aw"
-                        @save="openCollectionSelector"
-                        @like="likeArt"
-                    />
-                </div>
-            </div>
-            <div v-else>
-                <h2 class="text-xl font-semibold mb-2">Работы</h2>
-                <div v-if="artworks.length > 0" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
-                    <ArtworkCard
-                        v-for="aw in artworks"
-                        :key="aw.id"
-                        :art="aw"
-                        @save="openCollectionSelector"
-                        @like="likeArt"
-                    />
-                </div>
-                <div v-else class="text-gray-400 mb-4">Нет работ</div>
+            <!-- ─── Заголовок + поля ввода (если нужно) -->
+            <h1 class="text-2xl font-bold mb-6">
+                {{ query ? `“${query}”` : 'Поиск' }}
+            </h1>
 
-                <h2 class="text-xl font-semibold mb-2 mt-4">Авторы</h2>
-                <div v-if="authors.length > 0" class="flex flex-col space-y-2">
-                    <div v-for="u in authors" :key="u.id">
-                        <Link :href="`/profile/${u.id}`" class="text-blue-400 hover:underline">{{u.name}}</Link>
-                    </div>
-                </div>
-                <div v-else class="text-gray-400 mb-4">Нет авторов</div>
-
-                <h2 class="text-xl font-semibold mb-2 mt-4">По тегам</h2>
-                <div v-if="tagResults.length > 0" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
-                    <ArtworkCard
-                        v-for="aw in tagResults"
-                        :key="aw.id"
-                        :art="aw"
-                        @save="openCollectionSelector"
-                        @like="likeArt"
-                    />
-                </div>
-                <div v-else class="text-gray-400 mb-4">Нет результатов по тегам</div>
-
-                <div v-if="artworks.length===0 && authors.length===0 && tagResults.length===0 && recommended.length > 0">
-                    <h2 class="text-xl font-semibold mb-2">Рекомендуемые</h2>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
-                        <ArtworkCard
-                            v-for="aw in recommended"
-                            :key="aw.id"
-                            :art="aw"
-                            @save="openCollectionSelector"
-                            @like="likeArt"
-                        />
-                    </div>
-                </div>
+            <!-- ─── Вкладки -->
+            <div class="flex space-x-6 mb-6">
+                <button
+                    v-for="t in tabs"
+                    :key="t"
+                    :class="current===t
+                      ? 'border-b-2 border-blue-500 text-blue-400 pb-1'
+                      : 'text-gray-400 pb-1'"
+                    @click="current=t"
+                >
+                    {{ t==='artworks' ? 'Работы'
+                    : t==='tags' ? 'Теги'
+                        : 'Авторы' }}
+                    <span v-if="counts[t]" class="ml-1 text-xs text-gray-500">
+                      ({{ counts[t] }})
+                    </span>
+                </button>
             </div>
 
-            <CollectionSelector
-                v-if="showCollectionSelectorFlag"
-                :collections="userCollections"
-                :position="dropdownPosition"
-                :selected-collections="selectedArt.in_collections"
-                @close="showCollectionSelectorFlag=false"
-                @selected="saveArtToCollection"
-                @createCollection="createCollection"
-            />
+            <!-- ─── Работы ─── -->
+            <MasonryGrid
+                v-if="current==='artworks'"
+                :items="artworksRaw"
+                class="mb-8"
+            >
+                <template #default="{ item }">
+                    <ArtworkCard :art="item" />
+                </template>
+            </MasonryGrid>
 
-            <CreateCollectionModal
-                v-if="showCreateCollectionModal"
-                @close="showCreateCollectionModal=false"
-                @created="collectionCreated"
-            />
+            <!-- ─── Теги  ─── -->
+            <MasonryGrid v-if="current==='tags' && tagArtworks.length"
+                         :items="tagArtworks" class="mb-8">
+                <template #default="{ item }"><ArtworkCard :art="item" /></template>
+            </MasonryGrid>
+            <p v-else-if="current==='tags'" class="text-gray-500 mb-8">
+                Нет работ по тегам
+            </p>
 
-            <div v-if="notificationMessage" class="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-80 text-white px-4 py-2 rounded">
-                {{ notificationMessage }}
+
+            <!-- ─── Авторы ─── -->
+            <div v-if="current==='authors'"
+                 class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                <AuthorCard v-for="a in authors" :key="a.id" :author="a" />
             </div>
+
+            <!-- ─── При полном отсутствии результатов ─── -->
+            <template v-if="!artworksRaw.length && !authors.length && !tags.length">
+                <h2 class="text-xl font-semibold mb-2 mt-8">Рекомендуем</h2>
+                <MasonryGrid :items="recommended">
+                    <template #default="{ item }">
+                        <ArtworkCard :art="item" />
+                    </template>
+                </MasonryGrid>
+            </template>
+
         </div>
     </AppLayout>
 </template>
-
 <script setup>
-import { ref } from 'vue'
-import { usePage, Link } from '@inertiajs/vue3'
-import AppLayout from "@/Layouts/AppLayout.vue"
+import { ref, computed, watchEffect, onMounted } from 'vue'
+import { usePage } from '@inertiajs/vue3'
+import { useArtworkActions } from '@/stores/useArtworkActions'
+import AppLayout   from '@/Layouts/AppLayout.vue'
 import ArtworkCard from '@/Components/Gallery/ArtworkCard.vue'
-import CollectionSelector from '@/Components/Collections/CollectionSelector.vue'
-import CreateCollectionModal from '@/Components/Collections/CreateCollectionModal.vue'
-import axios from 'axios'
+import MasonryGrid from '@/Components/MasonryGrid.vue'
+import AuthorCard  from '@/Components/User/AuthorCard.vue'
 
-const page = usePage()
-const query = page.props.query || ''
-const artworks = page.props.artworks || []
-const authors = page.props.authors || []
-const tagResults = page.props.tagResults || []
-const recommended = page.props.recommended || []
-const userCollections = ref(page.props.collections || [])
+/* ---------- данные ---------- */
+const { props }   = usePage()
+const query       = props.q           ?? ''
+const artworksRaw = props.artworks    ?? []
+const authors     = props.authors     ?? []
+const tags        = props.tags        ?? []
+const recommended = props.recommended ?? []
+const collections = props.collections ?? []
 
-const showCollectionSelectorFlag = ref(false)
-const showCreateCollectionModal = ref(false)
-const selectedArt = ref(null)
-const dropdownPosition = ref({ top:0, left:0 })
-const notificationMessage = ref(null)
+/* ---------- Pinia ---------- */
+onMounted(()=> useArtworkActions().setCollections(collections))
 
-function openCollectionSelector({ art, event }) {
-    selectedArt.value = art
-    const rect = event.currentTarget.getBoundingClientRect()
-    dropdownPosition.value = { top: rect.bottom + window.scrollY, left: rect.left + window.scrollX }
-    showCollectionSelectorFlag.value = true
-}
+/* ---------- удобная «плоская» коллекция работ по тегам ---------- */
+const tagArtworks = computed(()=> tags
+    .flatMap(t => t.artworks ?? []))
 
-function saveArtToCollection(colIds) {
-    axios.post(`/artworks/${selectedArt.value.id}/add-to-collection`, { collections: colIds })
-        .then(res => {
-            showCollectionSelectorFlag.value = false
-            notificationMessage.value = 'Добавлено в коллекцию'
-            setTimeout(() => notificationMessage.value = null, 3000)
-            // Обновляем in_collections
-            function updateCollections(list) {
-                const idx = list.findIndex(a => a.id === selectedArt.value.id)
-                if (idx >= 0) {
-                    list[idx].in_collections = res.data.in_collections
-                }
-            }
-            updateCollections(artworks)
-            updateCollections(tagResults)
-            updateCollections(recommended)
-        }).catch(err => console.log(err))
-}
+/* ---------- вкладки ---------- */
+const tabs    = ['artworks','tags','authors']
+const current = ref('artworks')
 
-function createCollection() {
-    showCreateCollectionModal.value = true
-}
+watchEffect(()=>{
+    if (!artworksRaw.length && tagArtworks.value.length)
+        current.value = 'tags'
+    if (!artworksRaw.length && !tagArtworks.value.length && authors.length)
+        current.value = 'authors'
+})
 
-function collectionCreated(col) {
-    userCollections.value.push(col)
-    showCreateCollectionModal.value = false
-    notificationMessage.value = 'Коллекция создана'
-    setTimeout(() => notificationMessage.value = null, 3000)
-}
-
-function likeArt(art) {
-    axios.post(`/artworks/${art.id}/like`)
-        .then(res => {
-            function updateLike(list) {
-                const idx = list.findIndex(a => a.id === art.id)
-                if (idx >= 0) {
-                    list[idx].likes_count = res.data.likes_count
-                    list[idx].liked_by_user = res.data.liked
-                }
-            }
-            updateLike(artworks)
-            updateLike(tagResults)
-            updateLike(recommended)
-            notificationMessage.value = res.data.liked ? 'Лайкнуто' : 'Лайк удален'
-            setTimeout(() => notificationMessage.value = null, 3000)
-        }).catch(err => console.log(err))
-}
+/* ---------- счётчики ---------- */
+const counts = computed(()=>({
+    artworks: artworksRaw.length,
+    tags:     tagArtworks.value.length,   // ← суммарно, а не число тегов
+    authors:  authors.length
+}))
 </script>

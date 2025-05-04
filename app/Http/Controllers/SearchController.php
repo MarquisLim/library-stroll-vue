@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Collection;
 use App\Models\Comment;
 use App\Models\Artwork;
 use App\Models\Tag;
@@ -17,14 +18,21 @@ class SearchController extends Controller
         $q = $request->get('q');
         if ($q) {
             // Поиск по тегам
-            $tags = Tag::where('name','like',"%$q%")->take(5)->get(['id','name']);
+            $tags = Tag::withCount('artworks')
+                ->orderByDesc('artworks_count')
+                ->take(10)
+                ->get(['id','name']);
             // Поиск по авторам (юзерам)
             $users = User::where('name','like',"%$q%")->take(5)->get(['id','name']);
             // Поиск по работам
             $artworks = Artwork::where('title','like',"%$q%")->take(5)->get(['id','title as name']);
 
             $suggestions = collect();
-            $suggestions->push(...$tags->map(fn($t)=>['id'=>$t->id,'name'=>$t->name,'type'=>'tag']));
+            $suggestions->push(...$tags->map(fn($t)=>[
+                'id'=>$t->id,
+                'name'=>$t->name,
+                'type'=>'tag',
+                'hits' => $t->artworks_count]));
             $suggestions->push(...$users->map(fn($u)=>['id'=>$u->id,'name'=>$u->name,'type'=>'author']));
             $suggestions->push(...$artworks->map(fn($a)=>['id'=>$a->id,'name'=>$a->name,'type'=>'artwork']));
 
@@ -40,74 +48,61 @@ class SearchController extends Controller
 
     public function index(Request $request)
     {
-        $q = $request->get('q', '');
+        $q = $request->get('q','');
         $userId = Auth::id();
 
-        $artworks = collect();
-        $authors = collect();
-        $tagResults = collect();
+        /* ---------- 1. Работы ---------- */
+        $artworks = Artwork::query()
+            ->when($q, fn($qB)=>$qB->where('title','like',"%$q%"))
+            ->with(['user','media','likes','collections'])
+            ->withCount('likes')
+            ->take(60)
+            ->get()
+            ->map(fn($a)=>$this->markUserData($a,$userId));
 
-        if ($q) {
-            // Ищем работы
-            $artworks = Artwork::with(['user','media','likes','collections'])
-                ->withCount('likes')
-                ->where('title','like',"%$q%")
-                ->take(20)->get();
+        /* ---------- 2. Авторы ---------- */
+        $authors = User::query()
+            ->when($q, fn($qB)=>$qB->where('name','like',"%$q%"))
+            ->take(60)
+            ->get(['id','name','profile_photo_path']);
 
-            // Помечаем лайкнутость и коллекции
-            if ($userId) {
-                foreach ($artworks as $a) {
-                    $a->liked_by_user = $a->likes->where('user_id',$userId)->isNotEmpty();
-                    $a->in_collections = $a->collections->where('user_id',$userId)->pluck('id')->toArray();
-                }
-            }
+        /* ---------- 3. Теги ---------- */
+        $tags = Tag::query()
+            ->when($q, fn($qb) => $qb->where('name','like',"%$q%"))
+            ->with(['artworks' => function($qArt) use ($userId) {
+                $qArt->with(['user','media','likes','collections'])
+                    ->withCount('likes')
+                    ->take(6);
+            }])
+            ->withCount('artworks')
+            ->orderByDesc('artworks_count')
+            ->take(60)
+            ->get()
+            ->each(fn($tag) => $tag->artworks
+                ->transform(fn($a) => $this->markUserData($a,$userId)));
 
-            // Авторы
-            $authors = User::where('name','like',"%$q%")->take(20)->get();
+        /* ---------- recommended ---------- */
+        $recommended = !$q
+            ? Artwork::with(['user','media'])->inRandomOrder()->take(30)->get()
+                ->map(fn($a)=>$this->markUserData($a,$userId))
+            : collect();
 
-            // Теги
-            $foundTags = Tag::where('name','like',"%$q%")->take(5)->get();
-            $tagArtworks = collect();
-            foreach ($foundTags as $tag) {
-                $tagArt = $tag->artworks()->with(['user','media','likes','collections'])->withCount('likes')->take(10)->get();
-                if ($userId) {
-                    foreach ($tagArt as $ta) {
-                        $ta->liked_by_user = $ta->likes->where('user_id',$userId)->isNotEmpty();
-                        $ta->in_collections = $ta->collections->where('user_id',$userId)->pluck('id')->toArray();
-                    }
-                }
-                $tagArtworks = $tagArtworks->concat($tagArt);
-            }
-            $tagResults = $tagArtworks->unique('id')->values();
-        }
+        $collections = $userId
+            ? Collection::where('user_id',$userId)->get()
+            : collect();
 
-        // Если нет q или ничего не найдено, покажем рекомендованные (случайные)
-        $recommended = collect();
-        if(!$q || ($artworks->isEmpty() && $authors->isEmpty() && $tagResults->isEmpty())) {
-            $recommended = Artwork::with(['user','media','likes','collections'])
-                ->withCount('likes')
-                ->inRandomOrder()->take(12)->get();
-            if ($userId) {
-                foreach ($recommended as $r) {
-                    $r->liked_by_user = $r->likes->where('user_id',$userId)->isNotEmpty();
-                    $r->in_collections = $r->collections->where('user_id',$userId)->pluck('id')->toArray();
-                }
-            }
-        }
-
-        $collections = [];
-        if ($userId) {
-            $collections = \App\Models\Collection::where('user_id',$userId)->get();
-        }
-
-        return Inertia::render('Search/Index', [
-            'query' => $q,
-            'artworks' => $artworks,
-            'authors' => $authors,
-            'tagResults' => $tagResults,
-            'recommended' => $recommended,
-            'collections' => $collections
-        ]);
+        return Inertia::render('Search/Index', compact(
+            'q','artworks','authors','tags','recommended','collections'
+        ));
     }
+
+    private function markUserData($art,$userId)
+    {
+        if(!$userId) return $art;
+        $art->liked_by_user = $art->likes->where('user_id',$userId)->isNotEmpty();
+        $art->in_collections = $art->collections->where('user_id',$userId)->pluck('id');
+        return $art;
+    }
+
 
 }

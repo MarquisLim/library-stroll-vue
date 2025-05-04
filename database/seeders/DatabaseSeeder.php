@@ -3,12 +3,14 @@
 namespace Database\Seeders;
 
 use App\Models\User;
-// use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use App\Models\Tag;
 use App\Models\Artwork;
 use App\Models\Collection;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Faker\Factory as Faker;
 
 class DatabaseSeeder extends Seeder
 {
@@ -17,46 +19,88 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        $tagsList = ['котики','искусство','пейзаж','фантастика','авторское','портрет','абстракция','3D','фото'];
-        foreach($tagsList as $t){
-            Tag::firstOrCreate(['name'=>$t]);
-        }
+        $faker = Faker::create();
 
-        User::factory(20)->create(['password'=>bcrypt('123456zaza')])->each(function($user){
-            // Создаем коллекцию "Все" для каждого пользователя
-            $allCollection = Collection::create([
-                'user_id' => $user->id,
-                'name' => 'Все',
-                'is_private' => false
-            ]);
+        $tagMap = [
+            'cats'   => ['котики', 'мимими', 'пушистик'],
+            'dogs'   => ['собаки', 'друг', 'верность'],
+            'random' => ['пейзаж', 'фото', 'иллюстрация', 'современное', 'геометрия'],
+        ];
 
-            // Загрузим 5-10 работ с котиками
-            for($i=0;$i<rand(5,10);$i++){
-                $response=Http::get('https://api.thecatapi.com/v1/images/search');
-                $url=$response->json()[0]['url']??null;
-                if($url){
-                    $art=new Artwork();
-                    $art->user_id=$user->id;
-                    $art->title='Работа '.$i;
-                    $art->description='Описание работы '.$i;
-                    $art->is_published=true;
-                    $art->allow_download=true;
-                    $art->allow_comments=true;
-                    $art->save();
+        collect($tagMap)->flatten()->unique()->each(fn($tag) => Tag::firstOrCreate(['name' => $tag]));
 
-                    $art->addMediaFromUrl($url)->toMediaCollection('artworks');
+        $imageSources = [
+            [
+                'name' => 'cats',
+                'tags' => $tagMap['cats'],
+                'url'  => fn() => Http::get('https://api.thecatapi.com/v1/images/search')->json()[0]['url'] ?? null,
+            ],
+            [
+                'name' => 'dogs',
+                'tags' => $tagMap['dogs'],
+                'url'  => fn() => Http::get('https://dog.ceo/api/breeds/image/random')->json()['message'] ?? null,
+            ],
+            [
+                'name' => 'random',
+                'tags' => $tagMap['random'],
+                'url'  => fn() => 'https://picsum.photos/seed/' . Str::random(8) . '/640/480',
+            ],
+        ];
 
-                    // Привяжем случайные теги
-                    $allTags=Tag::inRandomOrder()->limit(rand(1,5))->pluck('id');
-                    $art->tags()->sync($allTags);
-
-                    $art->collections()->attach($allCollection->id);
-
-                    // Просмотры, лайки можно рандомно
-                    $art->views_count=rand(10,500);
-                    $art->save();
+        User::factory(20)
+            ->create(['password' => bcrypt('123456zaza')])
+            ->each(function ($user) use ($faker, $imageSources) {
+                // Аватарка
+                $avatarUrl = 'https://i.pravatar.cc/300?img=' . rand(1, 70);
+                $res = Http::get($avatarUrl);
+                if ($res->ok() && str_starts_with($res->header('Content-Type'), 'image')) {
+                    $fileName = "profile-photos/{$user->id}.jpg";
+                    Storage::disk('public')->put($fileName, $res->body());
+                    $user->forceFill(['profile_photo_path' => $fileName])->save();
                 }
-            }
-        });
+
+                $collection = Collection::create([
+                    'user_id'    => $user->id,
+                    'name'       => 'Моя галерея',
+                    'is_private' => false,
+                ]);
+
+                for ($i = 0; $i < rand(5, 10); $i++) {
+                    $source = $faker->randomElement($imageSources);
+                    $url = $source['url']();
+
+                    if (!$url) continue;
+
+                    $head = Http::withHeaders(['Accept' => '*/*'])->head($url);
+                    if (! $head->ok() || ! str_starts_with($head->header('Content-Type'), 'image')) continue;
+
+                    $response = Http::get($url);
+                    if (! $response->ok() || ! str_starts_with($response->header('Content-Type'), 'image')) continue;
+
+                    $art = new Artwork([
+                        'user_id'        => $user->id,
+                        'title'          => $faker->sentence(rand(2, 5)),
+                        'description'    => $faker->paragraph(rand(1, 2)),
+                        'is_published'   => true,
+                        'allow_download' => $faker->boolean(80),
+                        'allow_comments' => $faker->boolean(90),
+                        'views_count'    => rand(10, 500),
+                    ]);
+                    $art->save();
+
+                    try {
+                        $art->addMediaFromUrl($url)->toMediaCollection('artworks');
+                    } catch (\Exception $e) {
+                        $art->delete();
+                        continue;
+                    }
+
+                    $tags = collect($source['tags'])->random(rand(1, count($source['tags'])));
+                    $tagIds = Tag::whereIn('name', $tags)->pluck('id');
+                    $art->tags()->sync($tagIds);
+                    $art->collections()->attach($collection->id);
+                }
+            });
     }
 }
+
