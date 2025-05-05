@@ -244,5 +244,10 @@ function onSearchKey(e) {
 <style scoped>
 body {
     background-color: #1a1a2e;
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-top:    env(safe-area-inset-top);
+    padding-left:   env(safe-area-inset-left);
+    padding-right:  env(safe-area-inset-right);
+    box-sizing: border-box;
 }
 </style>
