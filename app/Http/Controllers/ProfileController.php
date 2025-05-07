@@ -43,7 +43,11 @@ class ProfileController extends Controller
             ->get();
 
         // Коллекции текущего авторизованного пользователя
-        $userCollections = Auth::check() ? Collection::where('user_id', Auth::id())->get() : [];
+        $userCollections = Collection::where('user_id', Auth::id())
+            ->with(['artworks' => function($q) {
+                $q->where('is_published', true)->with('media');
+            }])
+            ->get();
 
         return inertia('Profile/ProfileShow', [
             'profileUser' => $user->only('id', 'name', 'profile_photo_url', 'created_at'),

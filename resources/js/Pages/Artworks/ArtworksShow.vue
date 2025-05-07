@@ -20,21 +20,23 @@
                                loading="lazy" :alt="artwork.title"/>
                     </div>
 
-                    <!-- описание и кнопки -->
+                    <!-- Artwork Info -->
                     <div class="md:w-1/2 flex flex-col space-y-4">
                         <h1 class="text-2xl font-bold">{{ artwork.title || 'Без названия' }}</h1>
+
+                        <!-- Description -->
                         <p>{{ artwork.description }}</p>
 
-                        <!-- теги -->
+                        <!-- Tags -->
                         <div v-if="artwork.tags?.length" class="flex flex-wrap gap-2">
-              <span v-for="tag in artwork.tags" :key="tag.id"
-                    class="bg-purple-700 px-2 py-1 rounded cursor-pointer hover:bg-purple-600"
-                    @click="goToTag(tag.name)">
-                #{{ tag.name }}
-              </span>
+                          <span v-for="tag in artwork.tags" :key="tag.id"
+                                class="bg-purple-700 px-2 py-1 rounded cursor-pointer hover:bg-purple-600"
+                                @click="goToTag(tag.name)">
+                            #{{ tag.name }}
+                          </span>
                         </div>
 
-                        <!-- автор -->
+                        <!-- Author -->
                         <div class="flex items-center space-x-2">
                             <img class="h-8 w-8 rounded-full object-cover" :src="author.profile_photo_url"/>
                             <Link :href="`/profile/${author.id}`" class="font-semibold text-blue-400 hover:underline">
@@ -42,28 +44,29 @@
                             </Link>
                         </div>
 
-                        <!-- лайк / плюс -->
-                        <div class="flex items-center space-x-4">
-                            <!-- лайк -->
+                        <!-- Like / Collection -->
+                        <div class="flex items-center">
+                            <!-- Like -->
                             <button class="rounded-full w-8 h-8 flex items-center justify-center
-                             bg-black bg-opacity-50 hover:bg-opacity-80 transition"
+                             bg-black bg-opacity-50 hover:bg-opacity-80 transition me-2"
                                     @click="toggleLike(artwork)">
                                 <img :src="artwork.liked_by_user ? '/images/icons/liked.svg':'/images/icons/like.svg'"
                                      class="w-5 h-5"/>
                             </button>
                             <span>{{ artwork.likes_count }}</span>
 
-                            <!-- просмотры -->
-                            <div class="flex items-center space-x-1">
-                                <img src="/images/icons/views.svg" class="w-5 h-5"/>
+
+                            <!-- Collection -->
+                            <button class="rounded-full bg-black bg-opacity-50 w-8 h-8 flex items-center justify-center hover:bg-opacity-80 mx-2"
+                                    @click="openSelector(artwork, $event)">
+                                <img src="/images/icons/plus-btn-white.svg" class="w-5 h-5"/>
+                            </button>
+
+                            <!-- Views -->
+                            <div class="flex items-center">
+                                <img src="/images/icons/views.svg" class="w-5 h-5 me-2"/>
                                 <span>{{ artwork.views_count }}</span>
                             </div>
-
-                            <!-- плюс -->
-                            <button class="rounded-full bg-black bg-opacity-50 w-8 h-8 flex items-center justify-center hover:bg-opacity-80"
-                                    @click="openSelector(artwork, $event)">
-                                <img src="/images/icons/plus-btn.svg" class="w-5 h-5"/>
-                            </button>
                         </div>
 
                         <!-- комментарии -->

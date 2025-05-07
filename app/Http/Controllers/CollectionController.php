@@ -31,10 +31,11 @@ class CollectionController extends Controller
         });
 
         // Загрузим коллекции текущего пользователя, чтобы были видны в селекторе
-        $userCollections = [];
-        if($userId) {
-            $userCollections = Collection::where('user_id', $userId)->select('id','name')->get();
-        }
+        $userCollections = Collection::where('user_id', Auth::id())
+            ->with(['artworks' => function($q) {
+                $q->where('is_published', true)->with('media');
+            }])
+            ->get();
 
         return inertia('Collections/Show', [
             'collection' => [

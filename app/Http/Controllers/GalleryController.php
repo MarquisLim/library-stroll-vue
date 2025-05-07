@@ -35,10 +35,11 @@ class GalleryController extends Controller
                 return $artwork;
             });
 
-        $collections = [];
-        if(Auth::check()){
-            $collections = Collection::where('user_id', Auth::id())->get();
-        }
+        $collections = Collection::where('user_id', Auth::id())
+            ->with(['artworks' => function($q) {
+                $q->where('is_published', true)->with('media');
+            }])
+            ->get();
 
         $popularTags = Tag::withCount('artworks')
             ->with(['artworks' => function($q){

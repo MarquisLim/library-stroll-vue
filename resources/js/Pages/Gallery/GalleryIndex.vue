@@ -41,13 +41,13 @@ if (page.props.collections) setCollections(page.props.collections)
 <template>
     <AppLayout title="Галерея">
         <!-- ───────── панель фильтров ───────── -->
-        <div class="flex items-center space-x-4 mb-4 px-4 py-2">
+        <div class="flex items-center mb-4 px-4 py-2">
             <FilterDrawer v-model="filters"/>
             <button @click="selectAllTags"
                     :class="tag === 'all'
                       ? 'bg-purple-600 text-white'
                       : 'bg-gray-700 text-gray-300 hover:bg-gray-600'"
-                    class="h-12 px-5 rounded-full text-base font-medium whitespace-nowrap">
+                    class="h-12 px-5 rounded-full text-base font-medium whitespace-nowrap me-3">
                 Все
             </button>
 
@@ -59,6 +59,7 @@ if (page.props.collections) setCollections(page.props.collections)
         <MasonryGrid
             :key="gridKey"
             :items="artworks"
+            :start-page="artworks.length ? 1 : 0"
             :loadMoreUrl="`/gallery/load-more?${query}`"
             @update:items="artworks = $event"
         >

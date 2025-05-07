@@ -35,7 +35,8 @@ const props = defineProps({
     loadMoreUrl: {
         type: String,
         required: false
-    }
+    },
+    startPage: { type:Number, default:0 }
 })
 
 const emit = defineEmits(['update:items'])
@@ -48,7 +49,7 @@ let msnry
 let observer
 
 const loading = ref(false)
-const page = ref(0)
+const page = ref(props.startPage)
 const noMoreItems = ref(false)
 
 function sentinelVisible(){

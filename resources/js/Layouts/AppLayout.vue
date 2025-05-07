@@ -5,6 +5,9 @@ import Dropdown from '@/Components/Dropdown.vue'
 import DropdownLink from '@/Components/DropdownLink.vue'
 import axios from 'axios'
 import { Inertia } from '@inertiajs/inertia'
+import AuthModal from '@/Components/AuthModal.vue'
+import { useArtworkActions } from '@/stores/useArtworkActions'
+const actions = useArtworkActions()
 
 // Принимаем заголовок страницы
 const props = defineProps({ title: String })
@@ -64,7 +67,7 @@ function onSearchKey(e) {
 </script>
 
 <template>
-    <div class="bg-gray-900 text-white min-h-screen flex flex-col">
+    <div class="bg-gray-900 text-white min-h-screen flex flex-col pt-safe-t pb-safe-b">
         <Head :title="title" />
 
         <!-- Мобильный Navbar (для экранов меньше sm) -->
@@ -95,8 +98,8 @@ function onSearchKey(e) {
                                      alt="Profile"
                                      class="h-8 w-8 rounded-full object-cover" />
                                 <span v-else class="inline-flex items-center px-3 py-2 text-sm leading-4 font-medium text-white bg-transparent rounded-md hover:bg-gray-800">
-                  {{ user ? user.name : '' }}
-                </span>
+                                    {{ user ? user.name : '' }}
+                                </span>
                             </button>
                         </template>
                         <template #content>
@@ -110,14 +113,17 @@ function onSearchKey(e) {
                     </Dropdown>
                 </div>
                 <div v-else>
-                    <Link href="/login" class="bg-white text-black px-4 py-2 rounded-full text-lg hover:bg-gray-200 transition-colors duration-200">
+                    <button
+                        class="bg-white text-black px-4 py-2 rounded-full text-lg hover:bg-gray-200"
+                        @click="actions.showAuthModal = true"
+                    >
                         Войти
-                    </Link>
+                    </button>
                 </div>
             </div>
         </nav>
 
-        <!-- Desktop Navbar (для экранов от sm) -->
+        <!-- Desktop Navbar-->
         <nav class="hidden sm:flex h-16 items-center px-4 border-b border-gray-700 relative">
             <!-- Левая секция (flex-1) -->
             <div class="flex flex-1 items-center">
@@ -167,8 +173,8 @@ function onSearchKey(e) {
                                      alt="Profile"
                                      class="h-8 w-8 rounded-full object-cover" />
                                 <span v-else class="inline-flex items-center px-3 py-2 text-sm leading-4 font-medium text-white bg-transparent rounded-md hover:bg-gray-800">
-                  {{ user ? user.name : '' }}
-                </span>
+                                    {{ user ? user.name : '' }}
+                                </span>
                             </button>
                         </template>
                         <template #content>
@@ -182,9 +188,12 @@ function onSearchKey(e) {
                     </Dropdown>
                 </div>
                 <div v-else>
-                    <Link href="/login" class="bg-white text-black px-4 py-2 rounded-full text-lg hover:bg-gray-200 transition-colors duration-200">
+                    <button
+                        class="bg-white text-black px-4 py-2 rounded-full text-lg hover:bg-gray-200"
+                        @click="actions.showAuthModal = true"
+                    >
                         Войти
-                    </Link>
+                    </button>
                 </div>
             </div>
         </nav>
@@ -238,16 +247,11 @@ function onSearchKey(e) {
             <slot />
         </main>
         <GlobalModals />
+        <AuthModal
+            v-if="actions.showAuthModal"
+            @close="actions.showAuthModal = false"
+            @success="actions.onAuthSuccess"
+        />
+
     </div>
 </template>
-
-<style scoped>
-body {
-    background-color: #1a1a2e;
-    padding-bottom: env(safe-area-inset-bottom);
-    padding-top:    env(safe-area-inset-top);
-    padding-left:   env(safe-area-inset-left);
-    padding-right:  env(safe-area-inset-right);
-    box-sizing: border-box;
-}
-</style>

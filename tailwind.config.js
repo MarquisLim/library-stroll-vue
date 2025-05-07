@@ -18,6 +18,10 @@ export default {
             fontFamily: {
                 sans: ['Figtree', ...defaultTheme.fontFamily.sans],
             },
+            padding: {
+                'safe-b': 'env(safe-area-inset-bottom)',
+                'safe-t': 'env(safe-area-inset-top)',
+            }
         },
     },
 

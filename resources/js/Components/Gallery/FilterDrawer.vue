@@ -2,7 +2,7 @@
     <!-- иконка / счётчик -->
     <button @click="opened = true"
         class="relative flex items-center justify-center w-12 h-12
-         bg-gray-700 hover:bg-gray-600 text-white rounded-full">
+         bg-gray-700 hover:bg-gray-600 text-white rounded-full me-3">
         <img src="/images/icons/filter.svg" alt="Filter icon" class="w-7 h-7">
         <span v-if="count"
               class="absolute -top-1 -right-1 bg-purple-600 text-[10px]

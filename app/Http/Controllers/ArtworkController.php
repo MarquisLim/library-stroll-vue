@@ -27,8 +27,11 @@ class ArtworkController extends Controller
             : [];
 
         $author = $artwork->user;
-        $collections = Auth::check() ? Collection::where('user_id', Auth::id())->get() : [];
-
+        $collections = Collection::where('user_id', Auth::id())
+            ->with(['artworks' => function($q) {
+                $q->where('is_published', true)->with('media');
+            }])
+            ->get();
         return Inertia::render('Artworks/ArtworksShow', [
             'artwork' => $artwork,
             'author' => $author,
