@@ -12,11 +12,35 @@ class ArtworkController extends Controller
 {
     public function show($id)
     {
-        $artwork = Artwork::with(['media','user','tags','likes','collections'])
-            ->withCount('comments','likes')
+        $artwork = Artwork::with(['media', 'user', 'tags', 'likes', 'collections'])
+            ->withCount('comments', 'likes')
             ->findOrFail($id);
 
-        // Увеличение просмотров
+        if ($artwork->is_private && (!Auth::check() || Auth::id() !== $artwork->user_id)) {
+            abort(403, 'Вы не можете просматривать этот арт');
+        }
+
+        $myChats = auth()->user()
+            ->conversations()
+            ->with('users')
+            ->get()
+            ->map(function ($c) {
+                $partner = $c->type === 'dialog'
+                    ? $c->users->firstWhere('id', '!=', auth()->id())
+                    : null;
+
+                return [
+                    'id' => $c->id,
+                    'title' => $c->type === 'dialog'
+                        ? ($partner->name ?? '—')
+                        : ($c->title ?: 'Группа'),
+                    'avatar_url' => $c->type === 'dialog'
+                        ? ($partner->profile_photo_url ?? '/images/default-avatar.png')
+                        : ($c->users->first()?->profile_photo_url ?? '/images/default-avatar.png'),
+                    'type' => $c->type,
+                ];
+            });
+
         $artwork->increment('views_count');
         $artwork->refresh();
         $artwork->loadCount('comments', 'likes');
@@ -28,7 +52,7 @@ class ArtworkController extends Controller
 
         $author = $artwork->user;
         $collections = Collection::where('user_id', Auth::id())
-            ->with(['artworks' => function($q) {
+            ->with(['artworks' => function ($q) {
                 $q->where('is_published', true)->with('media');
             }])
             ->get();
@@ -36,29 +60,64 @@ class ArtworkController extends Controller
             'artwork' => $artwork,
             'author' => $author,
             'collections' => $collections,
+            'myChats' => $myChats,
         ]);
     }
+
+    public function similar($id, Request $request)
+    {
+        $page = (int)$request->get('page', 1);
+        $perPage = (int)$request->get('per_page', 12);
+
+        $art = Artwork::with('tags')->findOrFail($id);
+        $tagIds = $art->tags->pluck('id');
+
+        $query = Artwork::query()
+            ->where('is_published', true)
+            ->where('is_private', false)
+            ->where('id', '!=', $art->id)
+            ->when($tagIds->count(), fn($q) => $q->whereHas('tags', fn($t) => $t->whereIn('tags.id', $tagIds)))
+            // если тегов нет - fallback по похожему названию
+            ->when(!$tagIds->count() && $art->title,
+                fn($q) => $q->where('title', 'like', '%' . $art->title . '%'))
+            ->with(['media', 'user'])
+            ->withCount('likes')
+            ->orderBy('likes_count', 'desc');
+
+        $total = $query->count();
+        $similar = $query->skip(($page - 1) * $perPage)
+            ->take($perPage)->get();
+
+        // liked / in_collections
+        if (Auth::check()) {
+            foreach ($similar as $s) {
+                $s->liked_by_user = $s->likes()->where('user_id', Auth::id())->exists();
+                $s->in_collections = $s->collections()->where('user_id', Auth::id())->pluck('id');
+            }
+        }
+
+        return response()->json([
+            'artworks' => $similar,
+            'hasMore' => $page * $perPage < $total,
+        ]);
+    }
+
 
     public function like(Request $request, $id)
     {
         $user = Auth::user();
         $artwork = Artwork::findOrFail($id);
 
-        // Проверяем, поставил ли пользователь уже лайк
         $liked = $artwork->likes()->where('user_id', $user->id)->exists();
 
-        if($liked){
-            // Удаляем лайк
+        if ($liked) {
             $artwork->likes()->where('user_id', $user->id)->delete();
         } else {
-            // Добавляем лайк
             $artwork->likes()->create(['user_id' => $user->id]);
         }
 
-        // Получаем обновлённое количество лайков
         $likesCount = $artwork->likes()->count();
 
-        // Проверяем, поставил ли пользователь лайк после действия
         $likedByUser = $artwork->likes()->where('user_id', $user->id)->exists();
 
         return response()->json([
@@ -69,15 +128,15 @@ class ArtworkController extends Controller
 
     public function addToCollection(Request $request, $id)
     {
-        if(!Auth::check()){
-            return response()->json(['error'=>'Not authorized'],403);
+        if (!Auth::check()) {
+            return response()->json(['error' => 'Not authorized'], 403);
         }
 
         $artwork = Artwork::findOrFail($id);
         $collections = $request->collections ?? [];
         $artwork->collections()->sync($collections);
 
-        return response()->json(['message'=>'Added to collection','in_collections'=>$artwork->collections()->where('user_id',Auth::id())->pluck('id')]);
+        return response()->json(['message' => 'Added to collection', 'in_collections' => $artwork->collections()->where('user_id', Auth::id())->pluck('id')]);
     }
 
     public function authorWorks(Request $request, $id)

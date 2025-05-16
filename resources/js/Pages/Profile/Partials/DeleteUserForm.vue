@@ -40,11 +40,13 @@ const closeModal = () => {
 <template>
     <ActionSection>
         <template #title>
-          Удалить аккаунт
+            <div class="text-xl leading-relaxed text-base-content">
+                Удалить аккаунт
+            </div>
         </template>
 
         <template #description>
-          <div class="text-white">
+          <div class="text-base text-base-content">
             Удалите свой аккаунт навсегда.
           </div>
         </template>

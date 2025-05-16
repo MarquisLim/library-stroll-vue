@@ -87,9 +87,11 @@ class SearchController extends Controller
                 ->map(fn($a)=>$this->markUserData($a,$userId))
             : collect();
 
-        $collections = $userId
-            ? Collection::where('user_id',$userId)->get()
-            : collect();
+        $collections = Collection::where('user_id', Auth::id())
+            ->with(['artworks' => function($q) {
+                $q->where('is_published', true)->with('media');
+            }])
+            ->get();
 
         return Inertia::render('Search/Index', compact(
             'q','artworks','authors','tags','recommended','collections'

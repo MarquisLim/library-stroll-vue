@@ -1,257 +1,346 @@
 <script setup>
 import { Head, Link, usePage } from '@inertiajs/vue3'
-import { ref, computed } from 'vue'
-import Dropdown from '@/Components/Dropdown.vue'
-import DropdownLink from '@/Components/DropdownLink.vue'
-import axios from 'axios'
-import { Inertia } from '@inertiajs/inertia'
-import AuthModal from '@/Components/AuthModal.vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import Dropdown       from '@/Components/Dropdown.vue'
+import DropdownLink   from '@/Components/DropdownLink.vue'
+import GlobalModals   from '@/Components/Common/GlobalModals.vue'
+import AuthModal      from '@/Components/AuthModal.vue'
+import axios          from 'axios'
+import { Inertia }    from '@inertiajs/inertia'
 import { useArtworkActions } from '@/stores/useArtworkActions'
+import {
+    HomeIcon, MagnifyingGlassIcon, PlusCircleIcon,
+    SunIcon, MoonIcon, Bars3Icon
+} from '@heroicons/vue/24/outline'
+import { ChatBubbleLeftIcon } from '@heroicons/vue/24/outline'
+
+import Echo             from 'laravel-echo'
+
+/* ---------- props / pinia / page ---------- */
+const props   = defineProps({ title:String })
+const page    = usePage()
 const actions = useArtworkActions()
 
-// Принимаем заголовок страницы
-const props = defineProps({ title: String })
-const page = usePage()
+const unreadCount = ref(page.props.unreadCount || 0)
+const myId        = page.props.auth.user?.id
 
-// Состояние для мобильного меню (раскрытие/сворачивание)
-const showingNavigationDropdown = ref(false)
+/* ---------- theme (light / dark) ---------- */
+const isDark = ref(false)
 
-// Функция для выхода из аккаунта
-function logout() {
-    Inertia.post(route('logout'))
-}
+onMounted(() => {          // init
+    isDark.value = localStorage.getItem('theme') === 'dark'
+    setHtmlTheme()
 
-// Проверяем, авторизован ли пользователь
-const isAuth = computed(() => !!page.props.auth.user)
-const user = computed(() => page.props.auth.user)
+    if (!myId) return
 
-// Поле поиска и подсказки
-const searchQuery = ref('')
-const searchSuggestions = ref([])
-const showSuggestions = ref(false)
+    const convs = Array.isArray(page.props.conversationIds)
+        ? page.props.conversationIds
+        : []
 
-// Загрузка подсказок при вводе
-function loadSearchSuggestions(query) {
-    if (!query.trim()) {
-        axios.get('/search/suggestions', { params: { recommended: true } })
-            .then(res => {
-                searchSuggestions.value = res.data.suggestions || []
-                showSuggestions.value = searchSuggestions.value.length > 0
+    convs.forEach(id => {
+        window.Echo
+            .private(`conversation.${id}`)
+            .listen('.MessageSent', ({ message }) => {
+                if (message.user_id !== myId) {
+                    unreadCount.value++
+                }
             })
-            .catch(() => showSuggestions.value = false)
-        return
-    }
-    axios.get('/search/suggestions', { params: { q: query } })
-        .then(res => {
-            searchSuggestions.value = res.data.suggestions || []
-            showSuggestions.value = searchSuggestions.value.length > 0
+    })
+
+    // 2) слушаем создание новых бесед: в них тоже могут сразу прилететь сообщения
+    window.Echo
+        .private(`user.${myId}`)
+        .listen('.ConversationCreated', ({ conversation: conv }) => {
+            // подписываемся на канал этой беседы
+            window.Echo.private(`conversation.${conv.id}`)
+                .listen('.MessageSent', ({ message }) => {
+                    if (message.user_id !== myId) {
+                        unreadCount.value++
+                    }
+                })
         })
-        .catch(() => {
-            showSuggestions.value = false
+
+    window.Echo
+        .private(`user.${myId}`)
+        .listen('.ConversationRead', ({ conversationId }) => {
+            unreadCount.value = unreadCount.value
         })
+})
+watch(isDark, v=>{
+    localStorage.setItem('theme', v ? 'dark' : 'light')
+    setHtmlTheme()
+})
+function setHtmlTheme(){
+    document.documentElement.setAttribute('data-theme', isDark.value ? 'dark' : 'light')
+}
+function toggleTheme(){ isDark.value = !isDark.value }
+
+/* ---------- auth ---------- */
+const isAuth = computed(()=>!!page.props.auth.user)
+const user   = computed(()=>page.props.auth.user || {})
+function logout(){ Inertia.post(route('logout')) }
+
+/* ---------- search ---------- */
+const searchQuery       = ref('')
+const searchSuggestions = ref([])
+const showSuggestions   = ref(false)
+function loadSearchSuggestions(q){
+    if(!q.trim()){ showSuggestions.value=false; return }
+    axios.get('/search/suggestions',{params:{q}})
+        .then(r=>{
+            searchSuggestions.value = r.data.suggestions || []
+            showSuggestions.value = searchSuggestions.value.length>0
+        })
+}
+function doSearch(){
+    if(!searchQuery.value.trim()) return
+    Inertia.get('/search',{q:searchQuery.value})
+    showSuggestions.value=false
 }
 
-// Выполнить поиск
-function doSearch() {
-    if (!searchQuery.value.trim()) return
-    Inertia.get('/search', { q: searchQuery.value })
-    showSuggestions.value = false
-}
-
-// Обработка нажатия Enter в поле поиска
-function onSearchKey(e) {
-    if (e.key === 'Enter') {
-        doSearch()
-    }
-}
+/* ---------- mobile burger ---------- */
+const showingNavigationMenu = ref(false)
 </script>
 
 <template>
-    <div class="bg-gray-900 text-white min-h-screen flex flex-col pt-safe-t pb-safe-b">
+    <div class="min-h-screen flex flex-col bg-base-100 text-base-content">
+
         <Head :title="title" />
 
-        <!-- Мобильный Navbar (для экранов меньше sm) -->
-        <nav class="h-16 flex items-center justify-between px-4 border-b border-gray-700 sm:hidden">
-            <!-- Левая сторона: кнопка гамбургера -->
-            <div>
-                <button
-                    @click="showingNavigationDropdown = !showingNavigationDropdown"
-                    class="p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-800 focus:outline-none"
-                >
-                    <img src="/images/icons/hamburger.svg" alt="menu" class="w-6 h-6" />
+        <!-- Navbar -->
+        <!-- mobile nav -->
+        <nav
+            class="sm:hidden sticky top-0 z-40 bg-base-100/80 backdrop-blur
+             flex items-center justify-between h-16 px-4 border-b border-base-300">
+
+            <!-- burger -->
+            <button @click="showingNavigationMenu = !showingNavigationMenu"
+                    class="p-2 rounded-md hover:bg-base-200 transition">
+                <Bars3Icon class="w-6 h-6"/>
+            </button>
+
+            <!-- logo -->
+            <Link :href="route('gallery.index')" class="flex items-center">
+                <img src="/logo.png" alt="logo" class="h-10"/>
+            </Link>
+
+            <!-- right -->
+            <div class="flex items-center space-x-2">
+                <button @click="toggleTheme"
+                        class="p-2 rounded-md hover:bg-base-200 transition">
+                    <component :is="isDark ? SunIcon : MoonIcon" class="w-6 h-6"/>
                 </button>
-            </div>
-            <!-- Центр: логотип (уменьшенный) -->
-            <div>
-                <Link :href="route('gallery.index')" class="text-purple-400 font-bold text-2xl flex items-center">
-                    <img src="/logo.png" alt="Лого" class="h-12" />
-                </Link>
-            </div>
-            <!-- Правая сторона: аватар или кнопка "Войти" -->
-            <div>
-                <div v-if="isAuth">
+
+                <template v-if="isAuth">
+                    <Link
+                        :href="route('messenger.index')"
+                        class="relative p-2 hover:bg-base-200 rounded-md transition"
+                    >
+                        <ChatBubbleLeftIcon class="w-6 h-6"/>
+                        <span
+                            v-if="unreadCount > 0"
+                            class="badge badge-sm badge-primary absolute top-0 right-0 translate-x-1/2 -translate-y-1/2"
+                        >
+                      {{ unreadCount }}
+                    </span>
+                    </Link>
+
                     <Dropdown align="right" width="48">
                         <template #trigger>
-                            <button class="focus:outline-none">
-                                <img v-if="$page.props.jetstream.managesProfilePhotos && user"
-                                     :src="user.profile_photo_url"
-                                     alt="Profile"
-                                     class="h-8 w-8 rounded-full object-cover" />
-                                <span v-else class="inline-flex items-center px-3 py-2 text-sm leading-4 font-medium text-white bg-transparent rounded-md hover:bg-gray-800">
-                                    {{ user ? user.name : '' }}
-                                </span>
-                            </button>
+                            <img :src="user.profile_photo_url"
+                                 class="w-8 h-8 rounded-full object-cover"/>
                         </template>
                         <template #content>
                             <DropdownLink :href="`/profile/${user.id}`">Профиль</DropdownLink>
                             <DropdownLink :href="route('profile.show')">Настройки</DropdownLink>
-                            <div class="border-t border-gray-600"></div>
+                            <div class="border-t border-base-300"/>
                             <form @submit.prevent="logout">
                                 <DropdownLink as="button">Выход</DropdownLink>
                             </form>
                         </template>
                     </Dropdown>
-                </div>
-                <div v-else>
-                    <button
-                        class="bg-white text-black px-4 py-2 rounded-full text-lg hover:bg-gray-200"
-                        @click="actions.showAuthModal = true"
-                    >
+                </template>
+                <template v-else>
+                    <button class="btn btn-primary"
+                            @click="actions.showAuthModal = true">
                         Войти
                     </button>
-                </div>
+                </template>
             </div>
         </nav>
 
-        <!-- Desktop Navbar-->
-        <nav class="hidden sm:flex h-16 items-center px-4 border-b border-gray-700 relative">
-            <!-- Левая секция (flex-1) -->
-            <div class="flex flex-1 items-center">
-                <Link :href="route('gallery.index')" class="text-purple-400 font-bold text-4xl flex items-center space-x-1">
-                    <img src="/logo.png" alt="Лого" class="w-25 h-25" />
-                </Link>
-                <div class="flex items-center ml-6 space-x-4">
-                    <Link :href="route('gallery.index')" class="text-white hover:text-purple-200 text-lg flex items-center space-x-1">
-                        <img src="/images/icons/home.svg" alt="home" class="w-8 h-8" />
-                    </Link>
-                    <Link v-if="isAuth" :href="route('studio.index')" class="text-white hover:text-purple-200 text-lg flex items-center space-x-1">
-                        <img src="/images/icons/plus-btn.svg" alt="create"  class="w-8 h-8" />
-                    </Link>
-                </div>
-            </div>
+        <!-- mobile dropdown -->
+        <div v-show="showingNavigationMenu"
+             class="sm:hidden border-b border-base-300 bg-base-200 px-4 py-2 space-y-2">
 
-            <!-- Центральная секция (flex-1) - Поиск по центру -->
-            <div class="flex-1 justify-center relative">
-                <input
-                    v-model="searchQuery"
-                    @input="loadSearchSuggestions(searchQuery)"
-                    @keydown="onSearchKey"
-                    type="text"
-                    placeholder="Поиск..."
-                    class="w-full px-4 py-2 pl-10 rounded-full bg-gray-700 text-white placeholder-gray-400 focus:outline-none"
-                />
-                <img src="/images/icons/search.svg" alt="search" class="absolute left-3 top-2 w-6 h-6" />
-                <div v-if="showSuggestions" class="absolute left-0 right-0 bg-gray-700 mt-1 rounded p-2 max-h-40 overflow-auto z-50">
-                    <div v-for="s in searchSuggestions" :key="s.id" class="p-1 hover:bg-gray-600 rounded cursor-pointer"
-                         @click="searchQuery=s.name; doSearch()">
-                        {{ s.name }}
-                    </div>
-                    <div v-if="searchSuggestions.length === 0" class="text-gray-400">
-                        Рекомендуемые...
-                    </div>
-                </div>
-            </div>
-
-            <!-- Правая секция (flex-1) -->
-            <div class="flex flex-1 items-center justify-end">
-                <div v-if="isAuth">
-                    <Dropdown align="right" width="48">
-                        <template #trigger>
-                            <button class="focus:outline-none">
-                                <img v-if="$page.props.jetstream.managesProfilePhotos && user"
-                                     :src="user.profile_photo_url"
-                                     alt="Profile"
-                                     class="h-8 w-8 rounded-full object-cover" />
-                                <span v-else class="inline-flex items-center px-3 py-2 text-sm leading-4 font-medium text-white bg-transparent rounded-md hover:bg-gray-800">
-                                    {{ user ? user.name : '' }}
-                                </span>
-                            </button>
-                        </template>
-                        <template #content>
-                            <DropdownLink :href="`/profile/${user.id}`">Профиль</DropdownLink>
-                            <DropdownLink :href="route('profile.show')">Настройки</DropdownLink>
-                            <div class="border-t border-gray-600"></div>
-                            <form @submit.prevent="logout">
-                                <DropdownLink as="button">Выход</DropdownLink>
-                            </form>
-                        </template>
-                    </Dropdown>
-                </div>
-                <div v-else>
-                    <button
-                        class="bg-white text-black px-4 py-2 rounded-full text-lg hover:bg-gray-200"
-                        @click="actions.showAuthModal = true"
-                    >
-                        Войти
-                    </button>
-                </div>
-            </div>
-        </nav>
-
-        <!-- Мобильное меню (анимированное раскрытие под navbar) -->
-        <div
-            :class="[
-        showingNavigationDropdown ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0',
-        'transition-all duration-300 sm:hidden bg-gray-800 overflow-hidden'
-      ]"
-        >
-            <!-- Мобильный поиск -->
-            <div class="px-4 py-2 border-b border-gray-700">
-                <div class="relative">
-                    <input
-                        v-model="searchQuery"
-                        @input="loadSearchSuggestions(searchQuery)"
-                        @keydown="onSearchKey"
-                        type="text"
-                        placeholder="Поиск..."
-                        class="w-full px-4 py-2 pl-10 rounded-full bg-gray-700 text-white placeholder-gray-400 focus:outline-none"
-                    />
-                    <img src="/images/icons/search.svg" alt="search" class="absolute left-3 top-2 w-6 h-6" />
-                </div>
-                <div v-if="showSuggestions" class="bg-gray-700 mt-1 rounded p-2 max-h-40 overflow-auto">
-                    <div v-for="s in searchSuggestions" :key="s.id" class="p-1 hover:bg-gray-600 rounded cursor-pointer" @click="searchQuery = s.name; doSearch()">
-                        {{ s.name }}
-                    </div>
-                    <div v-if="searchSuggestions.length === 0" class="text-gray-400">
-                        Рекомендуемые...
-                    </div>
-                </div>
-            </div>
-            <Link :href="route('gallery.index')" class="block px-4 py-2 hover:bg-gray-700 text-lg">
-                Home
+            <Link :href="route('gallery.index')"
+                  class="flex items-center gap-2 py-2 hover:bg-base-300 rounded px-2">
+                <HomeIcon class="w-6 h-6"/> <span>Галерея</span>
             </Link>
-            <Link :href="route('studio.index')" class="block px-4 py-2 hover:bg-gray-700 text-lg" v-if="isAuth">
-                Create
+
+            <Link v-if="isAuth" :href="route('studio.index')"
+                  class="flex items-center gap-2 py-2 hover:bg-base-300 rounded px-2">
+                <PlusCircleIcon class="w-6 h-6"/> <span>Студия</span>
             </Link>
+
+            <!-- search -->
+            <div class="relative">
+                <input v-model="searchQuery"
+                       @input="loadSearchSuggestions(searchQuery)"
+                       @keydown.enter="doSearch"
+                       placeholder="Поиск…"
+                       class="input input-bordered w-full"/>
+                <ul v-if="showSuggestions"
+                    class="absolute mt-1 w-full bg-base-200 border border-base-300
+                   rounded shadow z-20 max-h-40 overflow-auto">
+                    <li v-for="s in searchSuggestions" :key="s.id"
+                        @click="searchQuery=s.name; doSearch()"
+                        class="px-4 py-2 hover:bg-base-300 cursor-pointer">
+                        {{ s.name }}
+                    </li>
+                </ul>
+            </div>
         </div>
 
-        <!-- Header (если передан слот header) -->
-        <header v-if="$slots.header" class="bg-gray-800 shadow">
-            <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-                <slot name="header" />
+        <!-- desktop nav -->
+        <nav
+            class="hidden sm:flex sticky top-0 z-40 bg-base-100/80 backdrop-blur
+             items-center justify-between h-16 px-8 border-b border-base-300">
+
+            <!-- left block -->
+            <div class="flex items-center space-x-8">
+                <Link :href="route('home')" class="flex items-center">
+                    <img src="/logo.png" class="h-12 w-auto"/>
+                </Link>
+
+                <Link :href="route('gallery.index')"
+                      class="flex items-center gap-1 font-semibold hover:text-primary">
+                    <HomeIcon class="w-6 h-6"/> <span>Галерея</span>
+                </Link>
+
+                <Link v-if="isAuth" :href="route('studio.index')"
+                      class="flex items-center gap-1 font-semibold hover:text-primary">
+                    <PlusCircleIcon class="w-6 h-6"/> <span>Студия</span>
+                </Link>
             </div>
-        </header>
 
-        <!-- Основной контент страницы -->
-        <main class="flex-1">
-            <slot />
+            <!-- Search -->
+            <div class="relative flex-1 mx-8">
+                <MagnifyingGlassIcon
+                    class="absolute left-3 top-1/2 -translate-y-1/2 w-6 h-6 pointer-events-none"/>
+                <input v-model="searchQuery"
+                       @input="loadSearchSuggestions(searchQuery)"
+                       @keydown.enter="doSearch"
+                       placeholder="Поиск…"
+                       class="input input-bordered w-full pl-10"/>
+                <div v-if="showSuggestions"
+                     class="absolute w-full mt-1 bg-base-200 border border-base-300 rounded shadow z-20 max-h-48 overflow-auto">
+                    <div v-for="s in searchSuggestions" :key="s.id"
+                         @click="searchQuery=s.name; doSearch()"
+                         class="px-4 py-2 hover:bg-base-300 cursor-pointer">
+                        {{ s.name }}
+                    </div>
+                </div>
+            </div>
+
+            <!-- right block -->
+            <div class="flex items-center space-x-4">
+                <button @click="toggleTheme" class="p-2 rounded-md hover:bg-base-200 transition">
+                    <component :is="isDark ? SunIcon : MoonIcon" class="w-6 h-6"/>
+                </button>
+                <Link
+                    :href="route('messenger.index')"
+                    class="relative p-2 hover:bg-base-200 rounded-md transition"
+                >
+                    <ChatBubbleLeftIcon class="w-6 h-6"/>
+                    <span
+                        v-if="unreadCount > 0"
+                        class="badge badge-sm badge-primary absolute top-0 right-0 translate-x-1/2 -translate-y-1/2"
+                    >
+                      {{ unreadCount }}
+                    </span>
+                </Link>
+                <template v-if="isAuth">
+                    <Dropdown align="right" width="48">
+                        <template #trigger>
+                            <img :src="user.profile_photo_url" class="w-8 h-8 rounded-full object-cover"/>
+                        </template>
+                        <template #content>
+                            <DropdownLink :href="route('dashboard')">Панель управления</DropdownLink>
+                            <DropdownLink :href="`/profile/${user.id}`">Моя страница</DropdownLink>
+                            <DropdownLink :href="route('profile.show')">Настройки</DropdownLink>
+                            <div class="border-t border-base-300"/>
+                            <form @submit.prevent="logout">
+                                <DropdownLink as="button">Выход</DropdownLink>
+                            </form>
+                        </template>
+                    </Dropdown>
+                </template>
+                <template v-else>
+                    <button class="btn btn-primary"
+                            @click="actions.showAuthModal = true">
+                        Войти
+                    </button>
+                </template>
+            </div>
+        </nav>
+        <!-- /Navbar  -->
+
+        <!-- Main -->
+        <main class="flex-1 h-[calc(100vh-4rem)] relative">
+            <slot/>
         </main>
-        <GlobalModals />
-        <AuthModal
-            v-if="actions.showAuthModal"
-            @close="actions.showAuthModal = false"
-            @success="actions.onAuthSuccess"
-        />
+        <!-- /Main -->
 
+        <!-- Footer -->
+        <footer class="bg-base-200 text-base-content border-t border-base-300">
+            <div class="max-w-7xl mx-auto px-6 py-8 grid gap-6
+                  sm:grid-cols-2 md:grid-cols-4">
+
+                <div>
+                    <h3 class="font-bold mb-2">Навигация</h3>
+                    <ul class="space-y-1">
+                        <li><Link class="link-hover" :href="route('gallery.index')">Галерея</Link></li>
+                        <li v-if="isAuth">
+                            <Link class="link-hover" :href="route('studio.index')">Студия</Link>
+                        </li>
+                        <li><Link class="link-hover" href="/about">О&nbsp;нас</Link></li>
+                        <li><Link class="link-hover" href="/faq">FAQ</Link></li>
+                    </ul>
+                </div>
+
+                <div>
+                    <h3 class="font-bold mb-2">Юридическое</h3>
+                    <ul class="space-y-1">
+                        <li><Link class="link-hover" :href="route('terms')">Польз. соглашение</Link></li>
+                        <li><Link class="link-hover" :href="route('privacy')">Политика&nbsp;конфиденц.</Link></li>
+                    </ul>
+                </div>
+
+                <div>
+                    <h3 class="font-bold mb-2">Контакты</h3>
+                    <p class="text-sm">1333guesswho1333@gmail.com</p>
+                    <p class="text-sm">+7&nbsp;705&nbsp;408-47-35</p>
+                </div>
+
+                <div class="sm:col-span-2 md:col-span-1 flex flex-col justify-between">
+                    <p class="text-sm">
+                        © 2025&nbsp;Aktan Shulenov<br>
+                        Все права защищены
+                    </p>
+                    <div class="flex space-x-3 mt-4 md:mt-0">
+                        <!-- dummy socials -->
+                        <a href="#" class="link-hover">VK</a>
+                        <a href="#" class="link-hover">TG</a>
+                        <a href="#" class="link-hover">X</a>
+                    </div>
+                </div>
+            </div>
+        </footer>
+        <!-- /Footer -->
+
+        <GlobalModals/>
+        <AuthModal v-if="actions.showAuthModal"
+                   @close="actions.showAuthModal=false"/>
     </div>
 </template>

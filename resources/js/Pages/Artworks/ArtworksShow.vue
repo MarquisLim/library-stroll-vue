@@ -1,164 +1,348 @@
+<script setup>
+import { ref, nextTick, onMounted } from 'vue'
+import { Link, usePage } from '@inertiajs/vue3'
+import { Inertia } from '@inertiajs/inertia'
+import axios from 'axios'
+
+// Heroicons
+import {
+    ArrowLeftIcon,
+    PlusCircleIcon,
+    EyeIcon,
+    ArrowDownTrayIcon,
+    ShareIcon,
+    HeartIcon as HeartOutlineIcon,
+    HeartIcon as HeartSolidIcon,
+} from '@heroicons/vue/24/outline'
+
+// Layout & components
+import AppLayout from '@/Layouts/AppLayout.vue'
+import MasonryGrid from '@/Components/MasonryGrid.vue'
+import ArtworkCard from '@/Components/Gallery/ArtworkCard.vue'
+import CommentsSection from '@/Components/Comments/CommentsSection.vue'
+import ShareModal from '@/Components/Messenger/ShareModal.vue'
+
+// Pinia store
+import { useArtworkActions } from '@/stores/useArtworkActions'
+const { toggleLike, openSelector, setCollections } = useArtworkActions()
+
+// props from Inertia
+const page = usePage()
+const artwork = ref({ ...page.props.artwork })
+const myChats = usePage().props.myChats
+const author = page.props.author
+
+const showShare = ref(false)
+
+function openShare() {
+    showShare.value = true
+}
+
+if (page.props.collections) setCollections(page.props.collections)
+
+// tabs
+const tabs = ['comments', 'author', 'similar']
+const activeTab = ref('comments')
+
+// pagination for author & similar
+const authorWorks  = ref([]), authorPage  = ref(1), moreAuthor  = ref(true), loadAuthor  = ref(false)
+const similarWorks = ref([]), similarPage = ref(1), moreSimilar = ref(true), loadSimilar = ref(false)
+const authorKey    = ref('aw-1'), similarKey  = ref('sim-1')
+
+function fetchAuthor() {
+    if (loadAuthor.value || !moreAuthor.value) return
+    loadAuthor.value = true
+    axios.get(`/author/${author.id}/works`, {
+        params: { page: authorPage.value, per_page: 12, exclude_artwork_id: artwork.value.id }
+    })
+        .then(({ data }) => {
+            if (data.artworks?.length) {
+                authorWorks.value.push(...data.artworks)
+                authorPage.value++
+                authorKey.value = `aw-${authorPage.value}`
+                if (data.artworks.length < 12) moreAuthor.value = false
+            } else {
+                moreAuthor.value = false
+            }
+        })
+        .finally(() => {
+            loadAuthor.value = false
+            nextTick(() => window.dispatchEvent(new Event('resize')))
+        })
+}
+
+function fetchSimilar() {
+    if (loadSimilar.value || !moreSimilar.value) return
+    loadSimilar.value = true
+    axios.get(`/artworks/${artwork.value.id}/similar`, {
+        params: { page: similarPage.value, per_page: 12 }
+    })
+        .then(({ data }) => {
+            if (data.artworks?.length) {
+                similarWorks.value.push(...data.artworks)
+                similarPage.value++
+                similarKey.value = `sim-${similarPage.value}`
+                if (data.artworks.length < 12) moreSimilar.value = false
+            } else {
+                moreSimilar.value = false
+            }
+        })
+        .finally(() => {
+            loadSimilar.value = false
+            nextTick(() => window.dispatchEvent(new Event('resize')))
+        })
+}
+
+function openTab(t) {
+    activeTab.value = t
+    if (t === 'author' && !authorWorks.value.length)  fetchAuthor()
+    if (t === 'similar'&& !similarWorks.value.length) fetchSimilar()
+}
+
+// helpers
+const expanded    = ref(false)
+const canDownload = ref(!!artwork.value.allow_download)
+const showComments = ref(!!artwork.value.allow_comments)
+
+function goBack() { history.back() }
+function goToTag(tag) { Inertia.get('/search', { q: tag }) }
+function openColSelector(e) {
+    const rect = e.currentTarget.getBoundingClientRect()
+    openSelector(artwork.value, rect)
+}
+
+// canvas for image protection
+const canvasRef = ref(null)
+onMounted(async () => {
+    if (artwork.value.type === 'image') {
+        const res  = await fetch(artwork.value.media[0].original_url, { credentials: 'include' })
+        const blob = await res.blob()
+        const img  = new Image()
+        img.onload = () => {
+            const canvas = canvasRef.value
+            canvas.width  = img.naturalWidth
+            canvas.height = img.naturalHeight
+            const ctx = canvas.getContext('2d')
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+            // watermark
+            ctx.font      = '20px sans-serif'
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)'
+            ctx.fillText('© LibraryStroll', 10, canvas.height - 10)
+        }
+        img.src = URL.createObjectURL(blob)
+    }
+})
+</script>
+
 <template>
     <AppLayout :title="artwork.title || 'Artwork'">
-        <div class="p-4 bg-gray-900 text-white min-h-screen">
-            <div class="max-w-7xl mx-auto">
-                <!-- назад -->
-                <button class="btn bg-black bg-opacity-50 hover:bg-opacity-80 rounded-full mb-4" @click="goBack">
-                    <img src="/images/icons/back.svg" alt="back" class="w-4 h-4" />
-                </button>
+        <div class="min-h-screen bg-base-200 dark:bg-base-800 text-base-content p-4 space-y-6">
 
-                <!-- контент -->
-                <div class="flex flex-col md:flex-row gap-4">
-                    <!-- медиа -->
-                    <div class="md:w-1/2">
-                        <video v-if="artwork.type==='video'"
-                               :src="artwork.media[0]?.original_url"
-                               class="w-full h-auto object-cover rounded" controls preload="metadata"/>
-                        <img   v-else
-                               :src="artwork.media[0]?.original_url"
-                               class="w-full h-auto object-cover rounded"
-                               loading="lazy" :alt="artwork.title"/>
+            <!-- back -->
+            <button class="btn btn-ghost btn-sm rounded-full" @click="goBack">
+                <ArrowLeftIcon class="w-5 h-5" />
+            </button>
+
+            <!-- CARD -->
+            <div class="mx-auto w-full max-w-5xl bg-base-100 dark:bg-base-700 rounded-2xl p-6 shadow flex flex-col md:flex-row gap-6">
+
+                <!-- media -->
+                <div
+                    class="md:w-1/2 flex justify-center relative"
+                    @contextmenu.prevent
+                >
+                    <!-- video with no-download -->
+                    <video
+                        v-if="artwork.type==='video'"
+                        :src="artwork.media[0]?.original_url"
+                        class="max-h-[80vh] w-full rounded-xl select-none"
+                        controls
+                        controlsList="nodownload"
+                        muted
+                        autoplay
+                        loop
+                        playsinline
+                        @contextmenu.prevent
+                    />
+
+                    <!-- protected canvas for image -->
+                    <canvas
+                        v-else
+                        ref="canvasRef"
+                        class="max-h-[80vh] w-full rounded-xl select-none"
+                        draggable="false"
+                        @contextmenu.prevent
+                    />
+                </div>
+
+                <!-- info -->
+                <div class="md:w-1/2 flex flex-col gap-5">
+
+                    <div class="flex justify-between items-center gap-2">
+                        <h1 class="text-3xl font-bold break-words flex-1">
+                            {{ artwork.title || 'Без названия' }}
+                        </h1>
+                        <button
+                            @click="openShare"
+                            class="btn btn-sm btn-circle btn-ghost"
+                            title="Поделиться"
+                        >
+                            <ShareIcon class="w-5 h-5" />
+                        </button>
                     </div>
 
-                    <!-- Artwork Info -->
-                    <div class="md:w-1/2 flex flex-col space-y-4">
-                        <h1 class="text-2xl font-bold">{{ artwork.title || 'Без названия' }}</h1>
+                    <div v-if="artwork.description" class="space-y-2">
+                        <p :class="expanded ? '' : 'line-clamp-5'">{{ artwork.description }}</p>
+                        <button
+                            v-if="artwork.description.length > 200"
+                            class="link link-primary text-sm"
+                            @click="expanded = !expanded"
+                        >
+                            {{ expanded ? 'Скрыть' : 'Читать полностью' }}
+                        </button>
+                    </div>
 
-                        <!-- Description -->
-                        <p>{{ artwork.description }}</p>
+                    <div v-if="artwork.tags?.length" class="flex flex-wrap gap-2">
+                        <button
+                            v-for="t in artwork.tags"
+                            :key="t.id"
+                            class="badge badge-outline badge-primary lowercase"
+                            @click="goToTag(t.name)"
+                        >
+                            #{{ t.name }}
+                        </button>
+                    </div>
 
-                        <!-- Tags -->
-                        <div v-if="artwork.tags?.length" class="flex flex-wrap gap-2">
-                          <span v-for="tag in artwork.tags" :key="tag.id"
-                                class="bg-purple-700 px-2 py-1 rounded cursor-pointer hover:bg-purple-600"
-                                @click="goToTag(tag.name)">
-                            #{{ tag.name }}
-                          </span>
+                    <div class="flex items-center gap-3">
+                        <img
+                            :src="author.profile_photo_url"
+                            class="w-10 h-10 rounded-full object-cover ring ring-primary/50"
+                        />
+                        <Link
+                            :href="`/profile/${author.id}`"
+                            class="font-semibold text-primary hover:underline"
+                        >
+                            {{ author.name }}
+                        </Link>
+                    </div>
+
+                    <div class="flex items-center gap-4">
+                        <button class="btn btn-circle btn-sm btn-ghost" @click="toggleLike(artwork)">
+                            <component
+                                :is="artwork.liked_by_user ? HeartSolidIcon : HeartOutlineIcon"
+                                class="w-6 h-6 text-error"
+                            />
+                        </button>
+                        <span class="font-bold text-lg">{{ artwork.likes_count }}</span>
+
+                        <button
+                            class="btn btn-circle btn-sm bg-success/10 hover:bg-success/20"
+                            @click="openColSelector"
+                        >
+                            <PlusCircleIcon class="w-6 h-6 text-success" />
+                        </button>
+
+                        <a
+                            v-if="canDownload"
+                            class="btn btn-circle btn-sm bg-info/10 hover:bg-info/20"
+                            :href="artwork.media[0]?.original_url"
+                            :download="artwork.title || 'artwork'"
+                        >
+                            <ArrowDownTrayIcon class="w-6 h-6 text-info" />
+                        </a>
+
+                        <div class="flex items-center gap-1 text-base-content/70">
+                            <EyeIcon class="w-6 h-6" />
+                            <span class="font-bold">{{ artwork.views_count }}</span>
                         </div>
-
-                        <!-- Author -->
-                        <div class="flex items-center space-x-2">
-                            <img class="h-8 w-8 rounded-full object-cover" :src="author.profile_photo_url"/>
-                            <Link :href="`/profile/${author.id}`" class="font-semibold text-blue-400 hover:underline">
-                                {{ author.name }}
-                            </Link>
-                        </div>
-
-                        <!-- Like / Collection -->
-                        <div class="flex items-center">
-                            <!-- Like -->
-                            <button class="rounded-full w-8 h-8 flex items-center justify-center
-                             bg-black bg-opacity-50 hover:bg-opacity-80 transition me-2"
-                                    @click="toggleLike(artwork)">
-                                <img :src="artwork.liked_by_user ? '/images/icons/liked.svg':'/images/icons/like.svg'"
-                                     class="w-5 h-5"/>
-                            </button>
-                            <span>{{ artwork.likes_count }}</span>
-
-
-                            <!-- Collection -->
-                            <button class="rounded-full bg-black bg-opacity-50 w-8 h-8 flex items-center justify-center hover:bg-opacity-80 mx-2"
-                                    @click="openSelector(artwork, $event)">
-                                <img src="/images/icons/plus-btn-white.svg" class="w-5 h-5"/>
-                            </button>
-
-                            <!-- Views -->
-                            <div class="flex items-center">
-                                <img src="/images/icons/views.svg" class="w-5 h-5 me-2"/>
-                                <span>{{ artwork.views_count }}</span>
-                            </div>
-                        </div>
-
-                        <!-- комментарии -->
-                        <CommentsSection :artworkId="artwork.id" @updateCommentsCount="cnt=>artwork.comments_count = cnt"/>
+                        <ShareModal
+                            v-if="showShare"
+                            :artwork-id="artwork.id"
+                            :chats="myChats"
+                            @close="showShare = false"
+                        />
                     </div>
                 </div>
             </div>
 
-            <!-- другие работы -->
-            <h2 class="text-xl font-bold mt-8 mb-2">Другие работы автора</h2>
-            <div class="bg-gray-800 p-4 rounded">
-                <MasonryGrid :items="authorWorks">
+            <!-- tabs -->
+            <div class="flex gap-6 border-b border-base-300 text-lg font-medium">
+                <button
+                    v-for="t in tabs"
+                    :key="t"
+                    :class="activeTab === t ? 'border-b-2 border-primary text-primary pb-1' : 'pb-1'"
+                    @click="openTab(t)"
+                >
+                    {{ t === 'comments'
+                    ? `Комментарии (${artwork.comments_count})`
+                    : t === 'author'
+                        ? 'Работы автора'
+                        : 'Похожие' }}
+                </button>
+            </div>
+
+            <!-- COMMENTS -->
+            <section v-show="activeTab === 'comments'">
+                <CommentsSection
+                    v-if="showComments"
+                    :artwork-id="artwork.id"
+                    :artwork-owner="author.id"
+                    @updateCommentsCount="cnt => artwork.comments_count = cnt"
+                />
+                <p v-else class="text-base-content/60 mt-4">Автор отключил комментарии</p>
+            </section>
+
+            <!-- AUTHOR WORKS -->
+            <section v-show="activeTab === 'author'">
+                <MasonryGrid :key="authorKey" :items="authorWorks" class="w-full">
                     <template #default="{ item }">
-                        <ArtworkCard :art="item"/>
+                        <ArtworkCard :art="item" />
                     </template>
                 </MasonryGrid>
-
                 <div class="flex justify-center mt-4">
-                    <button v-if="hasMoreAuthorWorks"
-                            class="btn btn-secondary"
-                            :disabled="loadingAuthorWorks"
-                            @click="loadAuthorWorks">
-                        {{ loadingAuthorWorks ? 'Загрузка…' : 'Загрузить ещё' }}
+                    <button
+                        v-if="moreAuthor"
+                        class="btn btn-outline"
+                        :disabled="loadAuthor"
+                        @click="fetchAuthor"
+                    >
+                        {{ loadAuthor ? 'Загрузка…' : 'Загрузить ещё' }}
                     </button>
                 </div>
+            </section>
 
-                <p v-if="!hasMoreAuthorWorks && authorWorks.length" class="text-center text-gray-400 mt-4">
-                    Больше работ нет
-                </p>
-                <p v-if="!loadingAuthorWorks && !authorWorks.length" class="text-center text-gray-400 mt-4">
-                    Нет других работ автора
-                </p>
-            </div>
+            <!-- SIMILAR -->
+            <section v-show="activeTab === 'similar'">
+                <MasonryGrid :key="similarKey" :items="similarWorks" class="w-full">
+                    <template #default="{ item }">
+                        <ArtworkCard :art="item" />
+                    </template>
+                </MasonryGrid>
+                <div class="flex justify-center mt-4">
+                    <button
+                        v-if="moreSimilar"
+                        class="btn btn-outline"
+                        :disabled="loadSimilar"
+                        @click="fetchSimilar"
+                    >
+                        {{ loadSimilar ? 'Загрузка…' : 'Загрузить ещё' }}
+                    </button>
+                </div>
+            </section>
         </div>
     </AppLayout>
 </template>
 
-<script setup>
-import { ref, onMounted } from 'vue'
-import axios from 'axios'
-import { Link, usePage } from '@inertiajs/vue3'
-import { Inertia }        from '@inertiajs/inertia'
-
-import AppLayout    from '@/Layouts/AppLayout.vue'
-import MasonryGrid  from '@/Components/MasonryGrid.vue'
-import ArtworkCard  from '@/Components/Gallery/ArtworkCard.vue'
-import CommentsSection from '@/Components/Comments/CommentsSection.vue'
-
-import { useArtworkActions } from '@/stores/useArtworkActions'
-import { storeToRefs }       from 'pinia'
-
-/* ---------- данные с сервера ---------- */
-const page     = usePage()
-const artwork  = ref({ ...page.props.artwork })
-const author   = page.props.author
-
-/* ---------- Pinia ---------- */
-const actions = useArtworkActions()
-const { toggleLike, openSelector: openSelectorFromStore, setCollections } = actions
-
-/* список коллекций от сервера → store */
-if (page.props.collections) setCollections(page.props.collections)
-
-/* ---------- другие работы автора ---------- */
-const authorWorks        = ref([])
-const loadingAuthorWorks = ref(false)
-const hasMoreAuthorWorks = ref(true)
-let   authorPage         = 1
-
-onMounted(loadAuthorWorks)
-
-function loadAuthorWorks () {
-    if (loadingAuthorWorks.value || !hasMoreAuthorWorks.value) return
-    loadingAuthorWorks.value = true
-    axios.get(`/author/${author.id}/works`, {
-        params: { page: authorPage, per_page: 12, exclude_artwork_id: artwork.value.id }
-    }).then(({ data }) => {
-        if (data.artworks?.length) {
-            authorWorks.value.push(...data.artworks)
-            authorPage++
-            if (data.artworks.length < 12) hasMoreAuthorWorks.value = false
-        } else {
-            hasMoreAuthorWorks.value = false
-        }
-    }).finally(() => loadingAuthorWorks.value = false)
+<style scoped>
+.select-none {
+    user-select: none;
+    -webkit-user-drag: none;
+    user-drag: none;
 }
-
-/* ---------- вспомогательные ---------- */
-function goBack()        { window.history.back() }
-function goToTag(tag)    { Inertia.get('/search', { q: tag }) }
-function openSelector (art, evt) {
-    const rect = evt.currentTarget.getBoundingClientRect()
-    openSelectorFromStore(art, rect)
+.line-clamp-5 {
+    display: -webkit-box;
+    -webkit-line-clamp: 5;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
-</script>
+</style>

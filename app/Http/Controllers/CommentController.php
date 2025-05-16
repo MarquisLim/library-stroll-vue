@@ -19,11 +19,22 @@ class CommentController extends Controller
         $query = Comment::where('commentable_id', $artworkId)
             ->where('commentable_type', Artwork::class)
             ->whereNull('parent_id')
-            ->with(['user', 'replies.user'])
+            ->with(['user', 'replies.user', 'replies.parent.user']) // добавлено
             ->orderBy('created_at', 'desc');
 
         $total = $query->count();
-        $comments = $query->skip(($page - 1) * $perPage)->take($perPage)->get();
+        $comments = Comment::whereNull('parent_id')
+            ->where('commentable_id', $artworkId)
+            ->with([
+                'user',
+                'replies.user',
+                'replies.parent.user',
+                'replies.replies.user',
+                'replies.replies.parent.user',
+            ])
+            ->orderBy('created_at','desc')
+            ->skip(($page-1)*$perPage)->take($perPage)
+            ->get();
 
         return response()->json([
             'comments' => $comments,
@@ -33,9 +44,6 @@ class CommentController extends Controller
     }
 
 
-    /**
-     * Добавление нового комментария.
-     */
     public function store(Request $request, $artworkId)
     {
         if (!Auth::check()) {
@@ -63,35 +71,28 @@ class CommentController extends Controller
         return response()->json(['comment' => $comment]);
     }
 
-    /**
-     * Добавление ответа на комментарий.
-     */
+
     public function reply(Request $request, $id)
     {
-        if (!Auth::check()) {
-            return response()->json(['error' => 'Неавторизован'], 403);
-        }
+        $user   = Auth::user() ?: abort(403);
+        $parent = Comment::with('parent')->findOrFail($id);
 
-        $parent = Comment::findOrFail($id);
+        $request->validate(['text' => 'required|string|max:1000']);
 
-        $request->validate([
-            'text' => 'required|string|max:1000',
-        ]);
+        // если отвечаем на ответ – берём корневой
+        $root = $parent->parent_id ? $parent->parent : $parent;
 
         $reply = Comment::create([
-            'user_id' => Auth::id(),
-            'commentable_id' => $parent->commentable_id,
-            'commentable_type' => $parent->commentable_type,
-            'parent_id' => $parent->id,
-            'text' => $request->text,
+            'user_id'          => $user->id,
+            'commentable_id'   => $root->commentable_id,
+            'commentable_type' => Artwork::class,
+            'parent_id'        => $root->id,
+            'text'             => $request->text,
         ]);
 
-        $reply->load('user');
-
-        // Уведомить автора исходного комментария о новом ответе (при необходимости)
-        // ...
-
+        $reply->load(['user', 'parent.user']);
         return response()->json(['reply' => $reply]);
     }
+
 
 }

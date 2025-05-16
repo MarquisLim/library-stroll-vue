@@ -33,7 +33,7 @@ const submit = () => {
 
         <form @submit.prevent="submit">
             <div>
-                <InputLabel for="name" value="Имя" />
+                <InputLabel for="name" value="Ник" />
                 <TextInput
                     id="name"
                     v-model="form.name"
@@ -85,25 +85,45 @@ const submit = () => {
                 <InputError class="mt-2" :message="form.errors.password_confirmation" />
             </div>
 
-            <div v-if="$page.props.jetstream.hasTermsAndPrivacyPolicyFeature" class="mt-4">
                 <InputLabel for="terms">
                     <div class="flex items-center">
-                        <Checkbox id="terms" v-model:checked="form.terms" name="terms" required />
+                        <Checkbox
+                            id="terms"
+                            v-model:checked="form.terms"
+                            name="terms"
+                            required
+                        />
 
-                        <div class="ms-2">
-                            I agree to the <a target="_blank" :href="route('terms.show')" class="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Terms of Service</a> and <a target="_blank" :href="route('policy.show')" class="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Privacy Policy</a>
+                        <div class="ms-2 text-sm">
+                            Я принимаю
+                            <a
+                                target="_blank"
+                                :href="route('terms')"
+                                class="underline text-gray-600 hover:text-gray-900"
+                            >
+                                Пользовательское соглашение
+                            </a>
+                            и
+                            <a
+                                target="_blank"
+                                :href="route('privacy')"
+                                class="underline text-gray-600 hover:text-gray-900"
+                            >
+                                Политику конфиденциальности
+                            </a>
                         </div>
                     </div>
-                    <InputError class="mt-2" :message="form.errors.terms" />
                 </InputLabel>
-            </div>
 
             <div class="flex items-center justify-end mt-4">
                 <Link :href="route('login')" class="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
                     Уже зарегистрированы?
                 </Link>
 
-                <PrimaryButton class="ms-4" :class="{ 'opacity-25': form.processing }" :disabled="form.processing">
+                <PrimaryButton class="ms-4"
+                               :class="{ 'opacity-25': form.processing || !form.terms }"
+                               :disabled="form.processing || !form.terms"
+                >
                     Зарегистрироваться
                 </PrimaryButton>
             </div>

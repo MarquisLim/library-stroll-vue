@@ -107,11 +107,13 @@ const disableTwoFactorAuthentication = () => {
 <template>
     <ActionSection>
         <template #title>
-            Двухфакторная аутентификация
+            <div class="text-xl leading-relaxed text-base-content">
+                Двухфакторная аутентификация
+            </div>
         </template>
 
         <template #description>
-          <div class="text-white">
+          <div class="text-base text-base-content">
             Добавьте дополнительную безопасность своей учетной записи, используя двухфакторную аутентификацию.
           </div>
         </template>

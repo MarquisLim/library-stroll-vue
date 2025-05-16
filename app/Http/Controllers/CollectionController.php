@@ -20,7 +20,7 @@ class CollectionController extends Controller
                     'media',
                     'likes',
                     'collections'
-                ])->withCount('likes'); // Добавляем подсчет лайков
+                ])->withCount('likes');
             }
         ]);
 

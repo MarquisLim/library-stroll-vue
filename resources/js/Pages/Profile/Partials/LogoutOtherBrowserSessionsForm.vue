@@ -45,11 +45,13 @@ const closeModal = () => {
 <template>
     <ActionSection>
         <template #title>
-          Сеансы браузера
+            <div class="text-xl leading-relaxed text-base-content">
+                Сеансы браузера
+            </div>
         </template>
 
         <template #description>
-          <div class="text-white">
+          <div class="text-base text-base-content">
             Управляйте активными сеансами и выходите из них в других браузерах и устройствах.
           </div>
         </template>
@@ -113,7 +115,7 @@ const closeModal = () => {
                             v-model="form.password"
                             type="password"
                             class="mt-1 block w-3/4"
-                            placeholder="Password"
+                            placeholder="Пароль"
                             autocomplete="current-password"
                             @keyup.enter="logoutOtherBrowserSessions"
                         />

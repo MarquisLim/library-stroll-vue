@@ -1,4 +1,4 @@
-document.documentElement.setAttribute("data-theme", "dark");
+// document.documentElement.setAttribute("data-theme", "dark");
 
 import './bootstrap';
 import '../css/app.css';
@@ -11,6 +11,8 @@ import { ZiggyVue } from '../../vendor/tightenco/ziggy';
 import GlobalModals from '@/Components/Common/GlobalModals.vue'
 import { Capacitor } from '@capacitor/core'
 import { StatusBar } from '@capacitor/status-bar'
+import { gsap } from 'gsap'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 

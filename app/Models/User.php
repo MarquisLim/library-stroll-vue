@@ -9,6 +9,7 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 use Laravel\Jetstream\HasProfilePhoto;
 use Laravel\Sanctum\HasApiTokens;
+use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
@@ -17,7 +18,7 @@ class User extends Authenticatable
 
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory;
-    use HasProfilePhoto;
+    use HasRoles;
     use Notifiable;
     use TwoFactorAuthenticatable;
 
@@ -73,6 +74,11 @@ class User extends Authenticatable
         return $this->hasMany(Artwork::class);
     }
 
+    public function collections()
+    {
+        return $this->hasMany(Collection::class);
+    }
+
     public function preferences()
     {
         return $this->hasMany(UserPreference::class);
@@ -91,5 +97,31 @@ class User extends Authenticatable
     public function replies()
     {
         return $this->hasMany(User::class, 'parent_id');
+    }
+
+    public function conversations()
+    {
+        return $this->belongsToMany(Conversation::class)
+            ->withPivot(['joined_at', 'role', 'last_read_at']);
+    }
+
+    public function conversationsWithPartner()
+    {
+        return $this->conversations()->with('users')
+            ->get()
+            ->map(function ($conv) {
+                $conv->partner = $conv->users->firstWhere('id', '!=', $this->id);
+                return $conv;
+            });
+    }
+
+    public function blockedUsers()
+    {
+        return $this->belongsToMany(User::class, 'user_blocks', 'blocker_id', 'blocked_id');
+    }
+
+    public function hasBlocked(User $user): bool
+    {
+        return $this->blockedUsers()->where('blocked_id', $user->id)->exists();
     }
 }

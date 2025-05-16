@@ -20,7 +20,7 @@ class AuthenticationTest extends TestCase
     public function test_users_can_authenticate_using_the_login_screen(): void
     {
         $user = User::factory()->create([
-            'password' => bcrypt('password') // Jetstream требует зашифрованный пароль
+            'password' => bcrypt('password')
         ]);
 
         // Имитируем CSRF-токен
@@ -32,7 +32,7 @@ class AuthenticationTest extends TestCase
             'password' => 'password',
         ]);
 
-        $response->assertRedirect(route('gallery.index', absolute: false));
+        $response->assertRedirect(route('home', absolute: false));
 
         // Проверяем, что пользователь вошёл
         $this->assertAuthenticatedAs($user);

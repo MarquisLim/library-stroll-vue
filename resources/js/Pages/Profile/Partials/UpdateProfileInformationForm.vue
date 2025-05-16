@@ -78,11 +78,13 @@ const clearPhotoFileInput = () => {
 <template>
     <FormSection @submitted="updateProfileInformation">
         <template #title>
-            Информация профиля
+            <div class="text-xl leading-relaxed text-base-content">
+                Информация профиля
+            </div>
         </template>
 
         <template #description>
-          <div class="text-white">
+          <div class="text-base text-base-content">
             Обновление основной информации
           </div>
         </template>
@@ -99,7 +101,7 @@ const clearPhotoFileInput = () => {
                     @change="updatePhotoPreview"
                 >
 
-                <InputLabel for="photo" value="Photo" />
+                <InputLabel for="photo" value="Фото" />
 
                 <!-- Current Profile Photo -->
                 <div v-show="! photoPreview" class="mt-2">
@@ -132,7 +134,7 @@ const clearPhotoFileInput = () => {
 
             <!-- Name -->
             <div class="col-span-6 sm:col-span-4">
-                <InputLabel for="name" value="Name" />
+                <InputLabel for="name" value="Ник" />
                 <TextInput
                     id="name"
                     v-model="form.name"
@@ -146,7 +148,7 @@ const clearPhotoFileInput = () => {
 
             <!-- Email -->
             <div class="col-span-6 sm:col-span-4">
-                <InputLabel for="email" value="Email" />
+                <InputLabel for="email" value="Почта" />
                 <TextInput
                     id="email"
                     v-model="form.email"

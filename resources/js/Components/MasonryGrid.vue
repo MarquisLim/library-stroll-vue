@@ -1,20 +1,21 @@
 <template>
-    <div ref="scrollContainer" class="relative overflow-y-auto overflow-x-hidden p-4">
-        <div ref="grid" class="masonry-grid w-full">
+    <div class="relative p-4">
+        <!-- GRID ------------------------------------------------------------>
+        <div ref="grid" class="masonry-grid">
             <div class="grid-sizer"></div>
-            <div v-for="item in items" :key="item.id" class="grid-item">
-                <slot :item="item" />
+
+            <div v-for="it in items" :key="it.id" class="grid-item">
+                <slot :item="it"/>
             </div>
         </div>
 
+        <!-- FOOTER ---------------------------------------------------------->
         <div class="text-center py-4">
             <div v-if="loading">
                 <div class="loader"></div>
-                <div class="text-gray-500 mt-2">Загружаем ещё...</div>
+                <p class="text-gray-500 mt-2">Загружаем…</p>
             </div>
-            <div v-else-if="noMoreItems" class="text-gray-400">
-                🎉 Вы долистали до конца!
-            </div>
+            <p v-else-if="noMoreItems" class="text-gray-400">🎉 Вы долистали до конца!</p>
         </div>
 
         <div ref="sentinel"></div>
@@ -23,187 +24,126 @@
 
 <script setup>
 import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
-import Masonry from 'masonry-layout'
+import Masonry      from 'masonry-layout'
 import imagesLoaded from 'imagesloaded'
-import axios from 'axios'
+import axios        from 'axios'
 
+/* ───── props / emits ───── */
 const props = defineProps({
-    items: {
-        type: Array,
-        required: true
-    },
-    loadMoreUrl: {
-        type: String,
-        required: false
-    },
-    startPage: { type:Number, default:0 }
+    items       : { type:Array,  required:true },
+    loadMoreUrl : { type:String, default:'' },
+    startPage   : { type:Number, default:0  },
+    perPage     : { type:Number, default:20 }
 })
-
 const emit = defineEmits(['update:items'])
 
-const grid = ref(null)
-const scrollContainer = ref(null)
+/* ───── refs / state ───── */
+const grid     = ref(null)
 const sentinel = ref(null)
 
-let msnry
-let observer
-
-const loading = ref(false)
-const page = ref(props.startPage)
+let msnry, observer
+const page        = ref(props.startPage) // 0 -> первая порция уже на странице
+const loading     = ref(false)
 const noMoreItems = ref(false)
 
-function sentinelVisible(){
-    const rect = sentinel.value?.getBoundingClientRect()
-    return rect && rect.top < window.innerHeight
-}
+/* ───── helpers ───── */
+const debounce = (fn,ms=100)=>{ let h; return (...a)=>{ clearTimeout(h); h=setTimeout(()=>fn(...a),ms) } }
 
-function initMasonry() {
-    msnry = new Masonry(grid.value, {
-        itemSelector: '.grid-item',
-        columnWidth: '.grid-sizer',
+function mountMasonry(){
+    msnry?.destroy()
+    msnry = new Masonry(grid.value,{
+        itemSelector   : '.grid-item',
+        columnWidth    : '.grid-sizer',
         percentPosition: true,
-        gutter: 0
+        gutter         : 0              // <-- важное изменение
     })
-    imagesLoaded(grid.value).on('progress', () => msnry.layout())
+    imagesLoaded(grid.value)
+        .on('progress',()=>msnry.layout())
+        .on('done'    ,()=>msnry.layout())
 }
+const onResize = debounce(()=>msnry?.layout(),100)
 
-function reloadMasonry() {
-    nextTick(() => {
-        imagesLoaded(grid.value).on('progress', () => {
-            msnry.reloadItems()
-            msnry.layout()
-        })
-    })
-}
-
-function handleIntersect(entries) {
-    if (entries[0].isIntersecting && !loading.value && props.loadMoreUrl && !noMoreItems.value) {
-        loadMore()
-    }
-}
-
-function loadMore() {
+/* ───── загрузка следующей страницы ───── */
+async function loadMore(){
+    if(loading.value || noMoreItems.value || !props.loadMoreUrl) return
     loading.value = true
-        const url = props.loadMoreUrl +
-                     (props.loadMoreUrl.includes('?') ? '&' : '?') +
-                     'page=' + (page.value + 1)
-            axios.get(url)
-                .then(res => {
-            if (res.data.artworks && res.data.artworks.length > 0) {
-                emit('update:items', [...props.items, ...res.data.artworks])
-                page.value++
-            } else {
-                noMoreItems.value = true
-            }
-        }).catch(() => {
-                +            /* если после добавления Sentinel всё ещё виден
-+               и сервер вернул ≥ perPage (20) — грузим следующую */
-                                nextTick(()=>{
-                                      if(!noMoreItems.value
-                                             && res.data.artworks.length === 20
-                                             && sentinelVisible()){
-                                            loadMore()
-                                          }
-                                    })
-                        }).catch(() => {
-        noMoreItems.value = true
-    }).finally(() => {
+    const sep = props.loadMoreUrl.includes('?') ? '&' : '?'
+    const url = `${props.loadMoreUrl}${sep}page=${page.value+1}`
+
+    try{
+        const {data} = await axios.get(url)
+        const more   = data.artworks ?? []
+        if(more.length){
+            emit('update:items',[...props.items,...more])
+            page.value++
+        }else noMoreItems.value = true
+    }catch{ noMoreItems.value = true }
+    finally{
         loading.value = false
-    })
+        nextTick(()=>{ msnry.layout(); autoLoadIfVisible() })
+    }
 }
 
-onMounted(() => {
-    initMasonry()
+/* если sentry уже на экране — грузим ещё */
+function autoLoadIfVisible(){
+    const rect = sentinel.value?.getBoundingClientRect()
+    if(!noMoreItems.value && rect && rect.top < innerHeight) loadMore()
+}
+function onIntersect([e]){ if(e.isIntersecting) loadMore() }
 
-    observer = new IntersectionObserver(handleIntersect, { threshold: 0.25 })
-    if (sentinel.value) observer.observe(sentinel.value)
+/* ───── life-cycle ───── */
+onMounted(()=>{
+    mountMasonry()
+    window.addEventListener('resize',onResize)
+
+    observer = new IntersectionObserver(onIntersect,{threshold:.25})
+    observer.observe(sentinel.value)
+})
+onBeforeUnmount(()=>{
+    window.removeEventListener('resize',onResize)
+    observer?.disconnect()
+    msnry?.destroy()
 })
 
-watch(() => [...props.items], reloadMasonry)
-
-/* сбрасываем page / noMore, когда **URL** поменялся (новый набор фильтров) */
-watch(() => props.loadMoreUrl, () => {
-      page.value        = 0
-      noMoreItems.value = false
-    loading.value     = false
-         msnry?.destroy()
-         nextTick(loadMore)
-
+/* ───── watch ───── */
+watch( () => props.items.length, (n,o)=>{
+    if(n>o) nextTick(()=>{ msnry.reloadItems(); msnry.layout() })
 })
-
-
-onBeforeUnmount(() => {
-    if (observer && sentinel.value) {
-        observer.unobserve(sentinel.value)
-    }
+watch( () => props.startPage, val=>{
+    page.value = val
+    noMoreItems.value = false
+    nextTick(mountMasonry)
 })
 </script>
 
 <style scoped>
+/* кол-во колонок: 6 / 3 / 2 / 1 */
 .grid-sizer,
-.grid-item {
-    width: 16.6667%;
-}
+.grid-item{ box-sizing:border-box; width:calc(100%/6) }
+@media (max-width:1024px){ .grid-sizer,.grid-item{ width:calc(100%/3) } }
+@media (max-width:768px) { .grid-sizer,.grid-item{ width:50%           } }
+@media (max-width:640px) { .grid-sizer,.grid-item{ width:100%          } }
 
+/* внутренние отступы — они НЕ влияют на расчёт ширины */
+.grid-item{ padding:0 4px 8px }
+
+/* плавное появление медиа */
 .grid-item img,
-.grid-item video {
-    will-change: opacity;
-}
-
-.grid-item {
-    padding-left: 4px;
-    padding-right: 4px;
-    margin-bottom: 8px;
-}
-
-/* Responsive */
-@media (max-width: 1024px) {
-    .grid-sizer,
-    .grid-item {
-        width: 33.3333%;
-    }
-}
-
-@media (max-width: 768px) {
-    .grid-sizer,
-    .grid-item {
-        width: 50%;
-    }
-}
-
-@media (max-width: 640px) {
-    .grid-sizer,
-    .grid-item {
-        width: 100%;
-    }
-}
-
-/* в <style scoped> MasonryGrid.vue */
-.grid-item img,
-.grid-item video {
-    width: 100%;
-    height: auto;
-    aspect-ratio: 1 / 1;   /* квадрат-заглушка */
-    opacity: 0;
-    transition: opacity .3s;
+.grid-item video{
+    width:100%; height:auto; aspect-ratio:1/1;
+    opacity:0; transition:opacity .3s
 }
 .grid-item img.loaded,
-.grid-item video.loaded { opacity: 1 }
+.grid-item video.loaded{ opacity:1 }
 
-
-/* Красивая крутилка */
-.loader {
-    border: 4px solid #f3f3f3;
-    border-top: 4px solid #3490dc;
-    border-radius: 50%;
-    width: 36px;
-    height: 36px;
-    animation: spin 1s linear infinite;
-    margin: 0 auto;
+/* крутилка */
+.loader{
+    border:4px solid var(--tw-prose-body);
+    border-top:4px solid var(--tw-prose-pre-bg);
+    border-radius:50%;
+    width:36px; height:36px;
+    animation:spin 1s linear infinite;
+    margin:0 auto;
 }
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
+@keyframes spin{ to{transform:rotate(360deg)} }
 </style>

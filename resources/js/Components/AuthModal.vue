@@ -1,72 +1,109 @@
 <template>
     <Teleport to="body">
-        <div class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center" @click.self="close">
-            <div class="bg-gray-800 w-full max-w-md mx-4 rounded-xl p-6 text-white">
-                <!-- ───── tabs -->
-                <div class="flex mb-4 border-b border-gray-700">
-                    <button class="flex-1 py-2 text-center"
-                            :class="tab==='login' ? activeCls : idleCls"
-                            @click="tab='login'">Вход</button>
-                    <button class="flex-1 py-2 text-center"
-                            :class="tab==='register' ? activeCls : idleCls"
-                            @click="tab='register'">Регистрация</button>
+        <div class="modal modal-open">
+            <div class="modal-box relative bg-base-100">
+                <!-- Close Button -->
+                <button @click="close" class="btn btn-sm btn-circle absolute right-2 top-2">✕</button>
+
+                <!-- Logo -->
+                <div class="flex justify-center mb-4">
+                    <img src="/logo.png" alt="Logo" class="h-16 w-auto" />
                 </div>
 
-                <!-- ───── LOGIN -->
-                <form v-if="tab==='login'" @submit.prevent="submitLogin">
-                    <label class="block mb-3 text-sm">
-                        Почта
-                        <input v-model="login.email" type="email" required class="input"/>
-                        <span v-if="loginErr.email" class="err">{{ loginErr.email[0] }}</span>
-                    </label>
+                <!-- Tabs -->
+                <div class="tabs tabs-boxed w-full mb-4">
+                    <a :class="['tab flex-1', tab === 'login' ? 'tab-active' : '']" @click.prevent="tab = 'login'">Вход</a>
+                    <a :class="['tab flex-1', tab === 'register' ? 'tab-active' : '']" @click.prevent="tab = 'register'">Регистрация</a>
+                </div>
 
-                    <label class="block mb-4 text-sm">
-                        Пароль
-                        <input v-model="login.password" type="password" required class="input"/>
-                        <span v-if="loginErr.password" class="err">{{ loginErr.password[0] }}</span>
-                    </label>
-
-                    <div class="flex justify-between items-center mb-4 text-sm">
-                        <button type="button" class="link" @click="tab='register'">Регистрация</button>
-                        <a :href="route('password.request')" class="text-gray-400 hover:underline">Забыли пароль?</a>
+                <!-- Login Form -->
+                <form v-if="tab === 'login'" @submit.prevent="submitLogin" class="space-y-4">
+                    <div>
+                        <label class="label">
+                            <span class="label-text">Почта</span>
+                        </label>
+                        <input v-model="login.email" type="email" placeholder="Введите email" required class="input input-bordered w-full" />
+                        <p v-if="loginErr.email" class="text-error text-sm mt-1">{{ loginErr.email[0] }}</p>
                     </div>
 
-                    <button type="submit" class="btn w-full" :disabled="loginLoading">Войти</button>
+                    <div>
+                        <label class="label">
+                            <span class="label-text">Пароль</span>
+                        </label>
+                        <input v-model="login.password" type="password" placeholder="Введите пароль" required class="input input-bordered w-full" />
+                        <p v-if="loginErr.password" class="text-error text-sm mt-1">{{ loginErr.password[0] }}</p>
+                    </div>
+
+                    <div class="flex justify-between items-center">
+                        <button type="button" class="link link-hover text-sm" @click.prevent="tab = 'register'">Регистрация</button>
+                        <a :href="route('password.request')" class="link link-hover text-sm">Забыли пароль?</a>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-full" :loading="loginLoading">Войти</button>
                 </form>
 
-                <!-- ───── REGISTER -->
-                <form v-else @submit.prevent="submitRegister">
-                    <label class="block mb-3 text-sm">
-                        Имя
-                        <input v-model="reg.name" type="text" required class="input"/>
-                        <span v-if="regErr.name"  class="err">{{ regErr.name[0] }}</span>
-                    </label>
+                <!-- Register Form -->
+                <form v-else @submit.prevent="submitRegister" class="space-y-4">
+                    <div>
+                        <label class="label">
+                            <span class="label-text">Никнейм</span>
+                        </label>
+                        <input v-model="reg.name" type="text" placeholder="Ваш ник" required class="input input-bordered w-full" />
+                        <p v-if="regErr.name" class="text-error text-sm mt-1">{{ regErr.name[0] }}</p>
+                    </div>
 
-                    <label class="block mb-3 text-sm">
-                        Почта
-                        <input v-model="reg.email" type="email" required class="input"/>
-                        <span v-if="regErr.email" class="err">{{ regErr.email[0] }}</span>
-                    </label>
+                    <div>
+                        <label class="label">
+                            <span class="label-text">Почта</span>
+                        </label>
+                        <input v-model="reg.email" type="email" placeholder="Введите email" required class="input input-bordered w-full" />
+                        <p v-if="regErr.email" class="text-error text-sm mt-1">{{ regErr.email[0] }}</p>
+                    </div>
 
-                    <label class="block mb-3 text-sm">
-                        Пароль
-                        <input v-model="reg.password" type="password" required class="input"/>
-                        <span v-if="regErr.password" class="err">{{ regErr.password[0] }}</span>
-                    </label>
+                    <div>
+                        <label class="label">
+                            <span class="label-text">Пароль</span>
+                        </label>
+                        <input v-model="reg.password" type="password" placeholder="Придумайте пароль" required class="input input-bordered w-full" />
+                        <p v-if="regErr.password" class="text-error text-sm mt-1">{{ regErr.password[0] }}</p>
+                    </div>
 
-                    <label class="block mb-4 text-sm">
-                        Подтвердите пароль
-                        <input v-model="reg.password_confirmation" type="password" required class="input"/>
-                    </label>
+                    <div>
+                        <label class="label">
+                            <span class="label-text">Подтверждение пароля</span>
+                        </label>
+                        <input v-model="reg.password_confirmation" type="password" placeholder="Повторите пароль" required class="input input-bordered w-full" />
+                    </div>
 
-                    <button type="submit" class="btn w-full mb-3" :disabled="regLoading">
+                    <div class="form-control">
+                        <label class="label cursor-pointer">
+                            <input
+                                type="checkbox"
+                                v-model="agreed"
+                                class="checkbox checkbox-primary mr-2"
+                            />
+                            <span class="label-text text-sm">
+                                Я принимаю
+                                <a href="/terms" class="link link-primary underline">Пользовательское соглашение</a>
+                                и
+                                <a href="/privacy" class="link link-primary underline">Политику конфиденциальности</a>
+                              </span>
+                        </label>
+                    </div>
+
+                    <button
+                        type="submit"
+                        class="btn btn-primary w-full"
+                        :disabled="!agreed || regLoading"
+                        :loading="regLoading"
+                    >
                         Зарегистрироваться
                     </button>
 
-                    <div class="text-sm text-center">
+                    <p class="text-center text-sm">
                         Уже зарегистрированы?
-                        <button type="button" class="link" @click="tab='login'">Войти</button>
-                    </div>
+                        <button type="button" class="link link-hover" @click.prevent="tab = 'login'">Войти</button>
+                    </p>
                 </form>
             </div>
         </div>
@@ -75,66 +112,56 @@
 
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue'
-import axios   from 'axios'
+import axios from 'axios'
 import { Inertia } from '@inertiajs/inertia'
 
 const emit = defineEmits(['close','success'])
 const tab  = ref('login')
 
-/* ――― блокируем скролл ――― */
-onMounted(()=>document.documentElement.classList.add('overflow-hidden'))
-onBeforeUnmount(()=>document.documentElement.classList.remove('overflow-hidden'))
+onMounted(() => document.documentElement.classList.add('overflow-hidden'))
+onBeforeUnmount(() => document.documentElement.classList.remove('overflow-hidden'))
 
-/* css helpers (т.к. внутри :class) */
-const activeCls = 'border-b-2 border-purple-400 text-purple-400'
-const idleCls   = 'text-gray-400'
-
-/* ---------- login ---------- */
+// login state
 const login        = ref({ email:'', password:'' })
 const loginErr     = ref({})
 const loginLoading = ref(false)
 
+// register state
+const reg          = ref({ name:'', email:'', password:'', password_confirmation:'' })
+const regErr       = ref({})
+const regLoading   = ref(false)
+
+const agreed       = ref(false)
+
 async function submitLogin () {
     loginLoading.value = true
     loginErr.value = {}
-    try{
-        await axios.post('/login', login.value, { headers:{ Accept:'application/json', 'X-Requested-With':'XMLHttpRequest' } })
-        // подтянуть fresh auth-prop
+    try {
+        await axios.post('/login', login.value, { headers:{ Accept:'application/json','X-Requested-With':'XMLHttpRequest' } })
         await Inertia.reload({ only:['auth'], preserveScroll:true })
         emit('success')
-    }catch(e){
-        if(e.response?.status===422) loginErr.value = e.response.data.errors
-    }finally{
+    } catch(e) {
+        if (e.response?.status === 422) loginErr.value = e.response.data.errors
+    } finally {
         loginLoading.value = false
     }
 }
 
-/* ---------- register ---------- */
-const reg        = ref({ name:'', email:'', password:'', password_confirmation:'' })
-const regErr     = ref({})
-const regLoading = ref(false)
-
 async function submitRegister () {
     regLoading.value = true
     regErr.value = {}
-    try{
-        await axios.post('/register', reg.value, { headers:{ Accept:'application/json', 'X-Requested-With':'XMLHttpRequest' } })
+    try {
+        await axios.post('/register', reg.value, { headers:{ Accept:'application/json','X-Requested-With':'XMLHttpRequest' } })
         await Inertia.reload({ only:['auth'], preserveScroll:true })
         emit('success')
-    }catch(e){
-        if(e.response?.status===422) regErr.value = e.response.data.errors
-    }finally{
+    } catch(e) {
+        if (e.response?.status === 422) regErr.value = e.response.data.errors
+    } finally {
         regLoading.value = false
     }
 }
 
-function close () { emit('close') }
+function close() {
+    emit('close')
+}
 </script>
-
-<style scoped>
-.input{ @apply mt-1 w-full px-3 py-2 rounded bg-gray-700 focus:outline-none }
-.btn  { @apply bg-purple-600 hover:bg-purple-500 py-2 rounded }
-.link { @apply text-purple-400 hover:underline }
-.err  { @apply text-red-500 text-xs }
-html.overflow-hidden,body.overflow-hidden{ overflow:hidden }
-</style>

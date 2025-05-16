@@ -40,11 +40,13 @@ const updatePassword = () => {
 <template>
     <FormSection @submitted="updatePassword">
         <template #title>
-            Обновление пароля
+            <div class="text-xl leading-relaxed text-base-content">
+                Обновление пароля
+            </div>
         </template>
 
         <template #description>
-          <div class="text-white">
+          <div class="text-base text-base-content">
             Чтобы обеспечить безопасность, в вашей учетной записи используется длинный случайный пароль.
           </div>
         </template>

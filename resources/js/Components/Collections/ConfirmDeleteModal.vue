@@ -1,9 +1,10 @@
 <template>
     <div class="modal modal-open">
-        <div class="modal-box bg-gray-800 text-white">
+        <div class="modal-box bg-base-100 dark:bg-base-900 text-base-content dark:text-base-content">
             <h3 class="font-bold text-lg">Удалить коллекцию?</h3>
-            <p class="my-2 text-gray-300">Вы уверены, что хотите удалить коллекцию «{{ collection.name }}»?</p>
-
+            <p class="my-2 text-base-content/60">
+                Вы уверены, что хотите удалить коллекцию «{{ collection.name }}»?
+            </p>
             <div class="modal-action">
                 <button class="btn" @click="$emit('close')">Отмена</button>
                 <button class="btn btn-error" @click="$emit('confirmed')">Удалить</button>
@@ -13,8 +14,6 @@
 </template>
 
 <script setup>
-const props = defineProps({
-    collection: Object
-})
-const emit = defineEmits(['close','confirmed'])
+const props = defineProps({ collection: Object })
+const emit  = defineEmits(['close','confirmed'])
 </script>

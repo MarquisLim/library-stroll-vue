@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
@@ -17,7 +18,22 @@ class Artwork extends Model implements HasMedia
         'user_id','title','description','type','is_published','allow_download','allow_comments','is_adult','has_ai','is_private','views_count'
     ];
 
-    protected $appends = ['thumb_url', 'preview_url', 'video_duration_formatted'];
+    protected $appends = ['thumb_url', 'preview_url', 'video_duration_formatted','liked_by_user', 'in_collections'];
+
+
+    public function getLikedByUserAttribute(): bool
+    {
+        return Auth::check()
+            ? $this->likes()->where('user_id', Auth::id())->exists()
+            : false;
+    }
+
+    public function getInCollectionsAttribute(): array
+    {
+        return Auth::check()
+            ? $this->collections()->where('user_id', Auth::id())->pluck('id')->toArray()
+            : [];
+    }
 
     public function user()
     {
@@ -66,6 +82,11 @@ class Artwork extends Model implements HasMedia
         $s = str_pad($secs % 60, 2, '0', STR_PAD_LEFT);
 
         return "{$m}:{$s}";
+    }
+
+    public function getOriginalUrlAttribute()
+    {
+        return $this->getFirstMediaUrl('artworks');
     }
 
     public function registerMediaConversions(Media $media = null): void

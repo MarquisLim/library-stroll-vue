@@ -1,4 +1,3 @@
-<!-- Components/Gallery/TagSlider.vue -->
 <template>
     <Swiper
         :modules="[Navigation, Mousewheel]"
@@ -30,9 +29,11 @@ import 'swiper/css/navigation'
 import TagPill from '@/Components/Gallery/TagPill.vue'
 
 const props = defineProps({
-    tags: Array,
+    tags      : Array,
     modelValue: String
 })
 const emit = defineEmits(['update:modelValue'])
-function select(name){ emit('update:modelValue', name) }
+function select(name){
+    emit('update:modelValue', name)
+}
 </script>

@@ -92,5 +92,6 @@ export const useArtworkActions = defineStore('artworkActions', () => {
         onAuthSuccess,
         saveToCollections, openCreateModal,
         addNewCollection, closeCreateModal,
+        notify
     }
 })
