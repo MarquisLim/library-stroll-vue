@@ -8,6 +8,7 @@ use App\Models\Collection;
 use App\Models\Artwork;
 use App\Models\Tag;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Faker\Factory as Faker;
 use Illuminate\Support\Str;
 
@@ -18,24 +19,43 @@ class UnsplashSeeder extends Seeder
      */
     public function run(): void
     {
-        $faker     = Faker::create();
+        $faker     = Faker::create('en_US');
         $accessKey = config('services.unsplash.access_key');
 
-        // Создаём несколько пользователей
         User::factory(10)
-            ->create(['password' => bcrypt('password')])
-            ->each(function ($user) use ($faker, $accessKey) {
-                // Коллекция для каждого пользователя
+            ->create(['password' => bcrypt('123456zaza')])
+            ->each(function (User $user) use ($faker, $accessKey) {
+                // Перепишем имя на английское и зададим ник
+                $user->forceFill([
+                    'name'     => $faker->userName(),
+                ])->save();
+
+                // Аватарка из pravatar
+                $avatarUrl = 'https://i.pravatar.cc/300?u=' . urlencode($user->email);
+                $head      = Http::head($avatarUrl);
+                if (
+                    $head->ok() &&
+                    Str::startsWith($head->header('Content-Type'), 'image')
+                ) {
+                    $resp = Http::get($avatarUrl);
+                    if (
+                        $resp->ok() &&
+                        Str::startsWith($resp->header('Content-Type'), 'image')
+                    ) {
+                        $file = "profile-photos/{$user->id}.jpg";
+                        Storage::disk('public')->put($file, $resp->body());
+                        $user->forceFill(['profile_photo_path' => $file])->save();
+                    }
+                }
+
                 $collection = Collection::create([
                     'user_id'    => $user->id,
                     'name'       => 'Unsplash Picks',
                     'is_private' => false,
                 ]);
 
-                // Сколько артов добавить
                 $count = rand(5, 10);
                 for ($i = 0; $i < $count; $i++) {
-                    // Запрос к Unsplash Random Photo
                     $response = Http::withHeaders([
                         'Authorization' => "Client-ID {$accessKey}",
                     ])->get('https://api.unsplash.com/photos/random', [
@@ -53,15 +73,26 @@ class UnsplashSeeder extends Seeder
                         continue;
                     }
 
-                    // Формируем заголовок и описание
-                    $title       = $data['description']
-                        ?: $data['alt_description']
-                            ?: "Photo by {$data['user']['name']}";
-                    $description = $data['description']
-                        ?: $data['alt_description']
-                            ?: $faker->sentence();
+                    $head = Http::head($url);
+                    if (
+                        ! $head->ok() ||
+                        ! Str::startsWith($head->header('Content-Type'), 'image')
+                    ) {
+                        continue;
+                    }
 
-                    // Создаём запись Artwork
+                    $titleSource = $data['description'] ?? $data['alt_description'] ?? null;
+                    $title = Str::limit(
+                        $titleSource
+                            ?: $faker->words(rand(2, 4), true),
+                        250,
+                        '…'
+                    );
+
+                    $descSource = $data['alt_description'] ?? null;
+                    $description = $descSource
+                        ?: $faker->paragraph(rand(1, 3));
+
                     $art = Artwork::create([
                         'user_id'        => $user->id,
                         'title'          => Str::limit($title, 250, '…'),
@@ -72,41 +103,33 @@ class UnsplashSeeder extends Seeder
                         'views_count'    => rand(0, 1000),
                     ]);
 
-                    // Прикрепляем картинку через spatie/laravel-medialibrary
                     try {
                         $art->addMediaFromUrl($url)
                             ->toMediaCollection('artworks');
                     } catch (\Exception $e) {
-                        // если не удалось скачать/сохранить — удаляем запись
                         $art->delete();
                         continue;
                     }
 
-                    // Синхронизируем теги из ответа Unsplash
-                    $tagTitles = collect($data['tags'] ?? [])
+                    $tagSlugs = collect($data['tags'] ?? [])
                         ->pluck('title')
                         ->map(fn($t) => Str::slug($t))
                         ->filter()
                         ->unique()
                         ->toArray();
 
-                    $tagIds = Tag::whereIn('name', $tagTitles)
-                        ->pluck('id')
+                    $existing = Tag::whereIn('name', $tagSlugs)
+                        ->pluck('id', 'name')
                         ->toArray();
 
-                    // Если каких-то тегов ещё нет — создаём их
                     $newTagIds = [];
-                    foreach ($tagTitles as $slug) {
-                        if (! in_array($slug, Tag::whereIn('id', $tagIds)->pluck('name')->toArray())) {
-                            $new = Tag::firstOrCreate(['name' => $slug]);
-                            $newTagIds[] = $new->id;
-                        }
+                    foreach (array_diff($tagSlugs, array_keys($existing)) as $slug) {
+                        $newTagIds[] = Tag::create(['name' => $slug])->id;
                     }
 
-                    $allTagIds = array_merge($tagIds, $newTagIds);
+                    $allTagIds = array_merge(array_values($existing), $newTagIds);
                     $art->tags()->sync($allTagIds);
 
-                    // Добавляем арт в коллекцию пользователя
                     $art->collections()->attach($collection->id);
                 }
             });

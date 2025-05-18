@@ -11,6 +11,7 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Faker\Factory as Faker;
+use Illuminate\Support\Str;
 
 class CatsSeeder extends Seeder
 {
