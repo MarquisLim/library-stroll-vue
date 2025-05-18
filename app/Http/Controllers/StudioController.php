@@ -83,7 +83,11 @@ class StudioController extends Controller
 
     public function updateDraft(Request $request, $id)
     {
-        $draft= Artwork::where('user_id',Auth::id())->findOrFail($id);
+        $user = Auth::user();
+
+        $draft = Artwork::when(! $user->hasAnyRole(['Admin', 'SuperAdmin']), function ($q) use ($user) {
+            $q->where('user_id', $user->id);
+        })->findOrFail($id);
         $draft->title=$request->title;
         $draft->description=$request->description;
         $draft->is_adult=$request->is_adult ? true:false;
@@ -111,12 +115,16 @@ class StudioController extends Controller
         $draft->collections()->sync($collections);
 
         $draft->load('media','tags','collections');
-        return response()->json(['message'=>'Draft updated','artwork'=>$draft]);
+        return response()->json(['message'=>'Черновик обновлен','artwork'=>$draft]);
     }
 
     public function publish(Request $request, $id)
     {
-        $art = Artwork::where('user_id',Auth::id())->findOrFail($id);
+        $user = Auth::user();
+
+        $art = Artwork::when(! $user->hasAnyRole(['Admin', 'SuperAdmin']), function ($q) use ($user) {
+            $q->where('user_id', $user->id);
+        })->findOrFail($id);
 
         if(!$art->getFirstMediaUrl('artworks'))
             return response()->json(['error'=>'Сначала загрузите файл'],422);
@@ -134,8 +142,12 @@ class StudioController extends Controller
 
     public function destroyDraft(Request $request, $id)
     {
-        $artwork = Artwork::where('user_id',Auth::id())->findOrFail($id);
-        $artwork->delete();
+        $user = Auth::user();
+
+        $art = Artwork::when(! $user->hasAnyRole(['Admin', 'SuperAdmin']), function ($q) use ($user) {
+            $q->where('user_id', $user->id);
+        })->findOrFail($id);
+        $art->delete();
         return response()->json(['message'=>'Черновик удален']);
     }
 

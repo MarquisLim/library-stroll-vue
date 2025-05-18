@@ -137,7 +137,7 @@ function logout() {
 <template>
     <div class="min-h-screen flex flex-col">
         <Head :title="title"/>
-        <nav class="sticky top-0 bg-base-100/80 backdrop-blur z-40 ">
+        <nav class="sticky top-0 bg-base-100/80 backdrop-blur z-40 pt-safe-t">
             <div class="flex items-center h-16 px-4 sm:px-8">
                 <button @click="showMenu=!showMenu" class="sm:hidden p-2 rounded hover:bg-base-200">
                     <Bars3Icon class="w-6 h-6"/>

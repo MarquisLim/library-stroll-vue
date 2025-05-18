@@ -1,5 +1,5 @@
 <script setup>
-import { Head, Link, router } from '@inertiajs/vue3'
+import { Head, Link, router, usePage } from '@inertiajs/vue3'
 import { ref, watch, computed } from 'vue'
 import { Inertia } from '@inertiajs/inertia'
 
@@ -24,6 +24,7 @@ const status     = ref(props.filters.status)
 const search     = ref(props.filters.search)
 const sort       = ref(props.filters.sort)
 const dir        = ref(props.filters.dir)
+const page = usePage()
 
 // computed
 const hasActiveFilters = computed(() =>
@@ -38,21 +39,31 @@ const hasActiveFilters = computed(() =>
 const { setCollections } = useArtworkActions()
 if (props.collections?.length) setCollections(props.collections)
 
+const isAdmin = computed(() => page.props.isAdminView === true)
+
 // fetch helper
-function fetch(page = 1) {
-    Inertia.get(route('studio.manager'), {
-        page,
-        visibility: visibility.value   !== 'all' ? visibility.value : undefined,
-        type:       type.value         !== 'all' ? type.value       : undefined,
-        status:     status.value       !== 'all' ? status.value     : undefined,
-        search:     search.value       || undefined,
-        sort:       sort.value,
-        dir:        dir.value,
-    }, {
-        preserveState: true,
-        preserveScroll: true,
-        replace: true,
-    })
+function fetch(pageNum = 1) {
+    const routeName = isAdmin.value
+        ? 'admin.artworks.manager'
+        : 'studio.manager'
+
+    Inertia.get(
+        route(routeName),
+        {
+            page:       pageNum,
+            visibility: visibility.value !== 'all' ? visibility.value : undefined,
+            type:       type.value       !== 'all' ? type.value       : undefined,
+            status:     status.value     !== 'all' ? status.value     : undefined,
+            search:     search.value     || undefined,
+            sort:       sort.value,
+            dir:        dir.value,
+        },
+        {
+            preserveState:  true,
+            preserveScroll: true,
+            replace:        true,
+        }
+    )
 }
 watch([visibility, type, status], () => fetch())
 
@@ -227,7 +238,7 @@ const saved   = () => fetch(props.artworks.current_page)
                     </td>
                     <td>
                         <template v-for="(tag, idx) in a.tags.slice(0,2)" :key="tag.id">
-                            <span class="badge badge-outline mr-1">{{ tag.name }}</span>
+                            <span class="badge badge-outline m-1">{{ tag.name }}</span>
                         </template>
                         <span v-if="a.tags.length > 2" class="badge badge-outline">
                 +{{ a.tags.length - 2 }}

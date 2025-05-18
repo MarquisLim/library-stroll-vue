@@ -136,6 +136,15 @@ const isMod   = computed(() => ['moderator','admin','superadmin'].some(r => role
                 : 'hover:bg-base-200 dark:hover:bg-base-800'"
                         >Пользователи</Link>
                     </div>
+                    <div class="pl-12 space-y-2 py-2 text-sm">
+                        <Link
+                            :href="route('admin.artworks.manager')"
+                            class="block px-3 py-2 rounded-lg"
+                            :class="isActive('/admin/artworks')
+                ? 'bg-base-200 dark:bg-base-800'
+                : 'hover:bg-base-200 dark:hover:bg-base-800'"
+                        >Работы</Link>
+                    </div>
                 </details>
             </div>
         </nav>

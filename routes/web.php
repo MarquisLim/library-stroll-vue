@@ -19,6 +19,7 @@ use App\Http\Controllers\StudioController;
 use App\Http\Controllers\User\BlockController;
 use App\Http\Controllers\User\UserController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
+use App\Http\Controllers\Admin\ArtworkController as AdminArtworkController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -153,6 +154,7 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
                 Route::post('users', [AdminUserController::class, 'store'])->name('users.store');
                 Route::post('users/{user}', [AdminUserController::class, 'update'])->name('users.update');
                 Route::delete('users/{user}', [AdminUserController::class, 'destroy'])->name('users.destroy');
+                Route::get('artworks', [AdminArtworkController::class, 'index'])->name('artworks.manager');
             });
 
         Route::middleware(['role:Moderator|Admin|SuperAdmin'])

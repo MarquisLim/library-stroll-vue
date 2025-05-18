@@ -49,13 +49,20 @@ class GalleryController extends Controller
             ->orderByDesc('artworks_count')
             ->take(20)
             ->get()
-            ->map(fn($tag)=>[
-                'id'   => $tag->id,
-                'name' => $tag->name,
-                'thumb'=> optional(
-                    optional($tag->artworks->first())->media->first()
-                )->getUrl('thumb')
-            ]);
+            ->map(function ($tag) {
+                $thumb = null;
+                if (
+                    $tag->artworks->isNotEmpty() &&
+                    $tag->artworks->first()->media->isNotEmpty()
+                ) {
+                    $thumb = $tag->artworks->first()->media->first()->getUrl('thumb');
+                }
+                return [
+                    'id'    => $tag->id,
+                    'name'  => $tag->name,
+                    'thumb' => $thumb,
+                ];
+            });
 
         return inertia('Gallery/GalleryIndex',[
             'artworks' => $artworks,
