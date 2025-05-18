@@ -1,152 +1,23 @@
-<!-- Index.vue (в примере код идёт как StudioDraft.vue, но суть — главная страница студии) -->
-<template>
-    <AppLayout title="Студия">
-        <div class="p-4 bg-base-100 text-base-content min-h-screen">
-
-            <!-- Мобильная кнопка-переключатель с иконками -->
-            <button
-                class="btn btn-ghost mb-4 md:hidden flex items-center gap-2"
-                @click="showList = !showList"
-            >
-                <component :is="showList ? ChevronLeftIcon : ChevronRightIcon" class="w-5 h-5" />
-                <span>{{ showList ? 'Скрыть список' : 'Показать список' }}</span>
-            </button>
-
-            <div class="flex flex-col md:flex-row gap-4">
-
-                <!-- Список черновиков -->
-                <aside
-                    v-show="showList"
-                    class="w-full md:w-1/4 flex flex-col"
-                >
-                    <button
-                        @click="showCreateModal = true"
-                        class="btn btn-primary w-full mb-4"
-                    >
-                        Создать искусство
-                    </button>
-                    <StudioDraftList
-                        :drafts="drafts"
-                        :selectedDraftId="selectedDraftId"
-                        @selectDraft="selectDraft"
-                        @confirmDeleteDraft="confirmDeleteDraft"
-                        @reorderDrafts="reorderDrafts"
-                    />
-                </aside>
-
-                <!-- Форма редактирования -->
-                <main class="w-full md:w-3/4 bg-base-200 p-4 rounded-lg shadow flex-1 relative">
-                    <StudioDraftForm
-                        v-model:collections="showCollectionModal"
-                        :selectedDraftId="selectedDraftId"
-                        :previewUrl="previewUrl"
-                        :fileType="fileType"
-                        :title="title"
-                        :description="description"
-                        :is_adult="is_adult"
-                        :has_ai="has_ai"
-                        :is_private="is_private"
-                        :allow_download="allow_download"
-                        :allow_comments="allow_comments"
-                        :tags="tags"
-                        :collections="collections"
-                        :tagSuggestions="tagSuggestions"
-                        :collectionSuggestions="collectionSuggestions"
-                        :isUploading="isUploading"
-                        :uploadProgress="uploadProgress"
-                        @update:title="updateTitle"
-                        @update:description="updateDescription"
-                        @update:is_adult="updateIsAdult"
-                        @update:has_ai="updateHasAi"
-                        @update:is_private="updateIsPrivate"
-                        @update:allow_download="updateAllowDownload"
-                        @update:allow_comments="updateAllowComments"
-                        @tagsUpdated="tagsUpdated"
-                        @searchTags="searchTags"
-                        @searchCollections="searchCollections"
-                        @addTag="addTag"
-                        @addCollection="addCollectionToSelected"
-                        @createCollection="openCreateCollectionModal"
-                        @publish="publishDraft"
-                        @destroyDraft="destroyDraft"
-                        @uploadFile="uploadFile"
-                    />
-                    <p v-if="successMessage" class="text-success mt-2">{{ successMessage }}</p>
-                </main>
-            </div>
-
-            <!-- Модалка создания -->
-            <div v-if="showCreateModal" class="modal modal-open">
-                <div class="modal-box bg-base-200 text-base-content">
-                    <h3 class="font-bold text-lg">Создать искусство</h3>
-                    <p class="my-2 text-base-content/70">
-                        Загрузите файл для нового черновика:
-                    </p>
-                    <div
-                        class="border-2 border-dashed border-base-content/50 p-4 rounded text-center cursor-pointer relative"
-                        @drop.prevent="onDropFileCreate"
-                        @dragover.prevent
-                        @click="browseFileCreate"
-                    >
-                        <input
-                            type="file"
-                            ref="createFileInput"
-                            class="hidden"
-                            @change="onFileChangeCreate"
-                        />
-                        <p v-if="!tempFile">Перетащите файл или нажмите</p>
-                        <p v-else>Выбран файл: {{ tempFile.name }}</p>
-                        <progress
-                            v-if="isUploading"
-                            class="progress w-full progress-primary absolute bottom-4 left-4 right-4"
-                            :value="uploadProgress"
-                            max="100"
-                        />
-                    </div>
-                    <div class="modal-action">
-                        <button class="btn" @click="showCreateModal = false">Отмена</button>
-                        <button
-                            class="btn btn-primary"
-                            @click="createArtFromFile"
-                            :disabled="!tempFile"
-                        >
-                            Создать
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Подтверждение удаления -->
-            <div v-if="confirmingDraftDeletion" class="modal modal-open">
-                <div class="modal-box bg-base-200 text-base-content">
-                    <h3 class="font-bold text-lg">Удалить черновик?</h3>
-                    <p class="text-base-content/70">Вы уверены?</p>
-                    <div class="modal-action">
-                        <button class="btn" @click="cancelDelete">Отмена</button>
-                        <button class="btn btn-error" @click="destroyDraft">
-                            Удалить
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </AppLayout>
-</template>
-
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { usePage } from '@inertiajs/vue3'
 import axios from 'axios'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import StudioDraftList from '@/Components/Studio/StudioDraftList.vue'
 import StudioDraftForm from '@/Components/Studio/StudioDraftForm.vue'
 import {ChevronLeftIcon, ChevronRightIcon} from "@heroicons/vue/16/solid/index.js";
+import CollectionSelector from "@/Components/Collections/CollectionSelector.vue";
+import CreateCollectionModal from "@/Components/Collections/CreateCollectionModal.vue";
+import { useArtworkActions } from '@/stores/useArtworkActions'
 
 const page = usePage()
 const drafts = ref([...page.props.drafts])
 const collections = ref([...page.props.collections])
+const artworkStore  = useArtworkActions()
 
 const showList = ref(true)
+const showCollectionModal        = ref(false)
+const showCreateCollectionModal  = ref(false)
 const selectedDraftId = ref(null)
 const title = ref('')
 const description = ref('')
@@ -160,7 +31,6 @@ const selectedCollections = ref([])
 const previewUrl = ref(null)
 const fileType = ref(null)
 
-const showCollectionModal = ref(false)
 const confirmingDraftDeletion = ref(false)
 const showCreateModal = ref(false)
 const tempFile = ref(null)
@@ -173,12 +43,18 @@ let autoSaveTimeout = null
 const tagSuggestions = ref([])
 const collectionSuggestions = ref([])
 
-/* ===== Функции для авто-сохранения, выбора черновика, загрузки файлов и т.д. ===== */
+/*  Функции для авто-сохранения, выбора черновика, загрузки файлов.  */
 
 function scheduleAutoSave() {
     if (autoSaveTimeout) clearTimeout(autoSaveTimeout)
     autoSaveTimeout = setTimeout(performAutoSave, 1000)
     successMessage.value = 'Сохранение...'
+}
+
+// …
+function saveSelectedCollections(ids) {
+    selectedCollections.value = ids
+    scheduleAutoSave()
 }
 
 function performAutoSave() {
@@ -485,8 +361,158 @@ function handleError(err) {
         errorMessages.value = []
     }, 5000)
 }
+
+onMounted(() => {
+    artworkStore.setCollections(collections.value)
+})
 </script>
 
-<style scoped>
-/* Дополнительные стили при необходимости */
-</style>
+<template>
+    <AppLayout title="Студия">
+        <div class="p-4 bg-base-100 text-base-content min-h-screen">
+
+            <!-- Мобильная кнопка-переключатель с иконками -->
+            <button
+                class="btn btn-ghost mb-4 md:hidden flex items-center gap-2"
+                @click="showList = !showList"
+            >
+                <component :is="showList ? ChevronLeftIcon : ChevronRightIcon" class="w-5 h-5" />
+                <span>{{ showList ? 'Скрыть список' : 'Показать список' }}</span>
+            </button>
+
+            <div class="flex flex-col md:flex-row gap-4">
+
+                <!-- Список черновиков -->
+                <aside
+                    v-show="showList"
+                    class="w-full md:w-1/4 flex flex-col"
+                >
+                    <button
+                        @click="showCreateModal = true"
+                        class="btn btn-primary w-full mb-4"
+                    >
+                        Создать искусство
+                    </button>
+                    <StudioDraftList
+                        :drafts="drafts"
+                        :selectedDraftId="selectedDraftId"
+                        @selectDraft="selectDraft"
+                        @confirmDeleteDraft="confirmDeleteDraft"
+                        @reorderDrafts="reorderDrafts"
+                    />
+                </aside>
+
+                <!-- Форма редактирования -->
+                <main class="w-full md:w-3/4 bg-base-200 p-4 rounded-lg shadow flex-1 relative">
+                    <StudioDraftForm
+                        v-model:showCollectionModal="showCollectionModal"
+                        :selectedDraftId="selectedDraftId"
+                        :previewUrl="previewUrl"
+                        :fileType="fileType"
+                        :title="title"
+                        :description="description"
+                        :is_adult="is_adult"
+                        :has_ai="has_ai"
+                        :is_private="is_private"
+                        :allow_download="allow_download"
+                        :allow_comments="allow_comments"
+                        :tags="tags"
+                        :collections="collections"
+                        :tagSuggestions="tagSuggestions"
+                        :collectionSuggestions="collectionSuggestions"
+                        :isUploading="isUploading"
+                        :uploadProgress="uploadProgress"
+                        @update:title="updateTitle"
+                        @update:description="updateDescription"
+                        @update:is_adult="updateIsAdult"
+                        @update:has_ai="updateHasAi"
+                        @update:is_private="updateIsPrivate"
+                        @update:allow_download="updateAllowDownload"
+                        @update:allow_comments="updateAllowComments"
+                        @tagsUpdated="tagsUpdated"
+                        @searchTags="searchTags"
+                        @searchCollections="searchCollections"
+                        @addTag="addTag"
+                        @addCollection="addCollectionToSelected"
+                        @createCollection="openCreateCollectionModal"
+                        @publish="publishDraft"
+                        @destroyDraft="destroyDraft"
+                        @uploadFile="uploadFile"
+                    />
+                    <p v-if="successMessage" class="text-success mt-2">{{ successMessage }}</p>
+                </main>
+            </div>
+
+            <!-- Модалка создания -->
+            <div v-if="showCreateModal" class="modal modal-open">
+                <div class="modal-box bg-base-200 text-base-content">
+                    <h3 class="font-bold text-lg">Создать искусство</h3>
+                    <p class="my-2 text-base-content/70">
+                        Загрузите файл для нового черновика:
+                    </p>
+                    <div
+                        class="border-2 border-dashed border-base-content/50 p-4 rounded text-center cursor-pointer relative"
+                        @drop.prevent="onDropFileCreate"
+                        @dragover.prevent
+                        @click="browseFileCreate"
+                    >
+                        <input
+                            type="file"
+                            ref="createFileInput"
+                            class="hidden"
+                            @change="onFileChangeCreate"
+                        />
+                        <p v-if="!tempFile">Перетащите файл или нажмите</p>
+                        <p v-else>Выбран файл: {{ tempFile.name }}</p>
+                        <progress
+                            v-if="isUploading"
+                            class="progress w-full progress-primary absolute bottom-4 left-4 right-4"
+                            :value="uploadProgress"
+                            max="100"
+                        />
+                    </div>
+                    <div class="modal-action">
+                        <button class="btn" @click="showCreateModal = false">Отмена</button>
+                        <button
+                            class="btn btn-primary"
+                            @click="createArtFromFile"
+                            :disabled="!tempFile"
+                        >
+                            Создать
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Подтверждение удаления -->
+            <div v-if="confirmingDraftDeletion" class="modal modal-open">
+                <div class="modal-box bg-base-200 text-base-content">
+                    <h3 class="font-bold text-lg">Удалить черновик?</h3>
+                    <p class="text-base-content/70">Вы уверены?</p>
+                    <div class="modal-action">
+                        <button class="btn" @click="cancelDelete">Отмена</button>
+                        <button class="btn btn-error" @click="destroyDraft">
+                            Удалить
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <Teleport to="body">
+            <CollectionSelector
+                v-if="showCollectionModal"
+                :position="{ top: '30%', left: '50%' }"
+                :collections="collections"
+                :selected-collections="selectedCollections"
+                @selected="saveSelectedCollections"
+                @close="showCollectionModal = false"
+                @createCollection="openCreateCollectionModal"
+            />
+            <CreateCollectionModal
+                v-if="showCreateCollectionModal"
+                @created="collectionCreated"
+                @close="showCreateCollectionModal = false"
+            />
+        </Teleport>
+    </AppLayout>
+</template>

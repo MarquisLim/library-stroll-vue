@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Artwork;
 use App\Models\Collection;
+use App\Models\Models\Complaint\ComplaintType;
+use App\Notifications\ArtworkLiked;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -13,6 +15,7 @@ class ArtworkController extends Controller
     public function show($id)
     {
         $artwork = Artwork::with(['media', 'user', 'tags', 'likes', 'collections'])
+            ->where('is_published', true)
             ->withCount('comments', 'likes')
             ->findOrFail($id);
 
@@ -20,26 +23,30 @@ class ArtworkController extends Controller
             abort(403, 'Вы не можете просматривать этот арт');
         }
 
-        $myChats = auth()->user()
-            ->conversations()
-            ->with('users')
-            ->get()
-            ->map(function ($c) {
-                $partner = $c->type === 'dialog'
-                    ? $c->users->firstWhere('id', '!=', auth()->id())
-                    : null;
+        if (Auth::check()) {
+            $myChats = Auth::user()
+                ->conversations()
+                ->with('users')
+                ->get()
+                ->map(function ($c) {
+                    $partner = $c->type === 'dialog'
+                        ? $c->users->firstWhere('id', '!=', Auth::id())
+                        : null;
 
-                return [
-                    'id' => $c->id,
-                    'title' => $c->type === 'dialog'
-                        ? ($partner->name ?? '—')
-                        : ($c->title ?: 'Группа'),
-                    'avatar_url' => $c->type === 'dialog'
-                        ? ($partner->profile_photo_url ?? '/images/default-avatar.png')
-                        : ($c->users->first()?->profile_photo_url ?? '/images/default-avatar.png'),
-                    'type' => $c->type,
-                ];
-            });
+                    return [
+                        'id'         => $c->id,
+                        'title'      => $c->type === 'dialog'
+                            ? ($partner->name ?? '—')
+                            : ($c->title ?: 'Группа'),
+                        'avatar_url' => $c->type === 'dialog'
+                            ? ($partner->profile_photo_url ?? '/images/default-avatar.png')
+                            : ($c->users->first()?->profile_photo_url ?? '/images/default-avatar.png'),
+                        'type'       => $c->type,
+                    ];
+                });
+        } else {
+            $myChats = collect();
+        }
 
         $artwork->increment('views_count');
         $artwork->refresh();
@@ -56,11 +63,13 @@ class ArtworkController extends Controller
                 $q->where('is_published', true)->with('media');
             }])
             ->get();
+        $complaintTypes = ComplaintType::select('slug', 'name')->get();
         return Inertia::render('Artworks/ArtworksShow', [
             'artwork' => $artwork,
             'author' => $author,
             'collections' => $collections,
             'myChats' => $myChats,
+            'complaintTypes' => $complaintTypes,
         ]);
     }
 
@@ -114,6 +123,7 @@ class ArtworkController extends Controller
             $artwork->likes()->where('user_id', $user->id)->delete();
         } else {
             $artwork->likes()->create(['user_id' => $user->id]);
+            $artwork->user->notify(new ArtworkLiked($artwork, $user));
         }
 
         $likesCount = $artwork->likes()->count();

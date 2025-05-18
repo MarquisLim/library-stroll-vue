@@ -1,5 +1,5 @@
 <script setup>
-import { Head } from '@inertiajs/vue3'
+import { Head, Link } from '@inertiajs/vue3'
 import ApexChart from 'vue3-apexcharts'
 import StatTile       from '@/Components/Dashboard/StatTile.vue'
 import ProfileCard    from '@/Components/Dashboard/ProfileCard.vue'
@@ -9,7 +9,6 @@ import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 import { useArtworkActions } from '@/stores/useArtworkActions'
 import { computed, onMounted } from 'vue'
 
-// чтобы layout обернул наш шаблон в DashboardLayout
 defineOptions({ layout: DashboardLayout })
 
 const props = defineProps({
@@ -24,51 +23,74 @@ const props = defineProps({
 const { setCollections } = useArtworkActions()
 onMounted(()=> setCollections(props.collections))
 
-// определяем, тёмная ли сейчас тема
-const isDark = computed(() =>
-    document.documentElement.classList.contains('dark')
-)
-
 const chartSeries = [
     { name: 'Отметки «Нравится»', data: Object.values(props.likesChart) }
 ]
 
-const chartOptions = computed(() => ({
+const chartOptions = {
     chart: {
         type: 'area',
         height: 300,
         toolbar: { show: false },
         background: 'transparent',
-        foreColor: 'var(--tw-prose-headings)'
+        foreColor: 'var(--tw-prose-body)',
     },
-    stroke: { curve: 'smooth', width: 3 },
+    stroke: {
+        curve: 'smooth',
+        width: 3,
+        colors: ['#3B82F6'],
+    },
     fill: {
         type: 'gradient',
         gradient: {
-            shadeIntensity: .4,
-            opacityFrom: .45,
-            opacityTo: .05,
+            shadeIntensity: 0.4,
+            opacityFrom: 0.5,
+            opacityTo: 0.1,
             stops: [0, 90, 100],
             colorStops: [
-                { offset: 0, color: 'var(--tw-prose-headings)' },
-                { offset: 100, color: 'var(--tw-prose-links)' }
-            ]
-        }
+                { offset: 0, color: '#3B82F6' },
+                { offset: 100, color: '#3B82F6' },
+            ],
+        },
     },
     dataLabels: { enabled: false },
-    grid: { borderColor: 'var(--tw-prose-pre-bg)' },
+    grid: {
+        borderColor: '#7480ff',
+    },
     xaxis: {
         categories: Object.keys(props.likesChart),
-        labels: { style: { colors: 'var(--tw-prose-body)' } }
+        axisBorder:   { show: true, color: 'var(--tw-prose-body)' },
+        axisTicks:    { show: true, color: 'var(--tw-prose-body)' },
+        labels: {
+            style: {
+                colors: '#7480ff',
+                fontSize: '12px',
+            },
+        },
     },
-    colors: ['var(--tw-prose-headings)'],
-    theme: {
-        mode: isDark.value ? 'dark' : 'light'
+    yaxis: {
+        axisBorder:   { show: true, color: 'var(--tw-prose-body)' },
+        axisTicks:    { show: true, color: 'var(--tw-prose-body)' },
+        labels: {
+            style: {
+                colors: '#7480ff',
+                fontSize: '12px',
+            },
+        },
     },
-    tooltip: {
-        theme: isDark.value ? 'dark' : 'light'
-    }
-}))
+    responsive: [
+        {
+            breakpoint: 768,
+            options: {
+                chart: { height: 200 },
+                stroke: { width: 2 },
+                legend: { show: false },
+            },
+        },
+    ],
+}
+
+
 </script>
 
 <template>
@@ -80,7 +102,7 @@ const chartOptions = computed(() => ({
 
             <!-- Статистика + популярная -->
             <section class="grid lg:grid-cols-3 gap-6 items-start">
-                <div class="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="lg:col-span-2 grid grid-cols-2 sm:grid-cols-2 gap-4">
                     <StatTile label="Работы"      :value="stats.artworks"  icon="mdi mdi-brush" />
                     <StatTile label="Просмотры"   :value="stats.views"     icon="mdi mdi-eye" />
                     <StatTile label="Понравилось" :value="stats.likes"     icon="mdi mdi-heart" />
@@ -92,19 +114,16 @@ const chartOptions = computed(() => ({
                         <ArtworkCard :art="topArtwork" />
                     </template>
                     <p v-else class="text-center text-base-content/60 py-6">
-                        Вы ещё ничего не опубликовали.
+                        Нет опубликованных работ.
                     </p>
                 </div>
             </section>
 
             <!-- График -->
             <section class="bg-base-200 dark:bg-base-800 rounded-xl p-6 shadow">
-                <h2 class="text-lg font-semibold mb-4">
-                    Динамика отметок «Нравится» (30 дней)
-                </h2>
+                <h2 class="text-lg font-semibold mb-4">Динамика лайков (30 дней)</h2>
                 <ApexChart
                     type="area"
-                    height="300"
                     :series="chartSeries"
                     :options="chartOptions"
                 />
@@ -112,7 +131,7 @@ const chartOptions = computed(() => ({
 
             <!-- Последние работы -->
             <section v-if="recentWorks.length" class="space-y-4">
-                <h2 class="text-lg font-semibold">Ваши последние работы</h2>
+                <h2 class="text-lg font-semibold">Последние работы</h2>
                 <MasonryGrid :items="recentWorks">
                     <template #default="{ item }">
                         <ArtworkCard :art="item" />
@@ -122,15 +141,18 @@ const chartOptions = computed(() => ({
 
             <!-- Черновики -->
             <section v-if="drafts.length" class="space-y-4">
-                <h2 class="text-lg font-semibold">Черновики (ожидают публикации)</h2>
+                <h2 class="text-lg font-semibold">Черновики</h2>
                 <MasonryGrid :items="drafts">
                     <template #default="{ item }">
-                        <Link :href="route('studio.index')" class="block group">
+                        <Link
+                            :href="route('studio.index')"
+                            class="block group"
+                        >
                             <img
                                 :src="item.thumb_url"
                                 class="w-full h-48 rounded-lg object-cover group-hover:opacity-80 transition"
                             />
-                            <p class="mt-1 text-center text-sm text-base-content/60">
+                            <p class="mt-2 text-center text-sm text-base-content/60">
                                 {{ item.title || 'Без названия' }}
                             </p>
                         </Link>

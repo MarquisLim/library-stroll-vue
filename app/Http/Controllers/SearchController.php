@@ -13,39 +13,62 @@ use Inertia\Inertia;
 
 class SearchController extends Controller
 {
+    /* ---------- ajax для модального окна ---------- */
     public function suggestions(Request $request)
     {
-        $q = $request->get('q');
-        if ($q) {
-            // Поиск по тегам
-            $tags = Tag::withCount('artworks')
-                ->orderByDesc('artworks_count')
-                ->take(10)
-                ->get(['id','name']);
-            // Поиск по авторам (юзерам)
-            $users = User::where('name','like',"%$q%")->take(5)->get(['id','name']);
-            // Поиск по работам
-            $artworks = Artwork::where('title','like',"%$q%")->take(5)->get(['id','title as name']);
+        $q    = trim($request->input('q',''));
+        $type = $request->input('type','all');          // all | artwork | author | tag
 
-            $suggestions = collect();
-            $suggestions->push(...$tags->map(fn($t)=>[
-                'id'=>$t->id,
-                'name'=>$t->name,
-                'type'=>'tag',
-                'hits' => $t->artworks_count]));
-            $suggestions->push(...$users->map(fn($u)=>['id'=>$u->id,'name'=>$u->name,'type'=>'author']));
-            $suggestions->push(...$artworks->map(fn($a)=>['id'=>$a->id,'name'=>$a->name,'type'=>'artwork']));
-
-            $suggestions = $suggestions->take(10)->values();
-        } else {
-            // Рекомендуемые - популярные теги или случайные работы
-            $tags = Tag::orderBy('popularity','desc')->take(10)->get(['id','name']);
-            $suggestions = $tags->map(fn($t)=>['id'=>$t->id,'name'=>$t->name,'type'=>'tag']);
+        if ($q === '') {
+            return response()->json(['suggestions' => []]);
         }
 
-        return response()->json(['suggestions'=>$suggestions]);
+        $out = collect();
+
+        /* --- теги --- */
+        if (in_array($type,['all','tag'])) {
+            Tag::where('name','like',"%{$q}%")
+                ->take(6)
+                ->get()
+                ->each(fn($t) => $out->push([
+                    'id'   => $t->id,
+                    'name' => $t->name,
+                    'type' => 'tag',
+                ]));
+        }
+
+        /* --- авторы --- */
+        if (in_array($type,['all','author'])) {
+            User::where('name','like',"%{$q}%")
+                ->take(6)
+                ->get(['id','name','profile_photo_path'])
+                ->each(fn($u) => $out->push([
+                    'id'     => $u->id,
+                    'name'   => $u->name,
+                    'avatar' => $u->profile_photo_url,
+                    'type'   => 'author',
+                ]));
+        }
+
+        /* --- артворки --- */
+        if (in_array($type,['all','artwork'])) {
+            Artwork::where('is_published',true)
+                ->where('title','like',"%{$q}%")
+                ->with('media')
+                ->take(6)
+                ->get()
+                ->each(fn($a) => $out->push([
+                    'id'    => $a->id,
+                    'name'  => $a->title ?: 'Без названия',
+                    'thumb' => $a->thumb_url,      // см. аксессор ниже
+                    'type'  => 'artwork',
+                ]));
+        }
+
+        return response()->json(['suggestions' => $out->values()]);
     }
 
+    /* -------- страница /search -------- */
     public function index(Request $request)
     {
         $q = $request->get('q','');
@@ -105,6 +128,5 @@ class SearchController extends Controller
         $art->in_collections = $art->collections->where('user_id',$userId)->pluck('id');
         return $art;
     }
-
-
 }
+

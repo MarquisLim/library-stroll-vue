@@ -2,8 +2,11 @@
 
 namespace App\Models;
 
+use App\Models\Models\Complaint\Complaint;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Spatie\MediaLibrary\HasMedia;
@@ -15,11 +18,20 @@ class Artwork extends Model implements HasMedia
     use HasFactory, InteractsWithMedia;
 
     protected $fillable = [
-        'user_id','title','description','type','is_published','allow_download','allow_comments','is_adult','has_ai','is_private','views_count'
+        'user_id','title','description','type','is_published','allow_download','allow_comments','is_adult','has_ai','is_private','views_count', 'is_blocked'
     ];
 
     protected $appends = ['thumb_url', 'preview_url', 'video_duration_formatted','liked_by_user', 'in_collections'];
 
+    protected static function booted()
+    {
+        static::addGlobalScope('not_blocked', function (Builder $builder) {
+            $builder->where('is_blocked', false)
+                ->whereDoesntHave('user', function ($q) {
+                    $q->where('is_blocked', true);
+                });
+        });
+    }
 
     public function getLikedByUserAttribute(): bool
     {
@@ -58,6 +70,23 @@ class Artwork extends Model implements HasMedia
     public function likes()
     {
         return $this->hasMany(Like::class);
+    }
+
+    public function complaints(): MorphMany
+    {
+        return $this->morphMany(Complaint::class, 'complaintable');
+    }
+
+    public function block()
+    {
+        $this->is_blocked = true;
+        $this->save();
+    }
+
+    public function unblock()
+    {
+        $this->is_blocked = false;
+        $this->save();
     }
 
     public function getThumbUrlAttribute(): ?string

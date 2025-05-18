@@ -51,6 +51,7 @@ class AppServiceProvider extends ServiceProvider
                         )
                     : 0;
             },
+            'unreadNotificationsCount' => fn() => auth()->user()?->unreadNotifications()->count() ?? 0,
         ]);
     }
 }

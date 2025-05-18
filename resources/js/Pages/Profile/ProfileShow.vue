@@ -17,38 +17,39 @@
                     Настройки профиля
                 </Link>
             </div>
+            <div v-if="collections.length">
+                <!-- ───────── коллекции (слайдер) ───────── -->
+                <h2 class="text-xl font-semibold text-primary mb-2">Коллекции</h2>
+                <div class="relative mb-8">
+                    <Swiper
+                        :modules="[Navigation, Pagination, Mousewheel]"
+                        :slides-per-view="'auto'"
+                        :space-between="16"
+                        mousewheel
+                        class="pb-4"
+                    >
+                        <SwiperSlide v-for="col in collections" :key="col.id" class="!w-auto">
+                            <CollectionCard
+                                :collection="col"
+                                @edit="openEditModal"
+                                @remove="confirmDeleteModal"
+                                :is-owner="isOwner"
+                            />
+                        </SwiperSlide>
 
-            <!-- ───────── коллекции (слайдер) ───────── -->
-            <h2 class="text-xl font-semibold text-primary mb-2">Коллекции</h2>
-            <div class="relative mb-8">
-                <Swiper
-                    :modules="[Navigation, Pagination, Mousewheel]"
-                    :slides-per-view="'auto'"
-                    :space-between="16"
-                    mousewheel
-                    class="pb-4"
-                >
-                    <SwiperSlide v-for="col in collections" :key="col.id" class="!w-auto">
-                        <CollectionCard
-                            :collection="col"
-                            @edit="openEditModal"
-                            @remove="confirmDeleteModal"
-                            :is-owner="isOwner"
-                        />
-                    </SwiperSlide>
-
-                    <!-- кастомные кнопки навигации -->
-                    <template #navigation-prev>
-                        <button class="swiper-button-prev btn btn-circle btn-sm bg-primary text-primary-content opacity-70 hover:opacity-100">
-                            <ChevronLeftIcon class="w-5 h-5"/>
-                        </button>
-                    </template>
-                    <template #navigation-next>
-                        <button class="swiper-button-next btn btn-circle btn-sm bg-primary text-primary-content opacity-70 hover:opacity-100">
-                            <ChevronRightIcon class="w-5 h-5"/>
-                        </button>
-                    </template>
-                </Swiper>
+                        <!-- кастомные кнопки навигации -->
+                        <template #navigation-prev>
+                            <button class="swiper-button-prev btn btn-circle btn-sm bg-primary text-primary-content opacity-70 hover:opacity-100">
+                                <ChevronLeftIcon class="w-5 h-5"/>
+                            </button>
+                        </template>
+                        <template #navigation-next>
+                            <button class="swiper-button-next btn btn-circle btn-sm bg-primary text-primary-content opacity-70 hover:opacity-100">
+                                <ChevronRightIcon class="w-5 h-5"/>
+                            </button>
+                        </template>
+                    </Swiper>
+                </div>
             </div>
 
             <!-- ───────── вкладки ───────── -->

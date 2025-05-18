@@ -74,10 +74,15 @@ const props = defineProps({
 })
 const emit = defineEmits(['edit','remove'])
 
-const thumbs = computed(() =>
-    props.collection.artworks.slice(0,3)
+const publicArts = computed(() => {
+    return (props.collection.artworks || [])
+        .filter(a => a.is_published && !a.is_private)
+})
+const thumbs = computed(() => {
+    return publicArts.value
+        .slice(0, 3)
         .map(a => a.thumb_url || a.media?.[0]?.original_url)
-)
+})
 const twoThumbs = computed(() => thumbs.value.length === 2)
 const formattedDate = computed(() =>
     new Date(props.collection.created_at)

@@ -34,5 +34,10 @@ return [
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
     ],
+    'unsplash' => [
+        'access_key'     => env('UNSPLASH_ACCESS_KEY'),
+        'secret'         => env('UNSPLASH_SECRET_KEY'),
+        'application_id' => env('UNSPLASH_APPLICATION_ID'),
+    ],
 
 ];

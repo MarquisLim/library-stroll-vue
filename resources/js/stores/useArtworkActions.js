@@ -89,7 +89,7 @@ export const useArtworkActions = defineStore('artworkActions', () => {
         showSelector, selectorPos, selectedArt,
         toast, showCreateModal,
         /* actions */ setCollections, toggleLike, openSelector,
-        onAuthSuccess,
+        onAuthSuccess, requireAuth,
         saveToCollections, openCreateModal,
         addNewCollection, closeCreateModal,
         notify

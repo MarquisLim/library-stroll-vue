@@ -1,188 +1,109 @@
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
-import AppLayout from '@/Layouts/AppLayout.vue'
-import { Head, Link } from '@inertiajs/vue3'
-import { gsap } from 'gsap'
-import { ScrollTrigger } from 'gsap/ScrollTrigger'
+import { ref, onMounted } from 'vue'
+import { Head, Link, usePage } from '@inertiajs/vue3'
+import AppLayout        from '@/Layouts/AppLayout.vue'
+import MasonryGrid      from '@/Components/MasonryGrid.vue'
+import ArtworkCard      from '@/Components/Gallery/ArtworkCard.vue'
 import { ArrowDownTrayIcon } from '@heroicons/vue/24/outline'
+import { useArtworkActions } from '@/stores/useArtworkActions'
 
-gsap.registerPlugin(ScrollTrigger)
+const { recentArtworks, collections } = usePage().props
+const items = ref([])
 
-const container = ref(null)
-
-async function initAnimations() {
-    await nextTick()
-    const scroller = container.value
-
-    // Hero
-    gsap.from('.hero-content', {
-        opacity: 0,
-        y: 50,
-        duration: 1,
-        ease: 'power3.out'
-    })
-
-    const animations = [
-        { sel: '.gallery-item',        trg: '.section-gallery',    from: { scale: 0.8 }, opts: { stagger: 0.2 } },
-        { sel: '.gallery-left',        trg: '.section-gallery',    from: { x: -100 } },
-        { sel: '.create-image',        trg: '.section-create',     from: { x: -100 } },
-        { sel: '.create-text',         trg: '.section-create',     from: { y: 50 } },
-        { sel: '.collections-text',    trg: '.section-collections', from: { x: 100 } },
-        { sel: '.collections-image',   trg: '.section-collections', from: { scale: 0.8 } },
-        { sel: '.chat-image',          trg: '.section-chat',        from: { x: 100 } },
-        { sel: '.chat-text',           trg: '.section-chat',        from: { y: 50 } },
-        { sel: '.mobile-btn',          trg: '.section-mobile',      from: { scale: 0.8 } },
-    ]
-
-    animations.forEach(({ sel, trg, from, opts = {} }) => {
-        gsap.from(sel, {
-            opacity: 0,
-            duration: 1,
-            ease: 'power3.out',
-            scrollTrigger: {
-                scroller,
-                trigger: trg,
-                start: 'top bottom'
-            },
-            ...from,
-            ...opts
-        })
-    })
-}
+const { setCollections } = useArtworkActions()
+if (collections) setCollections(collections)
 
 onMounted(() => {
-    initAnimations()
-    document.documentElement.style.overflow = 'hidden'
-})
-onUnmounted(() => {
-    document.documentElement.style.overflow = ''
+    items.value = recentArtworks
 })
 </script>
 
 <template>
     <AppLayout>
-        <Head title="LibraryStroll" />
+        <Head title="Главная"/>
 
-        <!-- основной контейнер -->
-        <div
-            ref="container"
-            class="h-[calc(100vh-4rem)] overflow-y-auto scroll-smooth snap-y snap-mandatory"
-        >
-            <!-- Hero -->
-            <section
-                class="section-hero snap-start h-full flex items-center justify-center relative bg-cover bg-center"
-                style="background-image:url('/images/main/main_section.webp')"
-            >
-                <div class="absolute inset-0 bg-black/60"></div>
-                <div class="hero-content relative z-10 flex flex-col items-center justify-center h-full text-center px-4">
-                    <img src="/logo.png" alt="LibraryStroll" class="w-40 md:w-60 mb-6" />
-                    <h1 class="text-5xl md:text-6xl font-extrabold text-white leading-tight">
-                        Открой <span class="text-primary">LibraryStroll</span>
-                    </h1>
-                    <p class="mt-4 text-lg md:text-xl text-white/80 max-w-2xl">
-                        Платформа для создания, коллекционирования и обсуждения цифрового искусства.
-                    </p>
-                </div>
-            </section>
+        <!-- Hero -->
+        <section class="min-h-screen relative flex items-center justify-center bg-cover bg-center" style="background-image:url('/images/main/main_section.webp')">
+            <div class="absolute inset-0 bg-black/70"></div>
+            <div class="relative z-10 text-center px-4">
+                <img src="/logo.png" class="mx-auto w-40 md:w-60 mb-6"/>
+                <h1 class="text-5xl md:text-6xl font-extrabold text-white">
+                    Открой <span class="text-primary">LibraryStroll</span>
+                </h1>
+                <p class="mt-4 text-lg md:text-xl text-white/80 max-w-2xl mx-auto">
+                    Платформа для создания, коллекционирования и&nbsp;обсуждения цифрового искусства.
+                </p>
+            </div>
+        </section>
 
-            <!-- Gallery -->
-            <section
-                class="section-gallery snap-start h-full flex flex-col md:flex-row items-center px-8 bg-base-200"
-            >
-                <div class="gallery-left md:w-1/2 space-y-4">
-                    <h2 class="text-4xl font-bold">Исследуй галерею</h2>
-                    <p class="text-lg text-base-content/70 max-w-md">
-                        Погрузись в работы талантливых авторов со всего мира.
-                    </p>
-                    <Link href="/gallery" class="btn btn-primary inline-flex items-center gap-2">
-                        Галерея
-                    </Link>
+        <!-- Recent artworks -->
+        <section class="min-h-screen flex flex-col bg-base-200 py-16">
+            <div class="flex-1 flex flex-col items-center px-4 w-full">
+                <h2 class="text-4xl font-bold mb-8">Новые работы</h2>
+                <div class="w-full">
+                    <MasonryGrid :items="items">
+                        <template #default="{ item }">
+                            <ArtworkCard :art="item"/>
+                        </template>
+                    </MasonryGrid>
                 </div>
-                <div class="gallery-right md:w-1/2 grid grid-cols-3 grid-rows-2 gap-4 mt-8 md:mt-0">
-                    <img src="/images/gallery/1.jpg" alt="" class="gallery-item row-span-2 col-span-2 object-cover w-full h-full rounded-lg"/>
-                    <img src="/images/gallery/2.jpg" alt="" class="gallery-item object-cover w-full h-full rounded-lg"/>
-                    <img src="/images/gallery/3.jpg" alt="" class="gallery-item object-cover w-full h-full rounded-lg"/>
-                    <img src="/images/gallery/4.jpg" alt="" class="gallery-item object-cover w-full h-full rounded-lg"/>
-                </div>
-            </section>
+                <Link href="/gallery" class="btn btn-primary mt-10">Перейти в галерею</Link>
+            </div>
+        </section>
 
-            <!-- Create -->
-            <section
-                class="section-create snap-start h-full flex flex-col md:flex-row items-center px-8 bg-base-100"
-            >
-                <div class="create-image md:w-1/2 flex justify-center">
-                    <img
-                        src="/images/main/photo_2025-04-03_15-04-13.jpg"
-                        alt="Create Art"
-                        class="w-full max-w-md rounded-lg shadow-lg"
-                    />
-                </div>
-                <div class="create-text md:w-1/2 mt-8 md:mt-0 text-right space-y-4">
-                    <h2 class="text-4xl font-bold">Создавай свои артворки</h2>
-                    <p class="text-lg text-base-content/70 max-w-md mx-auto md:mx-0 text-right">
-                        Загружай изображения и видео, добавляй описания и публикуй в пару кликов.
-                    </p>
-                </div>
-            </section>
+        <!-- Create -->
+        <section class="min-h-screen flex flex-col md:flex-row items-center bg-base-100 px-6 lg:px-16 py-16 gap-12">
+            <div class="w-full md:w-1/2 space-y-6 text-center md:text-right">
+                <h2 class="text-4xl font-bold">Создавай свои артворки</h2>
+                <p class="text-lg text-base-content/70 md:text-right md:mx-0">
+                    Загружай изображения и&nbsp;видео, добавляй описания и&nbsp;публикуй в&nbsp;пару кликов.
+                </p>
+            </div>
+            <div class="w-full md:w-1/2 flex justify-center">
+                <img src="/images/main/studio.jpg" class="w-3/4 rounded-lg shadow-lg object-cover"/>
+            </div>
+        </section>
 
-            <!-- Collections -->
-            <section
-                class="section-collections snap-start h-full flex flex-col md:flex-row items-center px-8 bg-base-200"
-            >
-                <div class="collections-text md:w-1/2 space-y-4">
-                    <h2 class="text-4xl font-bold">Организуй коллекции</h2>
-                    <p class="text-lg text-base-content/70 max-w-md">
-                        Создавай подборки любимых работ и делись ими.
-                    </p>
-                </div>
-                <div class="collections-image md:w-1/2 flex justify-center mt-6 md:mt-0">
-                    <img
-                        src="/images/main/photo_2025-04-03_15-04-13.jpg"
-                        alt="Collections"
-                        class="w-full max-w-md rounded-lg shadow-lg"
-                    />
-                </div>
-            </section>
+        <!-- Collections -->
+        <section class="min-h-screen flex flex-col md:flex-row items-center bg-base-200 px-6 lg:px-16 py-16 gap-12">
+            <div class="w-full md:w-1/2 flex justify-center">
+                <img src="/images/main/collection.jpg" class="w-3/4 rounded-lg shadow-lg object-cover"/>
+            </div>
+            <div class="w-full md:w-1/2 space-y-6 text-center md:text-left">
+                <h2 class="text-4xl font-bold">Организуй коллекции</h2>
+                <p class="text-lg text-base-content/70 max-w-md mx-auto md:mx-0">
+                    Создавай подборки любимых работ и&nbsp;делись ими.
+                </p>
+            </div>
+        </section>
 
-            <!-- Chat -->
-            <section
-                class="section-chat snap-start h-full flex flex-col md:flex-row items-center px-8 bg-base-100"
-            >
-                <div class="chat-image md:w-1/2 flex justify-center">
-                    <img
-                        src="/images/main/photo_2025-04-03_15-04-13.jpg"
-                        alt="Chat"
-                        class="w-full max-w-md rounded-lg shadow-lg"
-                    />
-                </div>
-                <div class="chat-text md:w-1/2 mt-8 md:mt-0 space-y-4 text-right">
-                    <h2 class="text-4xl font-bold">Общайся в чате</h2>
-                    <p class="text-lg text-base-content/70 max-w-md mx-auto md:mx-0">
-                        Обсуждай работы в реальном времени, оставляй отзывы.
-                    </p>
-                </div>
-            </section>
+        <!-- Chat -->
+        <section class="min-h-screen flex flex-col md:flex-row items-center bg-base-100 px-6 lg:px-16 py-16 gap-12">
+            <div class="w-full md:w-1/2 space-y-6 text-center md:text-right order-2 md:order-1">
+                <h2 class="text-4xl font-bold">Общайся в&nbsp;чате</h2>
+                <p class="text-lg text-base-content/70 md:mx-0">
+                    Обсуждай работы в&nbsp;реальном времени, оставляй отзывы.
+                </p>
+            </div>
+            <div class="w-full md:w-1/2 flex justify-center order-1 md:order-2">
+                <img src="/images/main/messenger.jpg" class="w-3/4 rounded-lg shadow-lg object-cover"/>
+            </div>
+        </section>
 
-            <!-- Mobile App -->
-            <section
-                class="section-mobile snap-start h-full relative bg-cover bg-center"
-                style="background-image:url('/images/main/app_section.jpg')"
-            >
-                <div class="absolute inset-0 bg-black/50"></div>
-                <div class="mobile-text relative z-10 flex flex-col items-center justify-center h-full text-center px-4 space-y-6">
-                    <h2 class="text-4xl font-bold text-white">Скачать приложение</h2>
-                    <button class="mobile-btn btn btn-primary inline-flex items-center gap-2">
-                        <ArrowDownTrayIcon class="w-5 h-5" /> Скачать
-                    </button>
-                </div>
-            </section>
-        </div>
+        <!-- App download -->
+        <section class="min-h-screen relative flex items-center justify-center bg-cover bg-center" style="background-image:url('/images/main/app_section.jpg')">
+            <div class="absolute inset-0 bg-black/60"></div>
+            <div class="relative z-10 flex flex-col items-center text-center px-4">
+                <img src="/images/main/app.png" class="w-52 md:w-72 mb-10 object-contain"/>
+                <h2 class="text-4xl font-bold text-white mb-6">Скачать приложение</h2>
+                <a href="/app/library_stroll.apk" download class="btn btn-primary inline-flex items-center gap-2">
+                    <ArrowDownTrayIcon class="w-5 h-5"/> Скачать APK
+                </a>
+            </div>
+        </section>
     </AppLayout>
 </template>
 
 <style scoped>
-/* scroll-snap */
-.scroll-smooth { scroll-behavior: smooth; }
-.snap-y       { scroll-snap-type: y mandatory; }
-.snap-start   { scroll-snap-align: start; }
+.min-h-screen{min-height:100vh}
 </style>

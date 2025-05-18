@@ -16,7 +16,8 @@ const props = defineProps({
     tags: Array,
     tagSuggestions: Array,
     isUploading: Boolean,
-    uploadProgress: Number
+    uploadProgress: Number,
+    showCollectionModal: Boolean,
 })
 
 const emit = defineEmits([

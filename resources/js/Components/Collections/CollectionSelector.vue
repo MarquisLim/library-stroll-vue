@@ -185,16 +185,28 @@ function thumb(col){
 /* позиционирование */
 const pop   = ref(null)
 const popStyle = computed(() => {
-    if(isMobile || !props.position) return {}
-    const { innerWidth, innerHeight } = window
-    const w = 288, h = pop.value?.offsetHeight || 320
-    let { top, left } = props.position
-    if(top + h > innerHeight) top = innerHeight - h - 16
-    if(left + w > innerWidth) left = innerWidth - w - 16
-    if(top < 16)  top = 16
-    if(left< 16)  left = 16
-    return { top:`${top}px`, left:`${left}px` }
-})
+    if (isMobile || !props.position) return {};
+    let { top, left } = props.position;
+    const { innerWidth, innerHeight } = window;
+    const w = 288;
+    const h = pop.value?.offsetHeight || 320;
+
+    const normalize = v => typeof v === 'number' ? `${v}px` : v;
+
+    if (typeof top === 'number') {
+        if (top + h > innerHeight) top = innerHeight - h - 16;
+        if (top < 16) top = 16;
+    }
+    if (typeof left === 'number') {
+        if (left + w > innerWidth) left = innerWidth - w - 16;
+        if (left < 16) left = 16;
+    }
+
+    return {
+        top: normalize(top),
+        left: normalize(left),
+    };
+});
 
 onMounted(() => {
     if(pop.value) pop.value.style.position = 'fixed'

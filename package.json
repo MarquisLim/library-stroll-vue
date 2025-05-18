@@ -48,6 +48,7 @@
         "videojs-watermark": "^2.0.0",
         "vue-chartjs": "^5.3.2",
         "vue-fullpage.js": "^0.2.21",
+        "vue-masonry-css": "^1.0.3",
         "vue3-apexcharts": "^1.8.0",
         "vue3-tags-input": "^1.0.12",
         "vuedraggable": "^4.1.0"

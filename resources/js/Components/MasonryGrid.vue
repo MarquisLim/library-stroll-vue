@@ -107,7 +107,7 @@ onBeforeUnmount(()=>{
 
 /* ───── watch ───── */
 watch( () => props.items.length, (n,o)=>{
-    if(n>o) nextTick(()=>{ msnry.reloadItems(); msnry.layout() })
+    if(n>o) nextTick(()=>{ msnry.reloadItems(); imagesLoaded(grid.value).on('progress', () => msnry.layout()) })
 })
 watch( () => props.startPage, val=>{
     page.value = val

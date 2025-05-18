@@ -27,7 +27,11 @@ class StudioController extends Controller
             ->orderBy('order_column')
             ->get();
 
-        $collections = Collection::where('user_id',Auth::id())->get();
+        $collections = Collection::where('user_id', Auth::id())
+            ->with(['artworks' => function ($q) {
+                $q->where('is_published', true)->with('media');
+            }])
+            ->get();
 
         return ['drafts' => $drafts, 'collections' => $collections];
     }

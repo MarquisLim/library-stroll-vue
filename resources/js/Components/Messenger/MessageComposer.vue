@@ -89,7 +89,7 @@ function addEmoji(emoji) {
             <label class="btn btn-sm btn-ghost">
                 📎 <input type="file" class="hidden" @change="onFile">
             </label>
-            <button class="btn btn-sm btn-ghost" @click="showPicker = !showPicker">😀</button>
+<!--            <button class="btn btn-sm btn-ghost" @click="showPicker = !showPicker">😀</button>-->
             <button class="ml-auto btn btn-primary btn-sm"
                     @click="send"
                     :disabled="sending"

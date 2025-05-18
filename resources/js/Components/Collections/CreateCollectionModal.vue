@@ -33,7 +33,7 @@ const name     = ref('')
 const isPrivate= ref(false)
 
 function createCollection(){
-    axios.post('/studio/create-collection', {
+    axios.post('/collections/create', {
         name: name.value,
         is_private: isPrivate.value
     }).then(res => {

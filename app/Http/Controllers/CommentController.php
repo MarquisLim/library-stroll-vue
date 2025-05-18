@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Comment;
 use App\Models\Artwork;
+use App\Notifications\CommentReceived;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -19,7 +20,7 @@ class CommentController extends Controller
         $query = Comment::where('commentable_id', $artworkId)
             ->where('commentable_type', Artwork::class)
             ->whereNull('parent_id')
-            ->with(['user', 'replies.user', 'replies.parent.user']) // добавлено
+            ->with(['user', 'replies.user', 'replies.parent.user'])
             ->orderBy('created_at', 'desc');
 
         $total = $query->count();
@@ -64,9 +65,8 @@ class CommentController extends Controller
         ]);
 
         $comment->load('user');
-
-        // Уведомить автора артворка о новом комментарии (при необходимости)
-        // ...
+        $owner   = $comment->commentable->user;
+        $owner->notify(new CommentReceived($comment));
 
         return response()->json(['comment' => $comment]);
     }
@@ -79,7 +79,6 @@ class CommentController extends Controller
 
         $request->validate(['text' => 'required|string|max:1000']);
 
-        // если отвечаем на ответ – берём корневой
         $root = $parent->parent_id ? $parent->parent : $parent;
 
         $reply = Comment::create([
@@ -89,6 +88,9 @@ class CommentController extends Controller
             'parent_id'        => $root->id,
             'text'             => $request->text,
         ]);
+
+        $owner   = $reply->commentable->user;
+        $owner->notify(new CommentReceived($reply));
 
         $reply->load(['user', 'parent.user']);
         return response()->json(['reply' => $reply]);

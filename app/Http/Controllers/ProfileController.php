@@ -14,13 +14,12 @@ class ProfileController extends Controller
     public function show(User $user)
     {
         $userId = Auth::id();
-        $isOwner = $userId === $user->id; // Определяем, является ли текущий пользователь владельцем профиля
+        $isOwner = $userId === $user->id;
 
-        // Фильтрация артворков
         $artworks = Artwork::where('user_id', $user->id)
             ->when(!$isOwner, function ($query) {
                 $query->where('is_published', '!=', 0)
-                    ->where('is_private', false); // Учитываем поле is_private только для других пользователей
+                    ->where('is_private', false);
             })
             ->with(['user', 'media', 'likes', 'collections'])
             ->withCount('likes')
@@ -31,14 +30,13 @@ class ProfileController extends Controller
                 return $art;
             });
 
-        // Фильтрация коллекций
         $collections = Collection::where('user_id', $user->id)
             ->when(!$isOwner, function ($query) {
-                $query->where('is_private', false); // Учитываем поле is_private только для других пользователей
+                $query->where('is_private', false);
             })
             ->withCount('artworks')
             ->with(['artworks.media' => function($q) {
-                $q->limit(3); // Ограничиваем количество медиа
+                $q->limit(3);
             }])
             ->get();
 
@@ -78,9 +76,4 @@ class ProfileController extends Controller
         return response()->json($likedArtworks);
     }
 
-
-    public function collections(User $user)
-    {
-        // Отдельная страница со списком коллекций или детальная информация по конкретной коллекции
-    }
 }

@@ -3,6 +3,8 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Models\Models\Complaint\Complaint;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -69,6 +71,13 @@ class User extends Authenticatable
         ];
     }
 
+    protected static function booted()
+    {
+        static::addGlobalScope('not_blocked', function (Builder $b) {
+            $b->where('is_blocked', false);
+        });
+    }
+
     public function artworks()
     {
         return $this->hasMany(Artwork::class);
@@ -113,6 +122,11 @@ class User extends Authenticatable
                 $conv->partner = $conv->users->firstWhere('id', '!=', $this->id);
                 return $conv;
             });
+    }
+
+    public function complaints()
+    {
+        return $this->morphMany(Complaint::class, 'complaintable');
     }
 
     public function blockedUsers()
