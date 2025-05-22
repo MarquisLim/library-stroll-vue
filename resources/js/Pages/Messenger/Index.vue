@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { reactive } from 'vue'
 import axios from 'axios'
-import { usePage, Link } from '@inertiajs/vue3'
+import { usePage, Link, router } from '@inertiajs/vue3'
 import {
     ChevronLeftIcon,
     UserIcon,
@@ -17,7 +17,6 @@ import ChatHeader from '@/Components/Messenger/ChatHeader.vue'
 import MessagesList from '@/Components/Messenger/MessagesList.vue'
 import MessageComposer from '@/Components/Messenger/MessageComposer.vue'
 import NewChatModal from '@/Components/Messenger/NewChatModal.vue'
-import {Inertia} from "@inertiajs/inertia";
 
 // props & state
 const page         = usePage()
@@ -68,7 +67,7 @@ function deleteChat() {
     if (!confirm('Удалить чат? Это действие необратимо.')) return
     axios.delete(`/messenger/conversations/${conversation.id}`)
         .then(() => {
-            Inertia.visit(route('messenger.index'), { method: 'get' })
+            router.visit(route('messenger.index'), { method: 'get' })
         })
         .catch(() => alert('Не удалось удалить чат'))
 }

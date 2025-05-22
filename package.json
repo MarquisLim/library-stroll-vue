@@ -6,12 +6,12 @@
         "dev": "vite"
     },
     "devDependencies": {
-        "@inertiajs/vue3": "^1.0.14",
+        "@inertiajs/vue3": "^1.0.0",
         "@tailwindcss/forms": "^0.5.10",
         "@tailwindcss/typography": "^0.5.16",
         "@vitejs/plugin-vue": "^5.2.3",
         "autoprefixer": "^10.4.21",
-        "axios": "^1.7.9",
+        "axios": "^1.6.0",
         "concurrently": "^9.1.2",
         "laravel-echo": "^2.1.0",
         "laravel-vite-plugin": "^1.2.0",
@@ -28,7 +28,8 @@
         "@capacitor/status-bar": "^7.0.1",
         "@emoji-mart/data": "^1.2.1",
         "@heroicons/vue": "^2.2.0",
-        "@inertiajs/inertia": "^0.11.1",
+        "@inertiajs/core": "^1.0.0",
+        "@inertiajs/progress": "^0.1.2",
         "@mdi/font": "^7.4.47",
         "@videojs-player/vue": "^1.0.0",
         "@vueuse/core": "^13.1.0",
@@ -44,12 +45,11 @@
         "pinia": "^3.0.2",
         "swiper": "^11.2.6",
         "uuid": "^11.1.0",
-        "video.js": "^7.21.7",
-        "videojs-watermark": "^2.0.0",
         "vue-chartjs": "^5.3.2",
         "vue-fullpage.js": "^0.2.21",
         "vue-masonry-css": "^1.0.3",
         "vue3-apexcharts": "^1.8.0",
+        "vue3-lazyload": "^0.3.8",
         "vue3-tags-input": "^1.0.12",
         "vuedraggable": "^4.1.0"
     }

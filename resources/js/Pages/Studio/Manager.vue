@@ -1,7 +1,6 @@
 <script setup>
 import { Head, Link, router, usePage } from '@inertiajs/vue3'
 import { ref, watch, computed } from 'vue'
-import { Inertia } from '@inertiajs/inertia'
 
 import EditModal from '@/Components/Studio/EditArtworkModal.vue'
 import DeleteModal from '@/Components/Studio/ConfirmDeleteModal.vue'
@@ -47,7 +46,7 @@ function fetch(pageNum = 1) {
         ? 'admin.artworks.manager'
         : 'studio.manager'
 
-    Inertia.get(
+    router.get(
         route(routeName),
         {
             page:       pageNum,

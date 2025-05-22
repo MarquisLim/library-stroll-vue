@@ -20,7 +20,7 @@
 </template>
 
 <script>
-import { Inertia } from '@inertiajs/inertia'
+import { router } from '@inertiajs/vue3'
 
 export default {
     data(){
@@ -31,7 +31,7 @@ export default {
     },
     methods:{
         createCollection(){
-            Inertia.post(route('createCollection'), {
+            router.post(route('createCollection'), {
                 name: this.name,
                 is_private: this.is_private
             }, {

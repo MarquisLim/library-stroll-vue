@@ -60,14 +60,14 @@ onMounted(() => {
                 </p>
             </div>
             <div class="w-full md:w-1/2 flex justify-center">
-                <img src="/images/main/studio.jpg" class="w-3/4 rounded-lg shadow-lg object-cover"/>
+                <img src="/images/main/studio.jpg" class="w-3/4 rounded-lg shadow-lg object-cover" loading="lazy"/>
             </div>
         </section>
 
         <!-- Collections -->
         <section class="min-h-screen flex flex-col md:flex-row items-center bg-base-200 px-6 lg:px-16 py-16 gap-12">
             <div class="w-full md:w-1/2 flex justify-center">
-                <img src="/images/main/collection.jpg" class="w-3/4 rounded-lg shadow-lg object-cover"/>
+                <img src="/images/main/collection.jpg" class="w-3/4 rounded-lg shadow-lg object-cover" loading="lazy" />
             </div>
             <div class="w-full md:w-1/2 space-y-6 text-center md:text-left">
                 <h2 class="text-4xl font-bold">Организуй коллекции</h2>
@@ -86,7 +86,7 @@ onMounted(() => {
                 </p>
             </div>
             <div class="w-full md:w-1/2 flex justify-center order-1 md:order-2">
-                <img src="/images/main/messenger.jpg" class="w-3/4 rounded-lg shadow-lg object-cover"/>
+                <img src="/images/main/messenger.jpg" class="w-3/4 rounded-lg shadow-lg object-cover" loading="lazy" />
             </div>
         </section>
 
@@ -94,7 +94,7 @@ onMounted(() => {
         <section class="min-h-screen relative flex items-center justify-center bg-cover bg-center" style="background-image:url('/images/main/app_section.jpg')">
             <div class="absolute inset-0 bg-black/60"></div>
             <div class="relative z-10 flex flex-col items-center text-center px-4">
-                <img src="/images/main/app.png" class="w-52 md:w-72 mb-10 object-contain"/>
+                <img src="/images/main/app.png" class="w-52 md:w-72 mb-10 object-contain" loading="lazy" />
                 <h2 class="text-4xl font-bold text-white mb-6">Скачать приложение</h2>
                 <a href="/app/library_stroll.apk" download class="btn btn-primary inline-flex items-center gap-2">
                     <ArrowDownTrayIcon class="w-5 h-5"/> Скачать APK

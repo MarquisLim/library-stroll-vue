@@ -1,7 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue'
-import { Head, usePage, Link } from '@inertiajs/vue3'
-import { Inertia } from '@inertiajs/inertia'
+import { Head, usePage, Link, router } from '@inertiajs/vue3'
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 import { defineOptions } from 'vue'
 
@@ -20,7 +19,7 @@ const moderatorNote = ref(complaint.moderator_note || '')
 
 // отправка решения
 function submit() {
-    Inertia.post(
+    router.post(
         route('moderation.complaints.review', complaint.id),
         { status: status.value, moderator_note: moderatorNote.value },
         { preserveScroll: true }

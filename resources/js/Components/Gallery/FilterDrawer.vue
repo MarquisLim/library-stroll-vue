@@ -12,7 +12,7 @@
     </button>
 
     <!-- Overlay + Panel -->
-    <div v-if="opened" class="fixed inset-0 z-50 flex">
+    <div v-if="opened" class="fixed inset-0 z-50 flex pt-safe-t">
         <!-- backdrop -->
         <div class="flex-1 bg-black/50" @click="opened = false" />
 

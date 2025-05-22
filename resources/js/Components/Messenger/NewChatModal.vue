@@ -1,7 +1,7 @@
 <script setup>
 import { ref } from 'vue'
 import axios from 'axios'
-import { Inertia } from '@inertiajs/inertia'
+import { router } from '@inertiajs/vue3'
 
 const show    = ref(false)
 const query   = ref('')
@@ -34,7 +34,7 @@ async function startChat(user) {
     })
     close()
     // переходим в созданный чат
-    Inertia.visit(route('messenger.index', data.id))
+    router.visit(route('messenger.index', data.id))
 }
 
 defineExpose({ open, close })

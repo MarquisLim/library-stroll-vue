@@ -2,7 +2,6 @@
 import { Head, Link, usePage, router } from '@inertiajs/vue3'
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import axios from 'axios'
-import { Inertia }    from '@inertiajs/inertia'
 import Dropdown from '@/Components/Dropdown.vue'
 import DropdownLink from '@/Components/DropdownLink.vue'
 import GlobalModals from '@/Components/Common/GlobalModals.vue'
@@ -35,6 +34,10 @@ const isMobile      = ref(window.innerWidth < 640)
 const notifPage     = ref(1)
 const notifHasMore  = ref(true)
 const notifBox = ref(null)
+const isLoading = ref(false)
+
+router.on('start', () => (isLoading.value = true))
+router.on('finish', () => (isLoading.value = false))
 
 function resize() { isMobile.value = window.innerWidth < 640 }
 
@@ -78,23 +81,6 @@ function markVisibleNotifs() {
 window.addEventListener('scroll', () => {
     if (showNotif.value) markVisibleNotifs()
 })
-
-function subjectLink(data) {
-    const t = data.subject_type
-    const id = data.subject_id
-
-    if (t === 'artwork') {
-        return route('artworks.show', id)
-    }
-    if (t === 'user') {
-        return route('user.profile.show', id)
-    }
-    if (t === 'comment') {
-        return route('artworks.show', data.parent_id) + `#comment-${id}`
-    }
-
-    return '#'
-}
 
 // Messages
 const msgUnread     = ref(page.props.unreadCount || 0)
@@ -215,7 +201,11 @@ function onSearchEnter(){
 }
 
 function logout() {
-    Inertia.post(route('logout'))
+    axios.post(route('logout'))
+        .then(() => window.location.reload())
+        .catch(e => {
+            if (e.response?.status === 419) window.location.reload()
+        })
 }
 </script>
 
@@ -318,13 +308,20 @@ function logout() {
                                 class="fixed inset-0 z-50 flex items-start justify-center p-4 bg-black/60"
                                 @click.self="showNotif=false"
                             >
-                                <div class="w-full max-w-sm bg-base-100 rounded-lg shadow-lg overflow-y-auto max-h-[80vh]">
+                                <div class="w-full max-w-sm bg-base-100 rounded-lg shadow-lg overflow-y-auto max-h-[80vh]"
+                                     ref="notifBox"
+                                     @scroll="markVisibleNotifs">
                                     <div class="flex items-center justify-between p-4 border-b">
                                         <span class="font-semibold">Уведомления</span>
                                         <button class="btn btn-ghost btn-circle" @click="showNotif=false">✕</button>
                                     </div>
                                     <div v-if="notifList.length" class="divide-y">
-                                        <div v-for="n in notifList" :key="n.id" class="p-3 hover:bg-base-200 flex">
+                                        <div v-for="n in notifList"
+                                             :key="n.id"
+                                             class="p-3 hover:bg-base-200 flex"
+                                             :class="{ read: n.read_at }"
+                                             :data-id="n.id"
+                                        >
                                             <img :src="n.data.avatar" class="w-8 h-8 rounded-full mr-3"/>
 
                                             <div class="flex-1 text-sm">
@@ -398,7 +395,12 @@ function logout() {
                 </div>
             </transition>
         </nav>
-
+        <div
+            v-if="isLoading"
+            class="fixed inset-0 z-50 bg-base-300 bg-opacity-70 flex items-center justify-center pointer-events-none"
+        >
+            <span class="loading loading-bars loading-lg text-primary"></span>
+        </div>
         <main class="flex-1">
             <slot/>
         </main>

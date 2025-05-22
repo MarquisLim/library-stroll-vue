@@ -1,10 +1,8 @@
 <script setup>
 import {ref, computed, onMounted, onUnmounted} from 'vue'
 import axios from 'axios'
-import {Inertia} from '@inertiajs/inertia'
 import {useArtworkActions} from '@/stores/useArtworkActions'
 import newChatModal from "@/Components/Messenger/NewChatModal.vue";
-import NewChatModal from "@/Components/Messenger/NewChatModal.vue";
 
 const artworkActions = useArtworkActions()
 

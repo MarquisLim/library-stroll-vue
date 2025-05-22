@@ -11,10 +11,18 @@ import { ZiggyVue } from '../../vendor/tightenco/ziggy';
 import GlobalModals from '@/Components/Common/GlobalModals.vue'
 import { Capacitor } from '@capacitor/core'
 import { StatusBar } from '@capacitor/status-bar'
-import { gsap } from 'gsap'
-import { ScrollTrigger } from 'gsap/ScrollTrigger'
+import { InertiaProgress } from '@inertiajs/progress'
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
+
+InertiaProgress.init({
+    // цвет полоски
+    color: '#4B5563',
+    // показывать спиннер справа
+    showSpinner: true,
+    // можно задать задержку в мс, по умолчанию 250
+    // delay: 0,
+});
 
 createInertiaApp({
     title: (title) => `${title} - ${appName}`,

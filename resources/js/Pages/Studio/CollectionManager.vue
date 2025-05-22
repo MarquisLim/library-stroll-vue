@@ -1,7 +1,6 @@
 <script setup>
-import { Head, Link } from '@inertiajs/vue3'
+import { Head, Link, router } from '@inertiajs/vue3'
 import { ref, watch, computed } from 'vue'
-import { Inertia } from '@inertiajs/inertia'
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 
 // модалки
@@ -32,7 +31,7 @@ const hasActiveFilters = computed(() =>
 
 // запрос
 function fetch(page = 1) {
-    Inertia.get(route('studio.collections'), {
+    router.get(route('studio.collections'), {
         page,
         visibility: visibility.value==='all' ? undefined : visibility.value,
         search    : search.value || undefined,

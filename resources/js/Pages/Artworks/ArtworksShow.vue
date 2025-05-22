@@ -1,7 +1,6 @@
 <script setup>
 import {ref, nextTick, onMounted} from 'vue'
-import {Link, usePage} from '@inertiajs/vue3'
-import {Inertia} from '@inertiajs/inertia'
+import {Link, usePage, router} from '@inertiajs/vue3'
 import axios from 'axios'
 
 // Heroicons
@@ -133,7 +132,7 @@ function goBack() {
 }
 
 function goToTag(tag) {
-    Inertia.get('/search', {q: tag})
+    router.get('/search', {q: tag})
 }
 
 function openColSelector(e) {
