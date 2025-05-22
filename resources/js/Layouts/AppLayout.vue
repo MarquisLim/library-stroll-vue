@@ -1,6 +1,6 @@
 <script setup>
 import { Head, Link, usePage, router } from '@inertiajs/vue3'
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import axios from 'axios'
 import { Inertia }    from '@inertiajs/inertia'
 import Dropdown from '@/Components/Dropdown.vue'
@@ -31,13 +31,20 @@ const isDark        = ref(false)
 const notifList     = ref([])
 const notifUnread   = ref(page.props.unreadNotificationsCount || 0)
 const showNotif     = ref(false)
-const isMobile = ref(window.innerWidth < 640)
+const isMobile      = ref(window.innerWidth < 640)
+const notifPage     = ref(1)
+const notifHasMore  = ref(true)
+const notifBox = ref(null)
+
 function resize() { isMobile.value = window.innerWidth < 640 }
 
 async function loadNotifs() {
-    const { data } = await axios.get('/notifications')
-    notifList.value   = data
-    notifUnread.value = data.filter(n => !n.read_at).length
+    const { data } = await axios.get(`/notifications?page=${notifPage.value}`)
+    notifList.value.push(...data.data)
+    notifUnread.value = notifList.value.filter(n => !n.read_at).length
+    notifHasMore.value = !!data.next_page_url
+    notifPage.value++
+    markVisibleNotifs()
 }
 
 async function markAllRead() {
@@ -45,6 +52,32 @@ async function markAllRead() {
     notifList.value.forEach(n => n.read_at = new Date().toISOString())
     notifUnread.value = 0
 }
+
+function markVisibleNotifs() {
+    nextTick(() => {
+        const box = notifBox.value
+        if (!box) return
+        box.querySelectorAll('.notif-item').forEach(el => {
+            if (!el.classList.contains('read')) {
+                const top    = el.offsetTop  - box.scrollTop
+                const bottom = top + el.offsetHeight
+                if (top >= 0 && bottom <= box.clientHeight) {
+                    el.classList.add('read')
+                    const notif = notifList.value.find(n => n.id == el.dataset.id)
+                    if (notif && !notif.read_at) {
+                        notif.read_at = new Date().toISOString()
+                        notifUnread.value--
+                        axios.post(`/notifications/${notif.id}/mark-read`)
+                    }
+                }
+            }
+        })
+    })
+}
+
+window.addEventListener('scroll', () => {
+    if (showNotif.value) markVisibleNotifs()
+})
 
 function subjectLink(data) {
     const t = data.subject_type
@@ -77,6 +110,58 @@ watch(isDark, v => {
 onMounted(() => window.addEventListener('resize', resize))
 onUnmounted(() => window.removeEventListener('resize', resize))
 function toggleNotif() { showNotif.value = !showNotif.value }
+// helper, чтобы не повторяться в шаблоне
+function notifInfo(n){
+    const t = n.type.split('\\').pop();
+    const d = n.data;
+
+    switch (t){
+        case 'ArtworkLiked':
+            return {
+                html:
+                    `<a class="link no-underline text-blue-500" href="/profile/${d.liker_id}">${d.liker_name}</a>
+                     лайкнул ваш арт
+                     <a class="link no-underline text-blue-500 ml-1" href="${d.artwork_url}">«${d.artwork_title}»</a>`,
+            };
+
+        case 'CommentReceived':
+            return {
+                html:
+                    `<a class="link no-underline text-blue-500" href="/profile/${d.commenter_id}">${d.commenter_name}</a>
+                        прокомментировал ваш
+                     <a class="link no-underline text-blue-500 ml-1" href="${d.artwork_url}">«${d.artwork_title}»</a>`,
+                extra: d.excerpt
+            };
+
+        case 'ComplaintCreated':
+            return {
+                html:
+                    `Жалоба от <a class="link no-underline text-blue-500" href="/profile/${d.user_id}">${d.user_name}</a>
+                     на <a class="link no-underline text-blue-500" href="${d.subject_url}">«${d.subject_title}»</a>`
+            };
+
+        case 'ContentBlocked':
+            return {
+                html:
+                    `${d.message}
+                     <a class="link no-underline text-blue-500 ml-1" href="${d.url}">«${d.title}»</a>`,
+                extra: d.note
+            };
+
+        case 'ComplaintRejected':
+            return {
+                html:
+                    `Ваша жалоба на
+                     <a class="link no-underline text-blue-500" href="${d.url}">«${d.title}»</a> отклонена`,
+                extra: d.note
+            };
+
+        /*  если добавите ComplaintApproved — обрабатывайте тут же  */
+
+        default:
+            return { text:'Уведомление', url:'#' };
+    }
+}
 onMounted(() => {
     isDark.value = localStorage.getItem('theme') === 'dark'
     setTheme()
@@ -188,38 +273,40 @@ function logout() {
                             v-if="showNotif && !isMobile"
                             @click.outside="showNotif=false"
                             class="absolute right-0 mt-2 w-72 max-h-96 bg-base-100 shadow-lg rounded overflow-y-auto z-50"
+                            ref="notifBox"
+                            @scroll="markVisibleNotifs"
                         >
                             <div v-if="notifList.length" class="divide-y">
-                                <div v-for="n in notifList" :key="n.id" class="p-3 hover:bg-base-200 flex">
-                                    <img :src="n.data.avatar" class="w-8 h-8 rounded-full object-cover mr-3"/>
-                                    <div class="flex-1 text-sm">
-                                        <template v-if="n.type==='ArtworkLiked'">
-                                            <Link :href="`/profile/${n.data.liker_id}`">{{n.data.liker_name}}</Link> лайкнул ваш арт
-                                        </template>
-                                        <template v-else-if="n.type==='CommentReceived'">
-                                            <Link :href="`/profile/${n.data.commenter_id}`">{{n.data.commenter_name}}</Link> прокомментировал ваш арт
-                                            <div class="italic text-xs mt-1">{{n.data.excerpt}}</div>
-                                        </template>
-                                        <template v-if="n.type === 'ComplaintCreated'">
-                                            <Link :href="subjectLink(n.data)">
-                                                {{ n.data.message }}
-                                            </Link>
-                                        </template>
-                                        <template v-else-if="n.type==='ContentBlocked'">
-                                            <span>{{ n.data.message }}</span>
-                                            <div class="text-xs opacity-60">{{ n.data.note }}</div>
-                                        </template>
+                                <div v-for="n in notifList" :key="n.id" class="p-3 hover:bg-base-200 flex notif-item" :class="{ read: n.read_at }" :data-id="n.id">
+                                    <img :src="n.data.avatar" class="w-8 h-8 rounded-full mr-3"/>
 
-                                        <template v-else-if="n.type==='ComplaintRejected'">
-                                            <span>{{ n.data.message }}</span>
-                                            <div class="text-xs opacity-60">{{ n.data.note }}</div>
-                                        </template>
-                                        <div class="text-xs opacity-60 mt-1">{{ new Date(n.created_at).toLocaleString() }}</div>
+                                    <div class="flex-1 text-sm">
+                                        <!-- основной текст -->
+                                        <span v-html="notifInfo(n).html"></span>
+
+                                        <!-- доп-строка -->
+                                        <div v-if="notifInfo(n).extra" class="text-xs italic opacity-70 mt-1">
+                                            {{ notifInfo(n).extra }}
+                                        </div>
+
+                                        <div class="text-xs opacity-60 mt-1">
+                                            {{ new Date(n.created_at).toLocaleString() }}
+                                        </div>
                                     </div>
+
                                     <span v-if="!n.read_at" class="w-2 h-2 bg-primary rounded-full self-center"/>
                                 </div>
                             </div>
                             <div v-else class="p-4 text-center opacity-60">Нет уведомлений</div>
+                            <div class="p-3">
+                                <button
+                                    v-if="notifHasMore"
+                                    @click.stop="loadNotifs"
+                                    class="btn btn-outline w-full mt-2"
+                                >
+                                    Загрузить ещё
+                                </button>
+                            </div>
                             <button v-if="notifList.length" @click="markAllRead" class="w-full py-2 text-center btn-link">Отметить всё прочитанным</button>
                         </div>
                     </div>
@@ -239,16 +326,21 @@ function logout() {
                                     <div v-if="notifList.length" class="divide-y">
                                         <div v-for="n in notifList" :key="n.id" class="p-3 hover:bg-base-200 flex">
                                             <img :src="n.data.avatar" class="w-8 h-8 rounded-full mr-3"/>
+
                                             <div class="flex-1 text-sm">
-                                                <template v-if="n.type==='ArtworkLiked'">
-                                                    <Link :href="`/profile/${n.data.liker_id}`">{{n.data.liker_name}}</Link> лайкнул ваш арт
-                                                </template>
-                                                <template v-else-if="n.type==='CommentReceived'">
-                                                    <Link :href="`/profile/${n.data.commenter_id}`">{{n.data.commenter_name}}</Link> прокомментировал ваш арт
-                                                    <div class="italic text-xs mt-1">{{n.data.excerpt}}</div>
-                                                </template>
-                                                <div class="text-xs opacity-60 mt-1">{{ new Date(n.created_at).toLocaleString() }}</div>
+                                                <!-- основной текст -->
+                                                <span v-html="notifInfo(n).html"></span>
+
+                                                <!-- доп-строка -->
+                                                <div v-if="notifInfo(n).extra" class="text-xs italic opacity-70 mt-1">
+                                                    {{ notifInfo(n).extra }}
+                                                </div>
+
+                                                <div class="text-xs opacity-60 mt-1">
+                                                    {{ new Date(n.created_at).toLocaleString() }}
+                                                </div>
                                             </div>
+
                                             <span v-if="!n.read_at" class="w-2 h-2 bg-primary rounded-full self-center"/>
                                         </div>
                                     </div>
@@ -319,4 +411,5 @@ function logout() {
 <style scoped>
 .fade-enter-active, .fade-leave-active { transition: opacity .2s }
 .fade-enter-from,   .fade-leave-to   { opacity: 0 }
+.notif-item.read { opacity: 0.9; transition: opacity .4s ease; }
 </style>

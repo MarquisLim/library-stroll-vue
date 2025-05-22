@@ -48,7 +48,7 @@ const isMod   = computed(() => ['moderator','admin','superadmin'].some(r => role
             class="fixed md:sticky inset-y-0 left-0 w-64
              bg-base-100 dark:bg-base-900 text-base-content
              transform duration-300 ease-in-out z-40
-             top-0 md:top-16 h-full overflow-y-auto"
+             top-0 md:top-16 h-full overflow-y-auto pt-safe-t"
         >
             <div class="px-4 py-6 space-y-4">
                 <!-- Дашборд -->

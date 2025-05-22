@@ -33,10 +33,13 @@ class ArtworkLiked extends Notification implements ShouldBroadcast
     public function toDatabase($notifiable)
     {
         return [
-            'artwork_id' => $this->artwork->id,
-            'liker_id'   => $this->liker->id,
-            'avatar'     => $this->liker->profile_photo_url,
-            'liker_name' => $this->liker->name,
+            'artwork_id'    => $this->artwork->id,
+            'artwork_title' => $this->artwork->title ?: 'Без названия',
+            'artwork_url'   => route('artworks.show', $this->artwork->id),
+
+            'liker_id'      => $this->liker->id,
+            'liker_name'    => $this->liker->name,
+            'avatar'        => $this->liker->profile_photo_url,
         ];
     }
 

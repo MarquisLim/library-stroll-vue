@@ -25,13 +25,18 @@ class CommentReceived extends Notification implements ShouldBroadcast
 
     public function toArray($notifiable): array
     {
+        $art = $this->comment->commentable;
         return [
-            'comment_id'        => $this->comment->id,
-            'commenter_id'      => $this->comment->user->id,
-            'commenter_name'    => $this->comment->user->name,
-            'avatar'            => $this->comment->user->profile_photo_url,
-            'artwork_id'        => $this->comment->commentable_id,
-            'excerpt'           => Str::limit($this->comment->text, 50),
+            'comment_id'      => $this->comment->id,
+            'excerpt'         => Str::limit($this->comment->text,50),
+
+            'artwork_id'      => $art->id,
+            'artwork_title'   => $art->title ?: 'Без названия',
+            'artwork_url'     => route('artworks.show', $art->id),
+
+            'commenter_id'    => $this->comment->user->id,
+            'commenter_name'  => $this->comment->user->name,
+            'avatar'          => $this->comment->user->profile_photo_url,
         ];
     }
 

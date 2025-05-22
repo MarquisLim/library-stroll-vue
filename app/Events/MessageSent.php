@@ -27,7 +27,6 @@ class MessageSent implements ShouldBroadcastNow
         return new PrivateChannel('conversation.'.$this->message->conversation_id);
     }
 
-    // Необязательно, но удобно — сразу отдавать «чистый» объект:
     public function broadcastWith(): array
     {
         return ['message' => $this->message->load('user','attachments','reactions')];

@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Models\Models\Complaint\Complaint;
+use App\Services\ComplaintSubjectInfo;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Notifications\Notification;
@@ -31,25 +32,22 @@ class ComplaintCreated extends Notification implements ShouldBroadcast
         $author = $this->complaint->user;
         $type   = $this->complaint->type;
 
-        $subjectType = strtolower(class_basename($this->complaint->complaintable_type));
-        $subjectId   = $this->complaint->complaintable_id;
-        $parentId    = $subjectType === 'comment'
-            ? $this->complaint->complaintable->commentable_id
-            : null;
+        $info   = ComplaintSubjectInfo::for($this->complaint->complaintable);
 
         return [
-            'message'       => "Новая жалоба «{$type->name}» от {$author->name}",
+            'message'        => "Новая жалоба «{$type->name}» от {$author->name}",
 
-            'user_id'       => $author->id,
-            'user_name'     => $author->name,
-            'avatar'        => $author->profile_photo_url,
+            'user_id'        => $author->id,
+            'user_name'      => $author->name,
+            'avatar'         => $author->profile_photo_url,
 
-            'subject_type'  => $subjectType,
-            'subject_id'    => $subjectId,
-            'parent_id'     => $parentId,
+            'subject_type'   => $info['type'],
+            'subject_id'     => $this->complaint->complaintable_id,
+            'subject_title'  => $info['title'],
+            'subject_url'    => $info['url'],
 
-            'complaint_id'  => $this->complaint->id,
-            'type'          => $type->slug,
+            'complaint_id'   => $this->complaint->id,
+            'type'           => $type->slug,
         ];
     }
 

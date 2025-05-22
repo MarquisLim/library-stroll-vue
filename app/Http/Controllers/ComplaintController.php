@@ -24,13 +24,16 @@ class ComplaintController extends Controller
             'details'           => $data['details'] ?? null,
         ]);
 
-        $owner = $entity instanceof Comment
-            ? $entity->commentable->user
-            : ($entity instanceof Artwork
-                ? $entity->user
-                : $entity);
+        $owner = match (true) {
+            $entity instanceof Comment  => $entity->user,
+            $entity instanceof Artwork  => $entity->user,
+            $entity instanceof User     => $entity,
+            default                     => null,
+        };
 
-        $owner->notify( new ComplaintCreated($complaint, $owner->id) );
+        if ($owner && $owner->id !== $request->user()->id) {
+            $owner->notify(new ComplaintCreated($complaint, $owner->id));
+        }
 
         User::role(['Moderator','Admin','SuperAdmin'])
             ->each(fn ($mod) => $mod->notify(

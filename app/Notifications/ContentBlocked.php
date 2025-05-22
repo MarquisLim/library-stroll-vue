@@ -2,17 +2,16 @@
 
 namespace App\Notifications;
 
-use App\Models\Models\Complaint\Complaint;
 use App\Models\User;
-use Illuminate\Broadcasting\PrivateChannel;
+use App\Models\Models\Complaint\Complaint;
+use App\Services\ComplaintSubjectInfo;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Notifications\Messages\BroadcastMessage;
-use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Illuminate\Notifications\Messages\BroadcastMessage;
 
-class ContentBlocked extends Notification implements ShouldBroadcast
+class ContentBlocked extends Notification implements ShouldBroadcast, ShouldQueue
 {
     use Queueable;
 
@@ -21,32 +20,40 @@ class ContentBlocked extends Notification implements ShouldBroadcast
         protected User      $moderator
     ) {}
 
-    public function via($notifiable) { return ['database','broadcast']; }
+    public function via($notifiable) { return ['database', 'broadcast']; }
 
-    public function toDatabase($notifiable) : array
+    /* ---------- общее тело ---------- */
+    protected function payload(): array
     {
-        $subjectType = class_basename($this->complaint->complaintable_type);
+        $info = ComplaintSubjectInfo::for($this->complaint->complaintable);
+
         return [
-            'message'  => "Ваш {$subjectType} заблокирован модератором",
-            'note'     => $this->complaint->moderator_note,
-            'type'     => 'content_blocked',
-            'avatar'   => $this->moderator->profile_photo_url,
+            'message' => "Ваш {$info['type']} был заблокирован модератором",
+            'note'    => $this->complaint->moderator_note,
+            'type'    => 'content_blocked',
+            'avatar'  => $this->moderator->profile_photo_url,
+
+            // новое
+            'title'   => $info['title'],
+            'url'     => $info['url'],
         ];
     }
 
-    public function toBroadcast($n) : BroadcastMessage
+    public function toDatabase($n): array          { return $this->payload(); }
+
+    public function toBroadcast($n): BroadcastMessage
     {
         return new BroadcastMessage([
             'id'         => $this->id,
-            'data'       => $this->toDatabase($n),
+            'data'       => $this->payload(),
             'created_at' => now()->toDateTimeString(),
             'read_at'    => null,
         ]);
     }
 
-    public function broadcastOn() : array
+    public function broadcastOn(): array
     {
         $ownerId = $this->complaint->complaintable->user->id;
-        return [new PrivateChannel('user.'.$ownerId)];
+        return ['private-user.'.$ownerId];
     }
 }

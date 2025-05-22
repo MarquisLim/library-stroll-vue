@@ -74,22 +74,73 @@ function hydrateReplies(list) {
     })
 }
 
-onMounted(loadComments)
+function loadComments(append = true) {
+    if (busy.value || !hasMore.value) return Promise.resolve()
 
-function loadComments() {
-    if (busy.value || !hasMore.value) return
     busy.value = true
-    axios
+
+    return axios
         .get(`/artworks/${props.artworkId}/comments`, { params: { page } })
         .then(({ data }) => {
             hydrateReplies(data.comments)
-            comments.value.push(...data.comments)
+
+            if (append) {
+                comments.value.push(...data.comments)
+            } else {
+                comments.value = [...data.comments]
+            }
+
             hasMore.value = data.hasMore
             page++
             emit('updateCommentsCount', data.total)
         })
         .finally(() => (busy.value = false))
 }
+
+async function loadUntilCommentFound(targetId) {
+    const maxTries = 10 // safeguard
+    let tries = 0
+
+    while (tries++ < maxTries && hasMore.value) {
+        await loadComments()
+        await nextTick()
+
+        const el = document.getElementById(`comment-${targetId}`)
+        if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            el.classList.add('ring', 'ring-primary', 'rounded')
+            setTimeout(() => el.classList.remove('ring', 'ring-primary'), 1500)
+            return true
+        }
+    }
+
+    console.warn('Комментарий не найден или достигнут лимит загрузок')
+    return false
+}
+
+function scrollToHashIfNeeded() {
+    const hash = window.location.hash
+    if (hash.startsWith('#comment-')) {
+        nextTick(() => {
+            const el = document.querySelector(hash)
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                el.classList.add('ring', 'ring-primary', 'rounded')
+                setTimeout(() => el.classList.remove('ring', 'ring-primary'), 1500)
+            }
+        })
+    }
+}
+
+onMounted(() => {
+    const hash = window.location.hash
+    if (hash.startsWith('#comment-')) {
+        const commentId = parseInt(hash.replace('#comment-', ''), 10)
+        loadUntilCommentFound(commentId)
+    } else {
+        loadComments()
+    }
+})
 
 function pushReplyIntoTree(reply) {
     const root =
@@ -156,7 +207,7 @@ function send(parentId = null) {
         </div>
 
         <div v-if="comments.length" class="space-y-6">
-            <div v-for="c in comments" :key="c.id" class="space-y-4">
+            <div v-for="c in comments" :key="c.id" :id="`comment-${c.id}`" class="space-y-4">
                 <div class="flex gap-3">
                     <img :src="c.user.profile_photo_url" class="w-9 h-9 rounded-full object-cover" />
                     <div class="flex-1">

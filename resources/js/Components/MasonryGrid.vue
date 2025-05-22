@@ -40,10 +40,10 @@ const emit = defineEmits(['update:items'])
 /* ───── refs / state ───── */
 const grid     = ref(null)
 const sentinel = ref(null)
+const loading = ref(false)
 
 let msnry, observer
-const page        = ref(props.startPage) // 0 -> первая порция уже на странице
-const loading     = ref(false)
+const page        = ref(props.startPage)
 const noMoreItems = ref(false)
 
 /* ───── helpers ───── */
@@ -55,7 +55,7 @@ function mountMasonry(){
         itemSelector   : '.grid-item',
         columnWidth    : '.grid-sizer',
         percentPosition: true,
-        gutter         : 0              // <-- важное изменение
+        gutter         : 0
     })
     imagesLoaded(grid.value)
         .on('progress',()=>msnry.layout())

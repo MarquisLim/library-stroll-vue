@@ -11,6 +11,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\GalleryController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\MessageController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReactionController;
 use App\Http\Controllers\ReadMarkerController;
@@ -56,34 +57,10 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
         // Dashboard
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
-        Route::get('/notifications/unread', function(){
-            return auth()->user()->unreadNotifications()
-                ->map(fn($n)=>[
-                    'id'         => $n->id,
-                    'type'       => class_basename($n->type),
-                    'data'       => $n->data,
-                    'created_at' => $n->created_at->toDateTimeString(),
-                    'read_at'    => $n->read_at,
-                ]);
-        });
-
-        Route::post('/notifications/mark-read', function(){
-            auth()->user()->unreadNotifications->markAsRead();
-            return response()->json();
-        });
-
-        Route::get('/notifications', function(){
-            return auth()->user()->notifications() // все: read + unread
-            ->orderBy('created_at','desc')
-                ->get()
-                ->map(fn($n)=>[
-                    'id'         => $n->id,
-                    'type'       => class_basename($n->type),
-                    'data'       => $n->data,
-                    'created_at' => $n->created_at->toDateTimeString(),
-                    'read_at'    => $n->read_at?->toDateTimeString(),
-                ]);
-        });
+        Route::get('/notifications', [NotificationController::class, 'index']);
+        Route::get('/notifications/unread', [NotificationController::class, 'unread']);
+        Route::post('/notifications/mark-read', [NotificationController::class, 'markAllRead']);
+        Route::post(  '/notifications/{id}/mark-read',[NotificationController::class, 'markRead']);
 
         // Studio
         Route::prefix('studio')->name('studio.')->group(function () {

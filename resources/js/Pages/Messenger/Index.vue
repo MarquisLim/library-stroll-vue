@@ -117,7 +117,7 @@ watch(() => conversation?.id, async id => {
             <!-- Sidebar -->
             <aside
                 :class="[
-                    'bg-base-100 border-r border-base-300 overflow-y-auto transition-transform',
+                    'bg-base-100 border-r border-base-300 overflow-y-auto transition-transform pt-safe-t',
                     'w-100',
                     'fixed inset-y-0 left-0 z-20 transform',
                     showSidebar ? 'translate-x-0' : '-translate-x-full',
@@ -134,11 +134,11 @@ watch(() => conversation?.id, async id => {
                 <ConversationsSidebar :items="conversations" :active-id="conversation?.id" />
             </aside>
             <div v-if="showSidebar" @click="showSidebar = false"
-                 class="fixed inset-0 bg-black/50 z-10 sm:hidden" />
+                 class="fixed inset-0 bg-black/50 z-10 pt-safe-t sm:hidden" />
 
             <!-- Main -->
             <div class="flex-1 flex flex-col">
-                <div class="flex items-center border border-base-300 px-2 h-16 fixed top-16 z-10 bg-base-100 w-full">
+                <div class="flex items-center border border-base-300 px-2 h-16 fixed top-16 z-10 pt-safe-t bg-base-100 w-full">
                     <button @click="showSidebar = !showSidebar" class="sm:hidden p-2">
                         <ChevronLeftIcon class="w-6 h-6"/>
                     </button>
@@ -153,7 +153,7 @@ watch(() => conversation?.id, async id => {
                             <template #menu>
                                 <div
                                     v-if="showUserMenu"
-                                    class="absolute left-6 top-12 mt-2 bg-base-100 border border-base-300 rounded shadow w-48 z-10"
+                                    class="absolute left-6 top-12 mt-2 bg-base-100 border border-base-300 rounded shadow w-48 z-10 pt-safe-t"
                                 >
                                     <Link :href="`/profile/${otherUser.id}`"
                                           class="flex items-center gap-2 px-4 py-2 hover:bg-base-200">
