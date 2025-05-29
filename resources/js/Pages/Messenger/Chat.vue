@@ -15,12 +15,10 @@ const initMsgs = ref(page.props.messages)
 <template>
     <AppLayout>
         <div class="flex h-full">
-            <!-- header + аватар/имя -->
             <div class="my-2">
                 <ChatHeader :conversation="conversation" />
             </div>
 
-            <!-- само тело чата -->
             <div class="flex flex-col flex-1">
                 <div class="flex-1 overflow-hidden">
                     <MessagesList

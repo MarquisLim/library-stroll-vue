@@ -12,10 +12,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('conversation_user', function (Blueprint $table) {
-            $table->unsignedBigInteger('last_read_id')
-                ->nullable()
-                ->after('last_read_at')
-                ->index();
+            $table->unsignedBigInteger('last_read_id')->nullable()->after('last_read_at');
+            $table->index('last_read_id');
         });
     }
 

@@ -16,7 +16,6 @@ class ConversationController extends Controller
     public function index(Request $request, ?Conversation $conversation = null)
     {
         $user = auth()->user();
-
         $convs = $request->user()
             ->conversations()
             ->with([
@@ -34,17 +33,9 @@ class ConversationController extends Controller
             ->paginate(20);
 
         foreach ($convs as $c) {
-            $pivot = $c->users
-            ->firstWhere('id', $request->user()->id)
-                ->pivot;
-
-            $lastRead = $pivot->last_read_at;
-
-            $c->unread = $c->pivot->last_read_at
-                ? $c->messages()
-                    ->where('user_id', '!=', $request->user()->id)
-                    ->when($lastRead, fn ($q) => $q->where('created_at', '>', $lastRead))
-                    ->count()
+            $c->unread = $c->lastMessage && $c->pivot->last_read_id
+                ? $c->messages()->where('id', '>', $c->pivot->last_read_id)
+                    ->where('user_id', '!=', $user->id)->count()
                 : $c->messages()
                     ->where('user_id', '!=', $request->user()->id)
                     ->count();
@@ -61,21 +52,9 @@ class ConversationController extends Controller
         $messages = collect();
         if ($conversation) {
             $this->authorize('view', $conversation);
-
-            $conversation->load(['users' => fn ($q) => $q
-                ->where('users.id', $user->id)
-                ->select('users.id', 'conversation_user.last_read_at')
-            ]);
-
-            $pivot     = $conversation->users()
-                ->where('users.id', $user->id)
-                ->first()
-                ->pivot;
-
-            $lastRead  = $pivot->last_read_at;
+            $conversation->load('users:id,name,profile_photo_path');
 
             $other = $conversation->users->firstWhere('id', '!=', $user->id);
-
             if ($other) {
                 $other->is_blocked_by_me = $user->hasBlocked($other);
                 $other->has_blocked_me   = $other->hasBlocked($user);
@@ -87,17 +66,12 @@ class ConversationController extends Controller
                     'user',
                     'attachments',
                     'reactions',
-                    'artwork' => fn ($q) => $q
-                        ->with(['media','user'])
-                        ->withCount('likes'),
+                    'artwork' => function($q) {
+                        $q->with(['media','user'])
+                            ->withCount('likes');
+                    },
                 ])
-                ->latest('id')->take(50)->get()->reverse()->values()
-                ->each(function ($m) use ($lastRead, $user) {
-                    // <<< ВАЖНО: добавляем булево свойство
-                    $m->unread_for_me =
-                        $m->user_id !== $user->id &&
-                        ($lastRead === null || $m->created_at > $lastRead);
-                });
+                ->latest('id')->take(50)->get()->reverse()->values();
         }
 
         $collections = Collection::where('user_id', Auth::id())
@@ -135,11 +109,9 @@ class ConversationController extends Controller
                 ->first();
 
             if ($existing) {
-                // для AJAX-запросов возвращаем JSON
                 if ($request->wantsJson()) {
                     return response()->json(['id' => $existing->id]);
                 }
-                // иначе редиректим на существующий чат
                 return redirect()->route('messenger', $existing->id);
             }
         }
@@ -169,14 +141,9 @@ class ConversationController extends Controller
     }
 
     public function show(Conversation $conversation)
+
     {
         $this->authorize('view', $conversation);
-
-        $conversation->load(['users' => fn ($q) => $q
-            ->where('users.id', auth()->id())
-            ->select('users.id', 'conversation_user.last_read_at')
-        ]);
-        $lastRead = optional($conversation->users->first())->pivot->last_read_at;
 
         $messages = $conversation->messages()
             ->with([
@@ -186,13 +153,9 @@ class ConversationController extends Controller
                 'artwork' => function($q) {
                     $q->with(['media','user'])
                         ->withCount('likes');
-                    },
-                ])
-            ->latest('id')->take(50)->get()->reverse()->values()
-            ->each(function ($m) use ($lastRead) {
-                $m->unread_for_me = $m->user_id !== auth()->id()
-                    && ($lastRead === null || $m->created_at > $lastRead);
-            });
+                },
+            ])
+            ->latest('id')->take(50)->get()->reverse()->values();
 
         $otherUser = $conversation->users->firstWhere('id', '!=', auth()->id());
 
@@ -205,9 +168,8 @@ class ConversationController extends Controller
             }])
             ->get();
 
-
         return Inertia::render('Messenger/Chat', [
-            'conversation' => $conversation,
+            'conversation' => $conversation->load('users:id,name,profile_photo_path'),
             'messages'     => $messages,
             'collections'     => $collections,
         ]);

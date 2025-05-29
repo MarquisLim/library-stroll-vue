@@ -62,7 +62,9 @@ function onOpenSelector(art, rect) {
     <div :class="[
       'flex items-start mb-4',
       isMine ? 'justify-end space-x-reverse' : 'justify-start'
-    ]">
+    ]"
+         :data-id="msg.id"
+         :data-incoming="isMine ? 0 : 1">
 
         <!-- Avatar -->
         <img

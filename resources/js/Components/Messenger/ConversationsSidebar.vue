@@ -26,13 +26,6 @@ function avatarUrl(c) {
     return c.users.slice(0,3).map(u => u.profile_photo_url)
 }
 
-onMounted(() => {
-    window.addEventListener('conv-read', e => {
-        const conv = conversations.find(c => c.id === e.detail.id)
-        if (conv) conv.unread = Math.max(0, conv.unread - 1)
-    })
-})
-
 function preview(c) {
     const m = c.last_message;
     if (!m) return 'Чат создан';

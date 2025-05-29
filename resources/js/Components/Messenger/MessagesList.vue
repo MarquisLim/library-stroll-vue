@@ -1,6 +1,6 @@
 <script setup>
 import { ref, nextTick, onMounted, watch } from 'vue'
-import { useInfiniteScroll } from '@vueuse/core'
+import {useInfiniteScroll, useThrottleFn} from '@vueuse/core'
 import axios from 'axios'
 import MessageItem from './MessageItem.vue'
 
@@ -11,10 +11,25 @@ const props = defineProps({
         default: () => []
     }
 })
+const emit = defineEmits(['read'])
 
 const msgs = ref([...props.initial])
 const container = ref(null)
 const endOfMessages = ref(null)
+const latestSeen = ref(0)
+const sendRead = useThrottleFn(async () => {
+    if (!latestSeen.value) return
+    await axios.patch(
+        route('messenger.conversations.read', props.conversationId),
+        { message_id: latestSeen.value }
+    )
+    emit('read')                       // оповестили родителя -> он обнулит счётчик
+}, 800)
+
+function markSeen(id) {
+    if (id > latestSeen.value) latestSeen.value = id
+    sendRead()
+}
 
 const earliestId = () => msgs.value[0]?.id ?? 0
 const hasMore = ref(true)
@@ -46,6 +61,30 @@ function scrollToBottom() {
     }
 }
 
+onMounted(() => {
+    const io = new IntersectionObserver(entries => {
+        entries.forEach(e => {
+            if (e.isIntersecting) {
+                markSeen(+e.target.dataset.id)
+                io.unobserve(e.target)
+            }
+        })
+    }, { root: container.value, threshold: 0.6 })
+
+    function observeIfIncoming(message) {
+        if (message.user_id === window.Laravel.user.id) return // мои не нужны
+        // ищем DOM-элемент по data-id
+        const el = container.value?.querySelector(`[data-id="${message.id}"]`)
+        if (el) io.observe(el)
+    }
+
+    nextTick(() => {
+        container.value
+            .querySelectorAll('[data-incoming="1"]')
+            .forEach(el => io.observe(el))
+    })
+})
+
 onMounted(async() => {
     useInfiniteScroll(container, loadPrevious, { distance: 50, direction: 'top', immediate: false, throttleWait: 300 });
 
@@ -58,7 +97,6 @@ onMounted(async() => {
             msgs.value.push(payload.message);
             nextTick(scrollToBottom)
         });
-    await axios.patch(`/messenger/conversations/${props.conversationId}/read`);
 });
 
 watch(

@@ -101,12 +101,14 @@ const conversations = reactive(
     }))
 )
 
-// сбрасываем непрочитанные при открытии
-watch(() => conversation?.id, async id => {
+function zeroUnread () {
+    const conv = conversations.find(c => c.id === conversation.id)
+    if (conv) conv.unread = 0
+}
+watch(() => conversation?.id, id => {
     if (!id) return
     const conv = conversations.find(c => c.id === id)
-    if (conv) conv.unread = 0
-    await axios.patch(route('messenger.conversations.read', id))
+    if (conv) conv.unread = 0         // ✔ убрали запрос
 })
 </script>
 
@@ -176,7 +178,12 @@ watch(() => conversation?.id, async id => {
 
                 <!-- Messages -->
                 <div class="flex-1 overflow-hidden mt-20">
-                    <MessagesList v-if="conversation" :conversation-id="conversation.id" :initial="initMsgs" />
+                    <MessagesList
+                        v-if="conversation"
+                        :conversation-id="conversation.id"
+                        :initial="initMsgs"
+                        @read="zeroUnread"
+                    />
                     <div v-else class="flex-1 flex items-center justify-center text-base-content/60">
                         Выберите чат слева
                     </div>
