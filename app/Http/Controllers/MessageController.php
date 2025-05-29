@@ -16,21 +16,33 @@ class MessageController extends Controller
     {
         $this->authorize('view', $conversation);
 
+        $lastRead = optional(
+            $conversation->users->firstWhere('id', $request->user()->id)
+        )->pivot->last_read_at;
+
+        $beforeId = $request->integer('before_id', PHP_INT_MAX);
+
         $messages = $conversation->messages()
             ->with([
-                'user',
-                'attachments',
-                'reactions',
-                'artwork' => function($q) {
-                    $q->with(['media','user','likes','collections'])
-                        ->withCount('likes');
-                    },
-                ])
-            ->where('id','<',$request->input('before_id', PHP_INT_MAX))
-            ->latest('id')->take(50)->get()->reverse()->values();
+                'user', 'attachments', 'reactions',
+                'artwork' => fn ($q) => $q
+                    ->with(['media','user','likes','collections'])
+                    ->withCount('likes'),
+            ])
+            ->where('id', '<', $beforeId)
+            ->latest('id')
+            ->take(50)
+            ->get()
+            ->reverse()
+            ->each(function ($m) use ($lastRead, $request) {
+                $m->unread_for_me =
+                    $m->user_id !== $request->user()->id &&
+                    ($lastRead === null || $m->created_at > $lastRead);
+            });
 
         return $messages;
     }
+
 
     public function store(Request $request, Conversation $conversation)
     {

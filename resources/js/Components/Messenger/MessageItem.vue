@@ -62,7 +62,12 @@ function onOpenSelector(art, rect) {
     <div :class="[
       'flex items-start mb-4',
       isMine ? 'justify-end space-x-reverse' : 'justify-start'
-    ]">
+    ]"
+         :data-id="msg.id"
+         :data-unread="msg.unread_for_me">
+
+        <span v-if="msg.unread_for_me && !isMine"
+              class="w-2 h-2 bg-primary rounded-full self-start mr-1"></span>
 
         <!-- Avatar -->
         <img
