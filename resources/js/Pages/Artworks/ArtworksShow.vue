@@ -220,11 +220,21 @@ onMounted(async () => {
                             <ShareIcon class="w-5 h-5"/>
                         </button>
                         <div class="dropdown dropdown-end">
-                            <button tabindex="0" class="btn btn-sm btn-circle btn-ghost">
+                            <label tabindex="0" class="btn btn-sm btn-circle btn-ghost">
                                 <EllipsisHorizontalIcon class="w-5 h-5" />
-                            </button>
-                            <ul tabindex="0" class="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-40">
-                                <li><button @click="openComplaint">Пожаловаться</button></li>
+                            </label>
+                            <ul
+                                tabindex="0"
+                                class="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-40 z-10"
+                            >
+                                <li>
+                                    <button
+                                        @click="openComplaint"
+                                        class="flex items-center gap-2 w-full text-left"
+                                    >
+                                        <span>Пожаловаться</span>
+                                    </button>
+                                </li>
                             </ul>
                         </div>
                         <ComplaintModal

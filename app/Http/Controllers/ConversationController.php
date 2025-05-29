@@ -34,10 +34,16 @@ class ConversationController extends Controller
             ->paginate(20);
 
         foreach ($convs as $c) {
+            $pivot = $c->users
+            ->firstWhere('id', $request->user()->id)
+                ->pivot;
+
+            $lastRead = $pivot->last_read_at;
+
             $c->unread = $c->pivot->last_read_at
                 ? $c->messages()
-                    ->where('created_at', '>', $c->pivot->last_read_at)
                     ->where('user_id', '!=', $request->user()->id)
+                    ->when($lastRead, fn ($q) => $q->where('created_at', '>', $lastRead))
                     ->count()
                 : $c->messages()
                     ->where('user_id', '!=', $request->user()->id)
@@ -56,7 +62,17 @@ class ConversationController extends Controller
         if ($conversation) {
             $this->authorize('view', $conversation);
 
-            $conversation->load('users:id,name,profile_photo_path');
+            $conversation->load(['users' => fn ($q) => $q
+                ->where('users.id', $user->id)
+                ->select('users.id', 'conversation_user.last_read_at')
+            ]);
+
+            $pivot     = $conversation->users()
+                ->where('users.id', $user->id)
+                ->first()
+                ->pivot;
+
+            $lastRead  = $pivot->last_read_at;
 
             $other = $conversation->users->firstWhere('id', '!=', $user->id);
 
@@ -65,17 +81,23 @@ class ConversationController extends Controller
                 $other->has_blocked_me   = $other->hasBlocked($user);
             }
 
+
             $messages = $conversation->messages()
                 ->with([
                     'user',
                     'attachments',
                     'reactions',
-                    'artwork' => function($q) {
-                        $q->with(['media','user'])
-                            ->withCount('likes');
-                        },
-                    ])
-                ->latest('id')->take(50)->get()->reverse()->values();
+                    'artwork' => fn ($q) => $q
+                        ->with(['media','user'])
+                        ->withCount('likes'),
+                ])
+                ->latest('id')->take(50)->get()->reverse()->values()
+                ->each(function ($m) use ($lastRead, $user) {
+                    // <<< ВАЖНО: добавляем булево свойство
+                    $m->unread_for_me =
+                        $m->user_id !== $user->id &&
+                        ($lastRead === null || $m->created_at > $lastRead);
+                });
         }
 
         $collections = Collection::where('user_id', Auth::id())
@@ -150,6 +172,12 @@ class ConversationController extends Controller
     {
         $this->authorize('view', $conversation);
 
+        $conversation->load(['users' => fn ($q) => $q
+            ->where('users.id', auth()->id())
+            ->select('users.id', 'conversation_user.last_read_at')
+        ]);
+        $lastRead = optional($conversation->users->first())->pivot->last_read_at;
+
         $messages = $conversation->messages()
             ->with([
                 'user:id,name,profile_photo_path',
@@ -160,7 +188,11 @@ class ConversationController extends Controller
                         ->withCount('likes');
                     },
                 ])
-            ->latest('id')->take(50)->get()->reverse()->values();
+            ->latest('id')->take(50)->get()->reverse()->values()
+            ->each(function ($m) use ($lastRead) {
+                $m->unread_for_me = $m->user_id !== auth()->id()
+                    && ($lastRead === null || $m->created_at > $lastRead);
+            });
 
         $otherUser = $conversation->users->firstWhere('id', '!=', auth()->id());
 
@@ -173,8 +205,9 @@ class ConversationController extends Controller
             }])
             ->get();
 
+
         return Inertia::render('Messenger/Chat', [
-            'conversation' => $conversation->load('users:id,name,profile_photo_path'),
+            'conversation' => $conversation,
             'messages'     => $messages,
             'collections'     => $collections,
         ]);

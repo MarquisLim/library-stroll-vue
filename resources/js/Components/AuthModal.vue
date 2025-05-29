@@ -1,186 +1,32 @@
-<template>
-    <Teleport to="body">
-        <div
-            class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-            @click.self="close"
-        >
-            <div class="modal-box relative bg-base-100 p-6" @click.stop>
-                <button @click="close" class="btn btn-sm btn-circle absolute right-2 top-2">✕</button>
-
-                <div class="flex justify-center mb-4">
-                    <img src="/logo.png" alt="Logo" class="h-16 w-auto" />
-                </div>
-
-                <div class="tabs tabs-boxed w-full mb-4">
-                    <a
-                        :class="['tab flex-1', tab === 'login' ? 'tab-active' : '']"
-                        @click.prevent="tab = 'login'"
-                    >Вход</a>
-                    <a
-                        :class="['tab flex-1', tab === 'register' ? 'tab-active' : '']"
-                        @click.prevent="tab = 'register'"
-                    >Регистрация</a>
-                </div>
-
-                <!-- LOGIN -->
-                <form v-if="tab === 'login'" @submit.prevent="submitLogin" class="space-y-4">
-                    <div>
-                        <label class="label"><span class="label-text">Почта</span></label>
-                        <input
-                            v-model="loginData.email"
-                            type="email"
-                            placeholder="you@example.com"
-                            required
-                            class="input input-bordered w-full placeholder-base-content/50"
-                        />
-                        <p v-if="loginErr.email" class="text-error text-sm mt-1">
-                            {{ Array.isArray(loginErr.email) ? loginErr.email[0] : loginErr.email }}
-                        </p>
-                    </div>
-
-                    <div>
-                        <label class="label"><span class="label-text">Пароль</span></label>
-                        <input
-                            v-model="loginData.password"
-                            type="password"
-                            placeholder="••••••••"
-                            required
-                            class="input input-bordered w-full placeholder-base-content/50"
-                        />
-                        <p v-if="loginErr.password" class="text-error text-sm mt-1">
-                            {{ Array.isArray(loginErr.password) ? loginErr.password[0] : loginErr.password }}
-                        </p>
-                    </div>
-
-                    <div class="flex justify-between items-center">
-                        <button type="button" class="btn btn-ghost btn-sm" @click.prevent="tab = 'register'">
-                            Регистрация
-                        </button>
-                        <a
-                            :href="route('password.request')"
-                            class="text-sm text-base-content hover:text-primary no-underline"
-                        >Забыли пароль?</a>
-                    </div>
-
-                    <button type="submit" class="btn btn-primary w-full" :disabled="loading">
-                        Войти
-                    </button>
-                </form>
-
-                <!-- REGISTER -->
-                <form v-else @submit.prevent="submitRegister" class="space-y-4">
-                    <div>
-                        <label class="label"><span class="label-text">Никнейм</span></label>
-                        <input
-                            v-model="regData.name"
-                            type="text"
-                            placeholder="Ваш ник"
-                            required
-                            class="input input-bordered w-full placeholder-base-content/50"
-                        />
-                        <p v-if="regErr.name" class="text-error text-sm mt-1">
-                            {{ Array.isArray(regErr.name) ? regErr.name[0] : regErr.name }}
-                        </p>
-                    </div>
-
-                    <div>
-                        <label class="label"><span class="label-text">Почта</span></label>
-                        <input
-                            v-model="regData.email"
-                            type="email"
-                            placeholder="you@example.com"
-                            required
-                            class="input input-bordered w-full placeholder-base-content/50"
-                        />
-                        <p v-if="regErr.email" class="text-error text-sm mt-1">
-                            {{ Array.isArray(regErr.email) ? regErr.email[0] : regErr.email }}
-                        </p>
-                    </div>
-
-                    <div>
-                        <label class="label"><span class="label-text">Пароль</span></label>
-                        <input
-                            v-model="regData.password"
-                            type="password"
-                            placeholder="••••••••"
-                            required
-                            class="input input-bordered w-full placeholder-base-content/50"
-                        />
-                        <p v-if="regErr.password" class="text-error text-sm mt-1">
-                            {{ Array.isArray(regErr.password) ? regErr.password[0] : regErr.password }}
-                        </p>
-                    </div>
-
-                    <div>
-                        <label class="label"><span class="label-text">Повторите пароль</span></label>
-                        <input
-                            v-model="regData.password_confirmation"
-                            type="password"
-                            placeholder="••••••••"
-                            required
-                            class="input input-bordered w-full placeholder-base-content/50"
-                        />
-                    </div>
-
-                    <div class="form-control">
-                        <label class="label cursor-pointer">
-                            <input type="checkbox" v-model="regData.terms" class="checkbox checkbox-primary mr-2" />
-                            <div class="ms-2 text-sm">
-                                Я принимаю
-                                <a
-                                    target="_blank"
-                                    :href="route('terms')"
-                                    class="underline text-gray-600 hover:text-gray-900"
-                                >Пользовательское соглашение</a>
-                                и
-                                <a
-                                    target="_blank"
-                                    :href="route('privacy')"
-                                    class="underline text-gray-600 hover:text-gray-900"
-                                >Политику конфиденциальности</a>
-                            </div>
-                        </label>
-                    </div>
-
-                    <button
-                        type="submit"
-                        class="btn btn-primary w-full"
-                        :disabled="!regData.terms || loading"
-                    >Подтвердить</button>
-
-                    <p class="text-center text-sm">
-                        Уже зарегистрированы?
-                        <button type="button" class="btn btn-ghost btn-sm" @click.prevent="tab = 'login'">
-                            Войти
-                        </button>
-                    </p>
-                </form>
-            </div>
-        </div>
-    </Teleport>
-</template>
-
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, watch, nextTick } from 'vue'
 import axios from 'axios'
 
 const emit = defineEmits(['close'])
-const tab = ref('login')
-const loginData = ref({ email: '', password: '' })
-const regData   = ref({ name: '', email: '', password: '', password_confirmation: '', terms: false })
-const loginErr  = ref({})
-const regErr    = ref({})
-const loading   = ref(false)
+const props = defineProps({ show: Boolean })
 
-onMounted(()  => document.body.classList.add('overflow-hidden'))
-onBeforeUnmount(() => document.body.classList.remove('overflow-hidden'))
+const dialogRef  = ref(null)
+const tab        = ref('login')
+const loginData  = ref({ email: '', password: '' })
+const regData    = ref({ name: '', email: '', password: '', password_confirmation: '', terms: false })
+const loginErr   = ref({})
+const regErr     = ref({})
+const loading    = ref(false)
 
-// всегда свежий CSRF перед каждым запросом
+watch(() => props.show, (v) => {
+    if (v) nextTick(() => dialogRef.value?.showModal())
+    else dialogRef.value?.close()
+})
+
 axios.interceptors.request.use(cfg => {
     const t = document.head.querySelector('meta[name="csrf-token"]')?.content
     if (t) cfg.headers['X-CSRF-TOKEN'] = t
     return cfg
 })
+
+function close() {
+    emit('close')
+}
 
 function submitLogin() {
     loading.value = true
@@ -205,8 +51,145 @@ function submitRegister() {
         })
         .finally(() => loading.value = false)
 }
-
-function close() {
-    emit('close')
-}
 </script>
+
+<template>
+    <dialog ref="dialogRef" class="modal" @close="close">
+        <div class="modal-box relative bg-base-100 p-6 w-full max-w-md">
+            <button @click="dialogRef.close()" class="btn btn-sm btn-circle absolute right-2 top-2">✕</button>
+
+            <div class="flex justify-center mb-4">
+                <img src="/logo.png" alt="Logo" class="h-16 w-auto" />
+            </div>
+
+            <div class="tabs tabs-boxed w-full mb-4">
+                <a :class="['tab flex-1', tab === 'login' ? 'tab-active' : '']" @click.prevent="tab = 'login'">Вход</a>
+                <a :class="['tab flex-1', tab === 'register' ? 'tab-active' : '']" @click.prevent="tab = 'register'">Регистрация</a>
+            </div>
+
+            <!-- LOGIN -->
+            <form v-if="tab === 'login'" @submit.prevent="submitLogin" class="space-y-4">
+                <div>
+                    <label class="label"><span class="label-text">Почта</span></label>
+                    <input
+                        v-model="loginData.email"
+                        type="email"
+                        placeholder="Почта"
+                        required
+                        class="input input-bordered w-full placeholder-base-content/50"
+                    />
+                    <p v-if="loginErr.email" class="text-error text-sm mt-1">
+                        {{ Array.isArray(loginErr.email) ? loginErr.email[0] : loginErr.email }}
+                    </p>
+                </div>
+
+                <div>
+                    <label class="label"><span class="label-text">Пароль</span></label>
+                    <input
+                        v-model="loginData.password"
+                        type="password"
+                        placeholder="Пароль"
+                        required
+                        class="input input-bordered w-full placeholder-base-content/50"
+                    />
+                    <p v-if="loginErr.password" class="text-error text-sm mt-1">
+                        {{ Array.isArray(loginErr.password) ? loginErr.password[0] : loginErr.password }}
+                    </p>
+                </div>
+
+                <div class="flex justify-between items-center">
+                    <button type="button" class="btn btn-ghost btn-sm" @click.prevent="tab = 'register'">Регистрация</button>
+                    <a :href="route('password.request')" class="text-sm hover:underline">Забыли пароль?</a>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-full" :disabled="loading">Войти</button>
+            </form>
+
+            <!-- REGISTER -->
+            <form v-else @submit.prevent="submitRegister" class="space-y-4">
+                <div>
+                    <label class="label"><span class="label-text">Никнейм</span></label>
+                    <input
+                        v-model="regData.name"
+                        type="text"
+                        placeholder="Ваш ник"
+                        required
+                        class="input input-bordered w-full placeholder-base-content/50"
+                    />
+                    <p v-if="regErr.name" class="text-error text-sm mt-1">
+                        {{ Array.isArray(regErr.name) ? regErr.name[0] : regErr.name }}
+                    </p>
+                </div>
+
+                <div>
+                    <label class="label"><span class="label-text">Почта</span></label>
+                    <input
+                        v-model="regData.email"
+                        type="email"
+                        placeholder="Почта"
+                        required
+                        class="input input-bordered w-full placeholder-base-content/50"
+                    />
+                    <p v-if="regErr.email" class="text-error text-sm mt-1">
+                        {{ Array.isArray(regErr.email) ? regErr.email[0] : regErr.email }}
+                    </p>
+                </div>
+
+                <div>
+                    <label class="label"><span class="label-text">Пароль</span></label>
+                    <input
+                        v-model="regData.password"
+                        type="password"
+                        placeholder="Пароль"
+                        required
+                        class="input input-bordered w-full placeholder-base-content/50"
+                    />
+                    <p v-if="regErr.password" class="text-error text-sm mt-1">
+                        {{ Array.isArray(regErr.password) ? regErr.password[0] : regErr.password }}
+                    </p>
+                </div>
+
+                <div>
+                    <label class="label"><span class="label-text">Повторите пароль</span></label>
+                    <input
+                        v-model="regData.password_confirmation"
+                        type="password"
+                        placeholder="Повторите пароль"
+                        required
+                        class="input input-bordered w-full placeholder-base-content/50"
+                    />
+                </div>
+
+                <div class="form-control">
+                    <label class="label cursor-pointer">
+                        <input type="checkbox" v-model="regData.terms" class="checkbox checkbox-primary mr-2" />
+                        <div class="ms-2 text-sm">
+                            Я принимаю
+                            <a target="_blank" :href="route('terms')" class="underline text-gray-600 hover:text-gray-900">
+                                Пользовательское соглашение
+                            </a>
+                            и
+                            <a target="_blank" :href="route('privacy')" class="underline text-gray-600 hover:text-gray-900">
+                                Политику конфиденциальности
+                            </a>
+                        </div>
+                    </label>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-full" :disabled="!regData.terms || loading">
+                    Подтвердить
+                </button>
+
+                <p class="text-center text-sm">
+                    Уже зарегистрированы?
+                    <button type="button" class="btn btn-ghost btn-sm" @click.prevent="tab = 'login'">Войти</button>
+                </p>
+            </form>
+        </div>
+
+        <!-- Фон (закрывает при клике вне) -->
+        <form method="dialog" class="modal-backdrop">
+            <button></button>
+        </form>
+    </dialog>
+</template>

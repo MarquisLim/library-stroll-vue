@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { usePage, Link } from '@inertiajs/vue3'
 
 const props = defineProps({
@@ -25,6 +25,13 @@ function avatarUrl(c) {
     // Берём первые три аватарки группы
     return c.users.slice(0,3).map(u => u.profile_photo_url)
 }
+
+onMounted(() => {
+    window.addEventListener('conv-read', e => {
+        const conv = conversations.find(c => c.id === e.detail.id)
+        if (conv) conv.unread = Math.max(0, conv.unread - 1)
+    })
+})
 
 function preview(c) {
     const m = c.last_message;

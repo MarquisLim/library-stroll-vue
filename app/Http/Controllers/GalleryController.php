@@ -18,7 +18,7 @@ class GalleryController extends Controller
         $artworks = Artwork::where('is_published', true)
             ->where('is_private', false)
             ->orderByDesc('updated_at')
-            ->with(['media', 'user', 'likes', 'collections' => function($q) use ($userId) {
+            ->with(['media', 'user', 'likes', 'tags', 'collections' => function($q) use ($userId) {
                 if($userId){
                     $q->where('user_id', $userId);
                 }
@@ -113,7 +113,7 @@ class GalleryController extends Controller
         };
 
         /* --- 5. Scroll Infinity --- */
-        $artworks = $q->with(['media', 'user', 'likes',
+        $artworks = $q->with(['media', 'user', 'likes', 'tags',
             'collections' => fn($c) => $c->where('user_id', $userId)])
             ->withCount('likes')
             ->skip(($page-1)*$perPage)

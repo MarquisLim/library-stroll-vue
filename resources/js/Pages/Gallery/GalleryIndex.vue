@@ -8,24 +8,19 @@ import FilterDrawer                  from '@/Components/Gallery/FilterDrawer.vue
 import TagSlider                     from '@/Components/Gallery/TagSlider.vue'
 import { useArtworkActions }         from '@/stores/useArtworkActions'
 
-// 1. Inertia-props
 const page = usePage()
 const initialArtworks = page.props.artworks
 
-// 2. Локальный массив для Masonry
 const items = ref([])
 
-// 3. Популярные тэги
 const popularTags = ref(page.props.popularTags || [])
 
-// 4. Фильтры и тэг
 const filters = ref({ category:'all', ai:'', sort:'popular' })
 const tag     = ref('all')
 function selectAllTags() {
     tag.value = 'all'
 }
 
-// 5. Собираем query-строку
 const query = computed(() => {
     const p = new URLSearchParams()
     if (filters.value.category!=='all') p.set('category', filters.value.category)
@@ -35,22 +30,25 @@ const query = computed(() => {
     return p.toString()
 })
 
-// 6. Ключ для принудительного перемонтирования Masonry
 const gridKey = computed(() => btoa(query.value))
 
-// 7. Сразу сохраняем коллекции в Pinia
+const visibleTags = computed(() => {
+    const usedIds = new Set(
+        items.value.flatMap(a => (a.tags ?? []).map(t => t.id))
+    )
+    return popularTags.value.filter(t => usedIds.has(t.id))
+})
+
 const { setCollections } = useArtworkActions()
 if (page.props.collections) {
     setCollections(page.props.collections)
 }
 
-// 8. При первой отрисовке вставляем initialArtworks
 onMounted(() => {
     items.value = initialArtworks
 })
 
-// 9. При смене фильтров/тэга — ОЧИЩАЕМ items,
-//    MasonryGrid посмотрит items.length===0 и загрузит page=1
+
 watch([filters, tag], () => {
     items.value = []
 })
@@ -77,7 +75,7 @@ function appendItems(newItems) {
             >
                 Все
             </button>
-            <TagSlider class="flex-1" v-model="tag" :tags="popularTags" />
+            <TagSlider class="flex-1" v-model="tag" :tags="visibleTags" />
         </div>
 
         <!-- MasonryGrid -->

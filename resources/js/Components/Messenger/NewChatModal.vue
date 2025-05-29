@@ -1,21 +1,20 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, nextTick } from 'vue'
 import axios from 'axios'
 import { router } from '@inertiajs/vue3'
 
-const show    = ref(false)
+const dialogRef = ref(null)
 const query   = ref('')
 const results = ref([])
 
-
 function open() {
-    show.value   = true
-    query.value  = ''
-    results.value= []
+    nextTick(() => dialogRef.value.showModal())
+    query.value   = ''
+    results.value = []
 }
 
 function close() {
-    show.value = false
+    dialogRef.value.close()
 }
 
 async function onSearch() {
@@ -28,12 +27,11 @@ async function onSearch() {
 }
 
 async function startChat(user) {
-    const { data } = await axios.post(route('messenger.conversations.store'), {
-        user_ids: [user.id],
-        type: 'dialog'
-    })
+    const { data } = await axios.post(
+        route('messenger.conversations.store'),
+        { user_ids: [user.id], type: 'dialog' }
+    )
     close()
-    // переходим в созданный чат
     router.visit(route('messenger.index', data.id))
 }
 
@@ -41,9 +39,11 @@ defineExpose({ open, close })
 </script>
 
 <template>
-    <div v-if="show" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-        <div class="bg-base-100 p-6 rounded-lg w-80">
+    <!-- сам dialog, скрыт по умолчанию -->
+    <dialog ref="dialogRef" class="modal">
+        <div class="modal-box w-80 p-6">
             <h3 class="text-lg font-semibold mb-4">Новый чат</h3>
+
             <input
                 v-model="query"
                 @input="onSearch"
@@ -51,7 +51,8 @@ defineExpose({ open, close })
                 placeholder="Поиск по имени…"
                 class="input input-bordered w-full mb-3"
             />
-            <ul class="max-h-40 overflow-auto space-y-1">
+
+            <ul class="max-h-40 overflow-auto space-y-1 mb-4">
                 <li v-for="u in results" :key="u.id">
                     <button
                         @click="startChat(u)"
@@ -62,9 +63,17 @@ defineExpose({ open, close })
                     </button>
                 </li>
             </ul>
-            <div class="text-right mt-4">
-                <button @click="close" class="btn btn-ghost">Отмена</button>
+
+            <div class="modal-action justify-end">
+                <form method="dialog">
+                    <button class="btn btn-error mr-2">Отмена</button>
+                </form>
             </div>
         </div>
-    </div>
+
+        <!-- фон, клик по которому тоже закроет dialog -->
+        <form method="dialog" class="modal-backdrop">
+            <button> </button>
+        </form>
+    </dialog>
 </template>

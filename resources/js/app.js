@@ -25,7 +25,7 @@ InertiaProgress.init({
 });
 
 createInertiaApp({
-    title: (title) => `${title} - ${appName}`,
+    title: (title) => `${title} | ${appName}`,
     resolve: (name) => resolvePageComponent(`./Pages/${name}.vue`, import.meta.glob('./Pages/**/*.vue')),
     setup({ el, App, props, plugin }) {
         const pinia = createPinia()
@@ -34,6 +34,18 @@ createInertiaApp({
             .use(pinia)
             .use(ZiggyVue)
             .component('GlobalModals', GlobalModals)
+
+        vueApp.directive('click-outside', {
+            beforeMount(el, binding) {
+                el.__ClickOutside__ = e => {
+                    if (!el.contains(e.target)) binding.value(e)
+                }
+                document.addEventListener('click', el.__ClickOutside__)
+            },
+            unmounted(el) {
+                document.removeEventListener('click', el.__ClickOutside__)
+            },
+        })
 
         vueApp.mount(el)
 

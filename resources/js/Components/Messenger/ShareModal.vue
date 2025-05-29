@@ -1,20 +1,21 @@
+<!-- resources/js/Components/Messenger/ShareModal.vue -->
 <script setup>
-import {ref, computed, onMounted, onUnmounted} from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import axios from 'axios'
-import {useArtworkActions} from '@/stores/useArtworkActions'
-import newChatModal from "@/Components/Messenger/NewChatModal.vue";
-
-const artworkActions = useArtworkActions()
+import { useArtworkActions } from '@/stores/useArtworkActions'
+import NewChatModal from '@/Components/Messenger/NewChatModal.vue'
 
 const emit = defineEmits(['close'])
-
 const props = defineProps({
     artworkId: Number,
-    chats: Array,
+    chats:     Array,
 })
 
-const filter = ref('')
-const selected = ref([])
+const artworkActions = useArtworkActions()
+const dialogRef      = ref(null)
+const newChatModal   = ref(null)
+const filter         = ref('')
+const selected       = ref([])
 
 const filtered = computed(() =>
     props.chats.filter(c =>
@@ -23,40 +24,38 @@ const filtered = computed(() =>
 )
 
 onMounted(() => {
-    document.body.style.overflow = 'hidden'
+    nextTick(() => dialogRef.value.showModal())
 })
 
-onUnmounted(() => {
-    document.body.style.overflow = ''
-})
-
-function close() {
-    emit('close')
+function openNewChat() {
+    newChatModal.value.open()
 }
 
 async function share() {
-    for (let convId of selected.value) {
+    for (const convId of selected.value) {
         await axios.post(
             `/messenger/conversations/${convId}/messages`,
-            {artwork_id: props.artworkId}
+            { artwork_id: props.artworkId }
         )
     }
-    selected.value = []
-    filter.value = ''
     artworkActions.notify('Сообщения отправлены')
-    emit('close')
+    dialogRef.value.close()
 }
 </script>
 
 <template>
-    <div
-        class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-        @click.self="close"
+    <dialog
+        ref="dialogRef"
+        class="modal"
+        @close="emit('close')"
     >
-        <div class="bg-base-100 rounded-lg w-96 p-4">
+        <div class="modal-box w-96 p-4">
             <div class="flex justify-between items-center mb-3">
                 <h3 class="text-lg font-semibold">Выберите чаты</h3>
-                <button class="btn btn-sm btn-ghost" @click="close">✖</button>
+                <button
+                    class="btn btn-sm btn-ghost"
+                    @click="dialogRef.close()"
+                >✖</button>
             </div>
 
             <input
@@ -78,36 +77,41 @@ async function share() {
                         v-model="selected"
                         :value="c.id"
                     />
-                    <div class="flex items-center gap-2">
-                        <img
-                            :src="c.avatar_url || '/images/default-avatar.png'"
-                            class="w-10 h-10 rounded-full object-cover"
-                            alt="avatar"
-                        />
-                        <span>{{ c.title }}</span>
-                    </div>
+                    <img
+                        :src="c.avatar_url || '/images/default-avatar.png'"
+                        class="w-10 h-10 rounded-full object-cover"
+                        alt="avatar"
+                    />
+                    <span>{{ c.title }}</span>
                 </label>
             </div>
 
             <div class="flex justify-end gap-2">
-                <div class="border-b border-base-300">
-                    <button @click="newChatModal.open()"
-                            class="btn btn-outline btn-sm w-full flex items-center justify-center gap-2">
-                        + <span>Новый чат</span>
-                    </button>
-                </div>
-                <button class="btn btn-sm btn-ghost" @click="close">
-                    Отмена
+                <button
+                    @click="openNewChat"
+                    class="btn btn-outline btn-sm flex items-center gap-2"
+                >
+                    + Новый чат
                 </button>
+
+                <form method="dialog">
+                    <button class="btn btn-sm btn-ghost">Отмена</button>
+                </form>
+
                 <button
                     class="btn btn-sm btn-primary"
-                    @click="share"
+                    @click.prevent="share"
                     :disabled="!selected.length"
                 >
                     Поделиться
                 </button>
             </div>
-            <NewChatModal ref="newChatModal"/>
         </div>
-    </div>
+
+        <form method="dialog" class="modal-backdrop">
+            <button></button>
+        </form>
+
+        <NewChatModal ref="newChatModal" />
+    </dialog>
 </template>
