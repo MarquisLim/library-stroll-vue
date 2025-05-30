@@ -47,7 +47,7 @@ const collectionSuggestions = ref([])
 
 function scheduleAutoSave() {
     if (autoSaveTimeout) clearTimeout(autoSaveTimeout)
-    autoSaveTimeout = setTimeout(performAutoSave, 1000)
+    autoSaveTimeout = setTimeout(performAutoSave, 3000)
     successMessage.value = 'Сохранение...'
 }
 
