@@ -14,7 +14,7 @@ const isDialog = computed(() => props.conversation?.type === 'dialog')
 </script>
 
 <template>
-    <header class="flex items-center gap-4 border-base-300 bg-base-100 relative">
+    <header class="flex items-center gap-4 relative">
         <div v-if="otherUser" class="flex items-center gap-4 cursor-pointer" @click="$emit('toggle-user-menu')">
             <img
                 :src="otherUser.profile_photo_url"

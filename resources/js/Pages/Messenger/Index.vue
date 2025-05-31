@@ -139,7 +139,7 @@ watch(() => conversation?.id, id => {
 
             <!-- Main -->
             <div class="flex-1 flex flex-col">
-                <div class="flex items-center border border-base-300 px-2 h-16 fixed top-16 z-10 pt-safe-t bg-base-100 w-full">
+                <div class="flex items-center border border-base-300 px-2 h-16 fixed z-10 pt-safe-t bg-base-100/80 w-full top-[calc(4rem+env(safe-area-inset-top))] sm:top-16">
                     <button @click="showSidebar = !showSidebar" class="sm:hidden p-2">
                         <ChevronLeftIcon class="w-6 h-6"/>
                     </button>
@@ -154,7 +154,7 @@ watch(() => conversation?.id, id => {
                             <template #menu>
                                 <div
                                     v-if="showUserMenu"
-                                    class="absolute left-6 top-12 mt-2 bg-base-100 border border-base-300 rounded shadow w-48 z-10 pt-safe-t"
+                                    class="absolute left-6 top-12 mt-2 bg-base-100/80 border border-base-300 rounded shadow w-48 z-10 pt-safe-t"
                                 >
                                     <Link :href="`/profile/${otherUser.id}`"
                                           class="flex items-center gap-2 px-4 py-2 hover:bg-base-200">
