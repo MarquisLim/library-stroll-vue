@@ -8,10 +8,10 @@ use App\Http\Controllers\CommentController;
 use App\Http\Controllers\ComplaintController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\GalleryController;
-use App\Http\Controllers\GroupAvatarController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\Messenger\AttachmentController;
 use App\Http\Controllers\Messenger\ConversationController;
+use App\Http\Controllers\Messenger\GroupAvatarController;
 use App\Http\Controllers\Messenger\MessageController;
 use App\Http\Controllers\Messenger\ReactionController;
 use App\Http\Controllers\Messenger\ReadMarkerController;
@@ -110,7 +110,7 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
             Route::post('{user}/unblock', [BlockController::class, 'unblock'])->name('unblock');
         });
 
-        // Messenger & Chat
+        // Messenger
         Route::prefix('messenger')->name('messenger.')->group(function () {
             Route::get('{conversation?}', [ConversationController::class, 'index'])->name('index');
             Route::post('conversations', [ConversationController::class, 'store'])->name('conversations.store');

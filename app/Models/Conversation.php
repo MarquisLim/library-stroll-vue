@@ -9,6 +9,8 @@ class Conversation extends Model
 {
     protected $fillable = ['type', 'title', 'avatar'];
 
+    protected $appends = ['avatar_url'];
+
     // участники
     public function users()
     {
