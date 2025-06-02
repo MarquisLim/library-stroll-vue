@@ -36,7 +36,7 @@
         "@yeger/vue-masonry-wall": "^5.0.18",
         "apexcharts": "^4.7.0",
         "chart.js": "^4.4.9",
-        "daisyui": "^4.12.24",
+        "daisyui": "^5.0.43",
         "dayjs": "^1.11.13",
         "emoji-mart-vue-fast": "^15.0.4",
         "fullpage.js": "^4.0.35",

@@ -13,7 +13,11 @@ import {
     HomeIcon, PlusCircleIcon,
     SunIcon, MoonIcon, Bars3Icon,
     ChatBubbleLeftIcon,
-    MagnifyingGlassIcon
+    MagnifyingGlassIcon,
+    UserIcon,
+    Cog6ToothIcon,
+    ArrowRightOnRectangleIcon,
+    PhotoIcon
 } from '@heroicons/vue/24/outline'
 import { useArtworkActions } from '@/stores/useArtworkActions'
 
@@ -106,10 +110,10 @@ function logout() {
         <Head :title="title"/>
         <nav class="sticky top-0 bg-base-100/80 backdrop-blur z-40 pt-safe-t">
             <div class="flex items-center h-16 px-4 sm:px-8">
-                <button @click="showMenu=!showMenu" class="sm:hidden p-2 rounded hover:bg-base-200">
+                <button @click="showMenu=!showMenu" class="hidden sm:block lg:hidden p-2 rounded hover:bg-base-200">
                     <Bars3Icon class="w-6 h-6"/>
                 </button>
-                <Link :href="route('home')" class="mx-auto sm:mx-0">
+                <Link :href="route('home')" class="hidden lg:block mx-auto lg:mx-0">
                     <img src="/logo.png" class="h-9 sm:h-12"/>
                 </Link>
                 <div class="hidden sm:flex ml-8 space-x-6">
@@ -204,5 +208,78 @@ function logout() {
         <Footer />
         <GlobalModals/>
         <AuthModal :show="actions.showAuthModal" @close="actions.showAuthModal = false" />
+
+        <!-- Drawer для профиля -->
+        <div class="drawer drawer-end z-50 lg:hidden">
+            <input id="profile-drawer" type="checkbox" class="drawer-toggle" />
+            <div class="drawer-side">
+                <label for="profile-drawer" class="drawer-overlay"></label>
+                <div class="menu bg-base-200 w-80 min-h-full p-4 space-y-2">
+                    <div class="flex items-center gap-3 mb-4">
+                        <label for="profile-drawer" class="btn btn-ghost btn-sm p-0">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none"
+                                 viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                      stroke-width="2" d="M15 19l-7-7 7-7" />
+                            </svg>
+                        </label>
+                        <img :src="user.profile_photo_url" class="w-10 h-10 rounded-full object-cover" />
+                        <span class="font-semibold truncate">{{ user.name }}</span>
+                    </div>
+                    <Link :href="route('dashboard')" class="flex items-center gap-2 py-1">
+                        <HomeIcon class="w-5 h-5" /> Панель управления
+                    </Link>
+                    <Link :href="`/profile/${user.id}`" class="flex items-center gap-2 py-1">
+                        <UserIcon class="w-5 h-5" /> Моя страница
+                    </Link>
+                    <Link :href="route('profile.show')" class="flex items-center gap-2 py-1">
+                        <Cog6ToothIcon class="w-5 h-5" /> Настройки
+                    </Link>
+                    <button @click="isDark=!isDark" class="flex items-center gap-2 py-1">
+                        <component :is="isDark?SunIcon:MoonIcon" class="w-6 h-6"/> Тема
+                    </button>
+                    <form @submit.prevent="logout">
+                        <button type="submit" class="flex items-center gap-2 text-error py-1">
+                            <ArrowRightOnRectangleIcon class="w-5 h-5" /> Выход
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <!-- Dock для мобильных -->
+        <div class="dock fixed bottom-0 w-full bg-base-100 border-t border-base-300 z-40 lg:hidden">
+            <Link :href="route('home')" class="flex flex-col items-center px-2"
+                  :class="{ 'dock-active': route().current('home') }">
+                <HomeIcon class="w-6 h-6" />
+                <span class="dock-label text-xs">Главная</span>
+            </Link>
+
+            <Link :href="route('gallery.index')" class="flex flex-col items-center px-2"
+                  :class="{ 'dock-active': route().current('gallery.index') }">
+                <PhotoIcon class="w-6 h-6" />
+                <span class="dock-label text-xs">Галерея</span>
+            </Link>
+
+            <Link :href="route('studio.index')" class="flex flex-col items-center px-2"
+                  :class="{ 'dock-active': route().current('studio.index') }">
+                <PlusCircleIcon class="w-6 h-6" />
+                <span class="dock-label text-xs">Студия</span>
+            </Link>
+
+            <button @click="actions.showAuthModal = true" v-if="!isAuth"
+                    class="flex flex-col items-center px-2">
+                <ArrowRightOnRectangleIcon class="w-6 h-6" />
+                <span class="dock-label text-xs">Войти</span>
+            </button>
+
+            <label v-if="isAuth" for="profile-drawer" class="flex flex-col items-center px-2 cursor-pointer"
+                   :class="{
+           'dock-active': ['dashboard', 'profile.show', 'profile'].includes(route().current()),
+         }">
+                <img :src="user.profile_photo_url" class="w-6 h-6 rounded-full object-cover" />
+                <span class="dock-label text-xs">Меню</span>
+            </label>
+        </div>
+
     </div>
 </template>
