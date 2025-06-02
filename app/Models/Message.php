@@ -30,6 +30,7 @@ class Message extends Model
     {
         return $this->belongsTo(Message::class,'reply_to_id');
     }
+
     public function replies()
     {
         return $this->hasMany(Message::class,'reply_to_id');

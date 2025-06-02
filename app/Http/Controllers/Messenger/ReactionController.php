@@ -1,8 +1,9 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Messenger;
 
 use App\Events\ReactionUpdated;
+use App\Http\Controllers\Controller;
 use App\Models\Message;
 use Illuminate\Http\Request;
 

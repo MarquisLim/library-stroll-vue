@@ -1,7 +1,9 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Messenger;
 
+use App\Events\MessagesSeen;
+use App\Http\Controllers\Controller;
 use App\Models\Conversation;
 use Illuminate\Http\Request;
 

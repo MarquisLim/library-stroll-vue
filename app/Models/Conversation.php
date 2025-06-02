@@ -3,10 +3,11 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Storage;
 
 class Conversation extends Model
 {
-    protected $fillable = ['type','title'];
+    protected $fillable = ['type', 'title', 'avatar'];
 
     // участники
     public function users()
@@ -30,5 +31,13 @@ class Conversation extends Model
     public function isDialog(): bool
     {
         return $this->type === 'dialog';
+    }
+
+    public function getAvatarUrlAttribute(): ?string
+    {
+        if (! $this->avatar) {
+            return null;
+        }
+        return Storage::disk('public')->url($this->avatar);
     }
 }

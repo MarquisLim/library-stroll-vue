@@ -1,26 +1,27 @@
 <?php
 
+use App\Http\Controllers\Admin\ArtworkController as AdminArtworkController;
+use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\ArtworkController;
-use App\Http\Controllers\AttachmentController;
 use App\Http\Controllers\CollectionController;
 use App\Http\Controllers\CommentController;
 use App\Http\Controllers\ComplaintController;
-use App\Http\Controllers\Moderation\ComplaintController as ModerationComplaintController;
-use App\Http\Controllers\ConversationController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\GalleryController;
+use App\Http\Controllers\GroupAvatarController;
 use App\Http\Controllers\HomeController;
-use App\Http\Controllers\MessageController;
+use App\Http\Controllers\Messenger\AttachmentController;
+use App\Http\Controllers\Messenger\ConversationController;
+use App\Http\Controllers\Messenger\MessageController;
+use App\Http\Controllers\Messenger\ReactionController;
+use App\Http\Controllers\Messenger\ReadMarkerController;
+use App\Http\Controllers\Moderation\ComplaintController as ModerationComplaintController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\ReactionController;
-use App\Http\Controllers\ReadMarkerController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\StudioController;
 use App\Http\Controllers\User\BlockController;
 use App\Http\Controllers\User\UserController;
-use App\Http\Controllers\Admin\UserController as AdminUserController;
-use App\Http\Controllers\Admin\ArtworkController as AdminArtworkController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -122,6 +123,10 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
 
             Route::post('messages/{message}/reaction', [ReactionController::class, 'toggle'])->name('messages.reaction');
             Route::post('attachments', [AttachmentController::class, 'store'])->name('attachments.store');
+            Route::patch('conversations/{conversation}/avatar', [GroupAvatarController::class, 'update'])->name('conversations.avatar.update');
+            Route::post('conversations/{conversation}/add-user', [ConversationController::class, 'addUser'])->name('conversations.addUser');
+            Route::post('conversations/{conversation}/remove-user', [ConversationController::class, 'removeUser'])->name('conversations.removeUser');
+            Route::post('conversations/{conversation}/leave', [ConversationController::class, 'leaveGroup'])->name('conversations.leave');
         });
 
         // Admin only

@@ -11,11 +11,9 @@ class ConversationPolicy
     /**
      * Пользователь может просмотреть переписку, если он в ней состоит.
      */
-    public function view(User $user, Conversation $conversation): bool
+    public function view(User $user, Conversation $conversation)
     {
-        return $conversation->users()->whereKey($user->id)->exists();
-        // или, если users загружены:
-        // return $conversation->users->contains($user->id);
+        return $conversation->users()->where('user_id', $user->id)->exists();
     }
 
     /**

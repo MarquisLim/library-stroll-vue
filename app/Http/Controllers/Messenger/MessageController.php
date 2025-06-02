@@ -1,14 +1,14 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Messenger;
 
 use App\Events\MessageSent;
-use App\Models\Collection;
+use App\Http\Controllers\Controller;
 use App\Models\Conversation;
 use App\Models\MessageAttachment;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class MessageController extends Controller
 {
@@ -21,14 +21,22 @@ class MessageController extends Controller
                 'user',
                 'attachments',
                 'reactions',
+                'replyTo.user:id,name,profile_photo_path',
+                'replyTo.attachments',
+                'replyTo.artwork:id,title',
+                'replies',
                 'artwork' => function($q) {
                     $q->with(['media','user','likes','collections'])
                         ->withCount('likes');
                     },
                 ])
             ->where('id','<',$request->input('before_id', PHP_INT_MAX))
-            ->latest('id')->take(50)->get()->reverse()->values();
+            ->take(50)
+            ->latest('id')->get()->reverse()->values();
 
+        foreach ($messages as $m) {
+            Log::info('Message ID='.$m->id.' replyTo_id=' . ($m->replyTo ? $m->replyTo->id : 'null'));
+        }
         return $messages;
     }
 
@@ -52,6 +60,12 @@ class MessageController extends Controller
                 'artwork_id'      => $data['artwork_id'] ?? null,
             ]);
 
+            $conversation->users()
+                ->updateExistingPivot($request->user()->id, [
+                    'last_read_id' => $msg->id,
+                    'last_read_at' => now(),
+                ]);
+
             if (!empty($data['attachments'])) {
                 MessageAttachment::whereIn('id', $data['attachments'])
                     ->whereNull('message_id')
@@ -63,7 +77,12 @@ class MessageController extends Controller
             return $msg;
         });
 
-        $msg->load('user', 'attachments', 'reactions',     'artwork.media',
+        $msg->load('user', 'attachments', 'reactions',
+            'artwork.media',
+            'replyTo.user:id,name,profile_photo_path',
+            'replyTo.attachments',
+            'replyTo.artwork:id,title',
+            'replies',
             'artwork.user:id,name,profile_photo_path');
 
         if (is_null($msg->attachments)) {

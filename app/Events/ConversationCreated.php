@@ -39,14 +39,12 @@ class ConversationCreated implements ShouldBroadcastNow
 
     public function broadcastWith(): array
     {
-        // Грузим отношения, указывая реальные поля из БД
         $conv = $this->conversation->load([
             'lastMessage.user:id,name,profile_photo_path',
             'users:id,name,profile_photo_path',
         ]);
 
         return [
-            // сразу массив, чтобы не дергать несуществующие аксессоры
             'conversation' => $conv->toArray(),
         ];
     }

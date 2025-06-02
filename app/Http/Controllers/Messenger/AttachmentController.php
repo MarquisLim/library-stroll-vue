@@ -1,7 +1,8 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Messenger;
 
+use App\Http\Controllers\Controller;
 use App\Models\MessageAttachment;
 use Illuminate\Http\Request;
 
@@ -24,9 +25,10 @@ class AttachmentController extends Controller
         ]);
 
         return [
-            'id'  => $att->id,            // вернём temp-id
+            'id'  => $att->id,
             'url' => $att->url(),
             'mime'=> $att->mime,
+            'size'=> $att->size,
         ];
     }
 }

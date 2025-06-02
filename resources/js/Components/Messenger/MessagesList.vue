@@ -1,55 +1,59 @@
+<template>
+    <div
+        v-if="ready"
+        ref="container"
+        class="flex-1 overflow-y-auto px-4 space-y-4 my-2 scroll-smooth"
+    >
+        <MessageItem
+            v-for="message in messages"
+            :key="message.id"
+            :msg="message"
+            :last-read-id="currentReadId"
+            @reply="handleReply"
+            @go-to="scrollToMessage"
+        />
+        <div ref="endOfMessages"></div>
+    </div>
+</template>
+
 <script setup>
 import { ref, nextTick, onMounted, watch } from 'vue'
-import {useInfiniteScroll, useThrottleFn} from '@vueuse/core'
+import { useInfiniteScroll } from '@vueuse/core'
+import { usePage } from '@inertiajs/vue3'
 import axios from 'axios'
 import MessageItem from './MessageItem.vue'
 
 const props = defineProps({
     conversationId: Number,
-    initial: {
-        type: Array,
-        default: () => []
-    }
+    initial: Array,
+    lastReadId: Number
 })
-const emit = defineEmits(['read'])
+const emit = defineEmits(['read', 'reply'])
 
-const msgs = ref([...props.initial])
+const messages = ref([...props.initial])
 const container = ref(null)
 const endOfMessages = ref(null)
-const latestSeen = ref(0)
-const sendRead = useThrottleFn(async () => {
-    if (!latestSeen.value) return
-    await axios.patch(
-        route('messenger.conversations.read', props.conversationId),
-        { message_id: latestSeen.value }
-    )
-    emit('read')                       // оповестили родителя -> он обнулит счётчик
-}, 800)
+const currentReadId = ref(props.lastReadId ?? 0)
+const ready = ref(false)
 
-function markSeen(id) {
-    if (id > latestSeen.value) latestSeen.value = id
-    sendRead()
-}
-
-const earliestId = () => msgs.value[0]?.id ?? 0
+const earliestId = () => messages.value[0]?.id ?? 0
 const hasMore = ref(true)
 
-async function loadPrevious () {
+async function loadPrevious() {
     if (!hasMore.value) return
-
-    const before = earliestId()
-    if (!before || before === 1) {
+    const beforeId = earliestId()
+    if (!beforeId || beforeId === 1) {
         hasMore.value = false
         return
     }
-
-    const { data } = await axios.get(
+    const response = await axios.get(
         `/messenger/conversations/${props.conversationId}/messages`,
-        { params: { before_id: before } }
+        { params: { before_id: beforeId } }
     )
-
+    const data = response.data
     if (data.length) {
-        msgs.value = [...data, ...msgs.value]
+        messages.value = [...data, ...messages.value]
+        await nextTick()
     } else {
         hasMore.value = false
     }
@@ -61,46 +65,70 @@ function scrollToBottom() {
     }
 }
 
-onMounted(() => {
-    const io = new IntersectionObserver(entries => {
-        entries.forEach(e => {
-            if (e.isIntersecting) {
-                markSeen(+e.target.dataset.id)
-                io.unobserve(e.target)
-            }
-        })
-    }, { root: container.value, threshold: 0.6 })
-
-    function observeIfIncoming(message) {
-        if (message.user_id === window.Laravel.user.id) return // мои не нужны
-        // ищем DOM-элемент по data-id
-        const el = container.value?.querySelector(`[data-id="${message.id}"]`)
-        if (el) io.observe(el)
+async function markAllAsRead(upToId) {
+    if (upToId > currentReadId.value) {
+        await axios.patch(
+            route('messenger.conversations.read', props.conversationId),
+            { message_id: upToId }
+        )
+        const delta = upToId - currentReadId.value
+        currentReadId.value = upToId
+        emit('read', { delta, newLastReadId: upToId })
     }
+}
 
-    nextTick(() => {
-        container.value
-            .querySelectorAll('[data-incoming="1"]')
-            .forEach(el => io.observe(el))
-    })
-})
+const page = usePage()
+const authUserId = page.props.auth.user.id
 
-onMounted(async() => {
-    useInfiniteScroll(container, loadPrevious, { distance: 50, direction: 'top', immediate: false, throttleWait: 300 });
-
+async function handleReply(message) {
+    emit('reply', message)
     await nextTick()
     scrollToBottom()
+}
 
+async function scrollToMessage(id) {
+    await nextTick()
+    if (container.value) {
+        const selector = `[data-id="${id}"]`
+        const el = container.value.querySelector(selector)
+        if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            el.classList.add('ring-2', 'ring-blue-400')
+            setTimeout(() => el.classList.remove('ring-2', 'ring-blue-400'), 1000)
+        }
+    }
+}
+
+onMounted(async () => {
+    const lastOnScreen = messages.value.length
+        ? messages.value[messages.value.length - 1].id
+        : 0
+    if (lastOnScreen) {
+        await markAllAsRead(lastOnScreen)
+    }
+    await nextTick()
+    useInfiniteScroll(container, loadPrevious, {
+        distance: 50,
+        direction: 'top',
+        immediate: false,
+        throttleWait: 300,
+    })
+    scrollToBottom()
+    ready.value = true
     window.Echo
         .private(`conversation.${props.conversationId}`)
-        .listen('.MessageSent', payload => {
-            msgs.value.push(payload.message);
-            nextTick(scrollToBottom)
-        });
-});
+        .listen('.MessageSent', async ({ message }) => {
+            messages.value.push(message)
+            await nextTick()
+            scrollToBottom()
+            if (message.user_id !== authUserId) {
+                await markAllAsRead(message.id)
+            }
+        })
+})
 
 watch(
-    () => msgs.value.length,
+    () => messages.value.length,
     async () => {
         await nextTick()
         scrollToBottom()
@@ -108,17 +136,3 @@ watch(
     { flush: 'post' }
 )
 </script>
-
-<template>
-    <div
-        ref="container"
-        class="flex-1 overflow-y-auto px-4 space-y-4 my-2 scroll-smooth"
-    >
-        <MessageItem
-            v-for="m in msgs"
-            :key="m.id"
-            :msg="m"
-        />
-        <div ref="endOfMessages"></div>
-    </div>
-</template>
