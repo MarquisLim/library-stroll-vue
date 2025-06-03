@@ -63,9 +63,18 @@ function submitRegister() {
             </div>
 
             <div class="tabs tabs-boxed w-full mb-4">
-                <a :class="['tab flex-1', tab === 'login' ? 'tab-active' : '']" @click.prevent="tab = 'login'">Вход</a>
-                <a :class="['tab flex-1', tab === 'register' ? 'tab-active' : '']" @click.prevent="tab = 'register'">Регистрация</a>
+                <button
+                    class="tab flex-1"
+                    :class="tab === 'login' ? 'tab-active bg-primary text-primary-content rounded' : ''"
+                    @click.prevent="tab = 'login'"
+                >Вход</button>
+                <button
+                    class="tab flex-1"
+                    :class="tab === 'register' ? 'tab-active bg-primary text-primary-content rounded' : ''"
+                    @click.prevent="tab = 'register'"
+                >Регистрация</button>
             </div>
+
 
             <!-- LOGIN -->
             <form v-if="tab === 'login'" @submit.prevent="submitLogin" class="space-y-4">
@@ -163,13 +172,13 @@ function submitRegister() {
                 <div class="form-control">
                     <label class="label cursor-pointer">
                         <input type="checkbox" v-model="regData.terms" class="checkbox checkbox-primary mr-2" />
-                        <div class="ms-2 text-sm">
+                        <div class="ms-2 text-sm flex flex-wrap">
                             Я принимаю
-                            <a target="_blank" :href="route('terms')" class="underline text-gray-600 hover:text-gray-900">
+                            <a target="_blank" :href="route('terms')" class="underline text-gray-600 hover:text-gray-900 mx-1">
                                 Пользовательское соглашение
                             </a>
                             и
-                            <a target="_blank" :href="route('privacy')" class="underline text-gray-600 hover:text-gray-900">
+                            <a target="_blank" :href="route('privacy')" class="underline text-gray-600 hover:text-gray-900 mx-1">
                                 Политику конфиденциальности
                             </a>
                         </div>

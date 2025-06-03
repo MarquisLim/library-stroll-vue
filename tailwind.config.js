@@ -25,16 +25,13 @@ export default {
         },
     },
 
-    plugins: [forms, typography, daisyui],
+    plugins: [
+        daisyui,
+        forms({ strategy: 'class' }),
+        typography
+    ],
     daisyui: {
         themes: [
-            {
-                light: {
-                    'primary'      : '#7c3aed',
-                    'base-100'     : '#F3F4F6',
-                    'base-content' : '#1F2937',
-                },
-            },
             'dark',
         ],
     },

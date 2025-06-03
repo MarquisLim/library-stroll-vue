@@ -127,57 +127,71 @@ defineExpose({ fileInput })
                 />
             </div>
 
-            <div class="grid grid-cols-2 gap-2">
-                <label class="flex items-center space-x-2">
-                    <input
-                        type="checkbox"
-                        :checked="is_adult"
-                        @change="emitUpdateIsAdult($event.target.checked)"
-                        class="checkbox checkbox-primary"
-                        :disabled="!previewUrl"
-                    />
-                    <span>Взрослый</span>
-                </label>
-                <label class="flex items-center space-x-2">
-                    <input
-                        type="checkbox"
-                        :checked="has_ai"
-                        @change="emitUpdateHasAi($event.target.checked)"
-                        class="checkbox checkbox-secondary"
-                        :disabled="!previewUrl"
-                    />
-                    <span>AI-generated</span>
-                </label>
-                <label class="flex items-center space-x-2">
-                    <input
-                        type="checkbox"
-                        :checked="is_private"
-                        @change="emitUpdateIsPrivate($event.target.checked)"
-                        class="checkbox checkbox-accent"
-                        :disabled="!previewUrl"
-                    />
-                    <span>Приватный</span>
-                </label>
-                <label class="flex items-center space-x-2">
-                    <input
-                        type="checkbox"
-                        :checked="allow_download"
-                        @change="emitUpdateAllowDownload($event.target.checked)"
-                        class="checkbox checkbox-info"
-                        :disabled="!previewUrl"
-                    />
-                    <span>Скачивание</span>
-                </label>
-                <label class="flex items-center space-x-2">
-                    <input
-                        type="checkbox"
-                        :checked="allow_comments"
-                        @change="emitUpdateAllowComments($event.target.checked)"
-                        class="checkbox checkbox-warning"
-                        :disabled="!previewUrl"
-                    />
-                    <span>Комментарии</span>
-                </label>
+            <div class="grid grid-cols-2 gap-2 gap-y-2">
+                <div class="form-control">
+                    <label class="label cursor-pointer">
+                        <input
+                            type="checkbox"
+                            class="checkbox checkbox-primary"
+                            :checked="is_adult"
+                            @change="emitUpdateIsAdult($event.target.checked)"
+                            :disabled="!previewUrl"
+                        />
+                        <span class="label-text ms-2">Взрослый</span>
+                    </label>
+                </div>
+
+                <div class="form-control">
+                    <label class="label cursor-pointer">
+                        <input
+                            type="checkbox"
+                            class="checkbox checkbox-secondary"
+                            :checked="has_ai"
+                            @change="emitUpdateHasAi($event.target.checked)"
+                            :disabled="!previewUrl"
+                        />
+                        <span class="label-text ms-2">AI-generated</span>
+                    </label>
+                </div>
+
+                <div class="form-control">
+                    <label class="label cursor-pointer">
+                        <input
+                            type="checkbox"
+                            class="checkbox checkbox-accent"
+                            :checked="is_private"
+                            @change="emitUpdateIsPrivate($event.target.checked)"
+                            :disabled="!previewUrl"
+                        />
+                        <span class="label-text ms-2">Приватный</span>
+                    </label>
+                </div>
+
+                <div class="form-control">
+                    <label class="label cursor-pointer">
+                        <input
+                            type="checkbox"
+                            class="checkbox checkbox-info"
+                            :checked="allow_download"
+                            @change="emitUpdateAllowDownload($event.target.checked)"
+                            :disabled="!previewUrl"
+                        />
+                        <span class="label-text ms-2">Скачивание</span>
+                    </label>
+                </div>
+
+                <div class="form-control">
+                    <label class="label cursor-pointer">
+                        <input
+                            type="checkbox"
+                            class="checkbox checkbox-warning"
+                            :checked="allow_comments"
+                            @change="emitUpdateAllowComments($event.target.checked)"
+                            :disabled="!previewUrl"
+                        />
+                        <span class="label-text ms-2">Комментарии</span>
+                    </label>
+                </div>
             </div>
 
             <div>

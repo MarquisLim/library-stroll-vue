@@ -28,7 +28,6 @@ const actions       = useArtworkActions()
 const isAuth        = computed(() => !!page.props.auth.user)
 const user          = computed(() => page.props.auth.user || {})
 const myId          = page.props.auth.user?.id
-const showMenu      = ref(false)
 const isDark        = ref(false)
 
 const isMobile      = ref(window.innerWidth < 640)
@@ -108,93 +107,114 @@ function logout() {
 <template>
     <div class="min-h-screen flex flex-col">
         <Head :title="title"/>
-        <nav class="sticky top-0 bg-base-100/80 backdrop-blur z-40 pt-safe-t">
-            <div class="flex items-center h-16 px-4 sm:px-8">
-                <button @click="showMenu=!showMenu" class="hidden sm:block lg:hidden p-2 rounded hover:bg-base-200">
-                    <Bars3Icon class="w-6 h-6"/>
-                </button>
-                <Link :href="route('home')" class="hidden lg:block mx-auto lg:mx-0">
-                    <img src="/logo.png" class="h-9 sm:h-12"/>
-                </Link>
-                <div class="hidden sm:flex ml-8 space-x-6">
-                    <Link :href="route('gallery.index')" class="flex items-center gap-1">
-                        <HomeIcon class="w-6 h-6"/> Галерея
-                    </Link>
-                    <Link v-if="isAuth" :href="route('studio.index')" class="flex items-center gap-1">
-                        <PlusCircleIcon class="w-6 h-6"/> Студия
-                    </Link>
-                </div>
+        <nav class="sticky top-0 bg-base-100 backdrop-blur z-40 pt-safe-t">
+            <div class="relative flex items-center h-16 px-4 sm:px-8">
+                <!-- Left -->
+                <div class="flex items-center gap-4">
 
-                <!-- Search -->
-                <div class="hidden sm:block mx-auto w-1/2 px-4 relative">
-                    <div
-                        class="input input-bordered flex items-center px-3 py-2 cursor-pointer"
-                        @click="searchModal?.open()"
-                    >
-                        <MagnifyingGlassIcon class="w-5 h-5 text-base-content/50 mr-2"/>
-                        <span class="text-base-content/50">Поиск...</span>
+                    <!-- Logo -->
+                    <Link :href="route('home')" class="hidden lg:block">
+                        <img src="/logo.png" class="h-9 sm:h-12" />
+                    </Link>
+
+                    <!-- Навигация -->
+                    <div class="hidden lg:flex ml-4 space-x-6">
+                        <Link :href="route('gallery.index')" class="flex items-center gap-1 hover:underline">
+                            <PhotoIcon class="w-5 h-5" /> Галерея
+                        </Link>
+                        <Link v-if="isAuth" :href="route('studio.index')" class="flex items-center gap-1 hover:underline">
+                            <PlusCircleIcon class="w-5 h-5" /> Студия
+                        </Link>
                     </div>
                 </div>
-                <SearchOverlay ref="searchModal"/>
-                <div class="flex items-center ml-auto space-x-2">
-                    <button
-                        class="sm:hidden p-2 rounded hover:bg-base-200"
+
+                <!-- Center -->
+                <div class="hidden lg:flex flex-1 justify-center px-2">
+                    <div
+                        class="w-full max-w-3xl bg-base-300 hover:bg-base-200 transition rounded-xl px-5 py-3 flex items-center gap-3 cursor-pointer shadow-sm"
                         @click="searchModal?.open()"
                     >
-                        <MagnifyingGlassIcon class="w-6 h-6"/>
-                    </button>
+                        <MagnifyingGlassIcon class="w-6 h-6 text-base-content/80" />
+                        <span class="text-base-content text-lg font-medium">Поиск...</span>
+                    </div>
+                </div>
+
+                <SearchOverlay ref="searchModal" />
+                <div class="block lg:hidden w-full pe-4 py-2">
+                    <div
+                        class="bg-base-300 hover:bg-base-200 transition rounded-xl px-5 py-3 flex items-center gap-3 cursor-pointer shadow-sm"
+                        @click="searchModal?.open()"
+                    >
+                        <MagnifyingGlassIcon class="w-6 h-6 text-base-content/80" />
+                        <span class="text-base-content text-base font-medium">Поиск...</span>
+                    </div>
+                </div>
+                <!-- Right -->
+                <div class="flex items-center ml-auto space-x-2">
                     <button @click="isDark=!isDark" class="hidden sm:block p-2 rounded hover:bg-base-200">
                         <component :is="isDark?SunIcon:MoonIcon" class="w-6 h-6"/>
                     </button>
 
-                    <!-- Notifications -->
                     <NotificationBell />
-
-                    <!-- Messages -->
                     <Link :href="route('messenger.index')" class="relative p-2 rounded hover:bg-base-200">
                         <ChatBubbleLeftIcon class="w-6 h-6"/>
                         <span v-if="msgUnread" class="badge badge-xs badge-primary absolute -top-0.5 -right-0.5">
-                          {{ msgUnread }}
-                        </span>
+                    {{ msgUnread }}
+                </span>
                     </Link>
 
-                    <!-- User dropdown / login -->
                     <template v-if="isAuth">
-                        <Dropdown align="right" width="48">
-                            <template #trigger>
-                                <img :src="user.profile_photo_url" class="w-8 h-8 rounded-full object-cover"/>
-                            </template>
-                            <template #content>
-                                <DropdownLink :href="route('dashboard')">Панель управления</DropdownLink>
-                                <DropdownLink :href="`/profile/${user.id}`">Моя страница</DropdownLink>
-                                <DropdownLink :href="route('profile.show')">Настройки</DropdownLink>
-                                <div class="border-t my-2"></div>
-                                <form @submit.prevent="logout">
-                                    <DropdownLink as="button" type="submit">
-                                        Выход
-                                    </DropdownLink>
-                                </form>
-                            </template>
-                        </Dropdown>
+                        <div class="dropdown dropdown-end hidden lg:block">
+                            <div tabindex="0" role="button">
+                                <img :src="user.profile_photo_url" class="w-8 h-8 rounded-full object-cover" />
+                            </div>
+                            <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-50 w-64 p-2 shadow-md">
+                                <li>
+                                    <a :href="route('dashboard')" class="flex items-center gap-2">
+                                        <HomeIcon class="w-5 h-5" />
+                                        Панель управления
+                                    </a>
+                                </li>
+                                <li>
+                                    <a :href="`/profile/${user.id}`" class="flex items-center gap-2">
+                                        <UserIcon class="w-5 h-5" />
+                                        Моя страница
+                                    </a>
+                                </li>
+                                <li>
+                                    <a :href="route('profile.show')" class="flex items-center gap-2">
+                                        <Cog6ToothIcon class="w-5 h-5" />
+                                        Настройки
+                                    </a>
+                                </li>
+                                <li>
+                                    <button @click="isDark = !isDark" class="flex items-center gap-2">
+                                        <component :is="isDark ? SunIcon : MoonIcon" class="w-5 h-5" />
+                                        Тема
+                                    </button>
+                                </li>
+                                <li><hr class="my-1" /></li>
+                                <li>
+                                    <form @submit.prevent="logout">
+                                        <button type="submit" class="flex items-center gap-2 text-error hover:bg-error/10">
+                                            <ArrowRightOnRectangleIcon class="w-5 h-5" />
+                                            Выход
+                                        </button>
+                                    </form>
+                                </li>
+                            </ul>
+                        </div>
                     </template>
-                    <button v-else class="btn btn-primary btn-sm" @click="actions.showAuthModal=true">Войти</button>
-                </div>
-            </div>
 
-            <!-- Mobile menu -->
-            <transition name="fade">
-                <div v-show="showMenu" class="sm:hidden bg-base-200 px-4 py-3 space-y-2">
-                    <Link :href="route('gallery.index')" class="flex items-center gap-2 py-2">
-                        <HomeIcon class="w-6 h-6"/> Галерея
-                    </Link>
-                    <Link v-if="isAuth" :href="route('studio.index')" class="flex items-center gap-2 py-2">
-                        <PlusCircleIcon class="w-6 h-6"/> Студия
-                    </Link>
-                    <button @click="isDark=!isDark" class="flex items-center gap-2 py-2">
-                        <component :is="isDark?SunIcon:MoonIcon" class="w-6 h-6"/> Тема
+                    <button
+                        v-else
+                        class="btn btn-primary btn-sm hidden lg:inline-flex"
+                        @click="actions.showAuthModal = true"
+                    >
+                        Войти
                     </button>
                 </div>
-            </transition>
+            </div>
         </nav>
         <div
             v-if="isLoading"
@@ -210,7 +230,7 @@ function logout() {
         <AuthModal :show="actions.showAuthModal" @close="actions.showAuthModal = false" />
 
         <!-- Drawer для профиля -->
-        <div class="drawer drawer-end z-50 lg:hidden">
+        <div class="drawer drawer-end z-50 lg:hidden pt-safe-t">
             <input id="profile-drawer" type="checkbox" class="drawer-toggle" />
             <div class="drawer-side">
                 <label for="profile-drawer" class="drawer-overlay"></label>

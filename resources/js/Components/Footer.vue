@@ -1,5 +1,5 @@
 <template>
-    <footer class="bg-base-200 text-base-content border-t border-base-300">
+    <footer class="bg-base-200 text-base-content border-t border-base-300 lg:pb-0 pb-12">
         <div class="max-w-7xl mx-auto px-6 py-8 grid gap-6 sm:grid-cols-2 md:grid-cols-4">
             <div>
                 <h3 class="font-bold mb-2">Навигация</h3>

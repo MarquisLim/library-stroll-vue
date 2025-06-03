@@ -3,7 +3,7 @@
     <a
         ref="rootEl"
         :href="draft ? '/studio' : `/artworks/${art.id}`"
-        class="relative group break-inside-avoid block transition-transform duration-300 ease-in-out hover:scale-105"
+        class="relative group break-inside-avoid block transition-transform duration-300 ease-in-out md:hover:scale-105"
         @mouseenter="hover = true"
         @mouseleave="hover = false"
         @touchstart="mobileHover = true"
@@ -49,7 +49,7 @@
 
         <!-- dark overlay -->
         <div
-            class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-opacity pointer-events-none"
+            class="absolute inset-0 bg-black bg-opacity-0 md:group-hover:bg-opacity-50 transition-opacity pointer-events-none"
         ></div>
 
         <!-- desktop hover info -->
@@ -122,7 +122,7 @@
 
         <!-- mobile footer -->
         <div
-            class="block md:hidden bg-base-200/80 dark:bg-black/60 text-base-content dark:text-white px-2 py-1 rounded-b flex items-center justify-between"
+            class="block md:hidden bg-white/90 dark:bg-black/60 text-base-content dark:text-white px-2 py-1 rounded-b flex items-center justify-between shadow"
         >
             <div class="flex items-center space-x-2 overflow-hidden pr-1 flex-1">
                 <img
