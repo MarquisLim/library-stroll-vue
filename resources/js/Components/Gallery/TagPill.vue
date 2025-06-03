@@ -4,12 +4,15 @@
         :class="[
       active
         ? 'bg-primary text-primary-content'
-        : 'bg-base-200 text-base-content hover:bg-base-300'
+        : 'bg-gray-100 text-gray-700 hover:bg-gray-200 md:bg-base-200 md:text-base-content md:hover:bg-base-300'
     ]"
-        class="flex items-center rounded-full overflow-hidden text-base font-medium max-w-[260px] h-12"
+        class="flex items-center rounded-full overflow-hidden font-medium whitespace-nowrap
+           text-sm md:text-base
+           max-w-[200px] md:max-w-[260px]
+           h-10 md:h-12"
     >
         <!-- Thumb -->
-        <div class="w-12 h-12 flex-shrink-0 overflow-hidden rounded-full ring ring-base-content/10">
+        <div class="w-10 h-10 md:w-12 md:h-12 flex-shrink-0 overflow-hidden rounded-full ring ring-base-content/10">
             <img
                 v-if="tag.thumb"
                 :src="tag.thumb"
@@ -19,7 +22,7 @@
         </div>
 
         <!-- Label -->
-        <span class="px-4 max-w-[160px] overflow-hidden whitespace-nowrap text-ellipsis block">
+        <span class="px-3 md:px-4 max-w-[120px] md:max-w-[160px] overflow-hidden whitespace-nowrap text-ellipsis">
       {{ tag.name }}
     </span>
     </button>
@@ -27,7 +30,7 @@
 
 <script setup>
 defineProps({
-    tag   : Object,
-    active: Boolean
+    tag: Object,
+    active: Boolean,
 })
 </script>

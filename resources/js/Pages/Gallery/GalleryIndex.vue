@@ -66,15 +66,6 @@ function appendItems(newItems) {
         <!-- панель фильтров -->
         <div class="flex items-center mb-4 px-4 py-2">
             <FilterDrawer v-model="filters" />
-            <button
-                @click="selectAllTags"
-                :class="tag==='all'
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'"
-                class="h-12 px-5 rounded-full font-medium whitespace-nowrap me-3"
-            >
-                Все
-            </button>
             <TagSlider class="flex-1" v-model="tag" :tags="visibleTags" />
         </div>
 

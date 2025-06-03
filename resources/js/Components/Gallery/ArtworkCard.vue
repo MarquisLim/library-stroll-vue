@@ -20,7 +20,7 @@
             <template v-if="!showVideo">
                 <img
                     :src="thumbOrOriginal"
-                    class="w-full object-cover rounded"
+                    class="w-full object-cover md:rounded rounded-t-lg"
                     loading="lazy"
                     :alt="art.title"
                 />
@@ -30,7 +30,7 @@
                     :poster="thumbOrOriginal"
                     :src="previewSrc"
                     preload="metadata"
-                    class="w-full object-cover rounded"
+                    class="w-full object-cover md:rounded rounded-t-lg"
                     muted
                     autoplay
                     loop
@@ -121,9 +121,7 @@
         </div>
 
         <!-- mobile footer -->
-        <div
-            class="block md:hidden bg-white/90 dark:bg-black/60 text-base-content dark:text-white px-2 py-1 rounded-b flex items-center justify-between shadow"
-        >
+        <div class="block md:hidden bg-black/80 text-white px-3 py-2 rounded-b-lg shadow-lg z-10 flex items-center justify-between">
             <div class="flex items-center space-x-2 overflow-hidden pr-1 flex-1">
                 <img
                     :src="art.user.profile_photo_url"
