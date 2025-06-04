@@ -114,7 +114,7 @@ onMounted(() => {
                 />
                 <h2 class="text-4xl font-bold text-white mb-6">Скачать приложение</h2>
                 <a
-                    href="/app/library_stroll.apk"
+                    href="/app/library_stroll_02.apk"
                     download
                     class="btn btn-primary inline-flex items-center gap-2"
                 >
