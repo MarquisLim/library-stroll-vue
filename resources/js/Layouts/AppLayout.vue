@@ -114,7 +114,7 @@ function logout() {
 
                     <!-- Logo -->
                     <Link :href="route('home')" class="hidden lg:block">
-                        <img src="/logo.png" class="h-9 sm:h-12" />
+                        <img src="/logo.png?v=2" alt="logo" class="h-9 sm:h-12" />
                     </Link>
 
                     <!-- Навигация -->
