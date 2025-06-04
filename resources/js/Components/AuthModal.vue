@@ -59,7 +59,7 @@ function submitRegister() {
             <button @click="dialogRef.close()" class="btn btn-sm btn-circle absolute right-2 top-2">✕</button>
 
             <div class="flex justify-center mb-4">
-                <img src="/logo.png" alt="Logo" class="h-16 w-auto" />
+                <img src="/logo.png" alt="Logo" class="h-10 w-auto" />
             </div>
 
             <div class="tabs tabs-boxed w-full mb-4">

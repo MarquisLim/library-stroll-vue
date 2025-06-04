@@ -194,8 +194,14 @@ onMounted(async () => {
                         playsinline
                         @contextmenu.prevent
                     />
+                    <img
+                        v-else-if="artwork.media[0]?.mime_type === 'image/gif'"
+                        :src="artwork.media[0]?.original_url"
+                        class="max-h-[80vh] w-full rounded-xl select-none object-contain"
+                        draggable="false"
+                        @contextmenu.prevent
+                    />
 
-                    <!-- protected canvas for image -->
                     <canvas
                         v-else
                         ref="canvasRef"

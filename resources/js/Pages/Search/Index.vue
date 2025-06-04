@@ -1,3 +1,4 @@
+<!-- resources/js/Pages/Search/Index.vue -->
 <template>
     <AppLayout :title="query ? `Поиск – ${query}` : 'Поиск'">
         <div class="p-4 bg-base-100 dark:bg-base-900 text-base-content dark:text-base-content min-h-screen">
@@ -11,14 +12,14 @@
                 <button
                     v-for="t in tabs"
                     :key="t"
-                    :class="current===t
+                    :class="current === t
             ? 'border-b-2 border-primary text-primary pb-1'
             : 'text-base-content/60 hover:text-base-content pb-1'"
                     @click="current = t"
                 >
-                    {{ t==='artworks' ? 'Работы'
-                    : t==='tags'     ? 'Теги'
-                        :                  'Авторы' }}
+                    {{ t === 'artworks' ? 'Работы'
+                    : t === 'tags'     ? 'Теги'
+                        :                    'Авторы' }}
                     <span v-if="counts[t]" class="ml-1 text-xs text-base-content/50">
             ({{ counts[t] }})
           </span>
@@ -27,7 +28,7 @@
 
             <!-- Работы -->
             <MasonryGrid
-                v-if="current==='artworks'"
+                v-if="current === 'artworks'"
                 :items="artworksRaw"
                 class="mb-8"
             >
@@ -35,10 +36,13 @@
                     <ArtworkCard :art="item" />
                 </template>
             </MasonryGrid>
+            <p v-else-if="current === 'artworks'" class="text-base-content/50 mb-8">
+                Работы не найдены
+            </p>
 
             <!-- Теги -->
             <MasonryGrid
-                v-if="current==='tags' && tagArtworks.length"
+                v-if="current === 'tags' && tagArtworks.length"
                 :items="tagArtworks"
                 class="mb-8"
             >
@@ -46,21 +50,23 @@
                     <ArtworkCard :art="item" />
                 </template>
             </MasonryGrid>
-            <p v-else-if="current==='tags'" class="text-base-content/50 mb-8">
+            <p v-else-if="current === 'tags'" class="text-base-content/50 mb-8">
                 Нет работ по тегам
             </p>
 
             <!-- Авторы -->
-            <div
-                v-if="current==='authors'"
-                class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-8"
-            >
-                <AuthorCard
-                    v-for="a in authors"
-                    :key="a.id"
-                    :author="a"
-                />
-            </div>
+            <template v-if="current === 'authors'">
+                <div v-if="authors.length" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-8">
+                    <AuthorCard
+                        v-for="a in authors"
+                        :key="a.id"
+                        :author="a"
+                    />
+                </div>
+                <p v-else class="text-base-content/50 mb-8">
+                    Авторы не найдены
+                </p>
+            </template>
 
             <!-- Рекомендации, если совсем ничего -->
             <template v-if="!artworksRaw.length && !tagArtworks.length && !authors.length">
@@ -102,10 +108,12 @@ const tabs    = ['artworks','tags','authors']
 const current = ref('artworks')
 
 watchEffect(() => {
-    if (!artworksRaw.length && tagArtworks.value.length)
+    if (!artworksRaw.length && tagArtworks.value.length) {
         current.value = 'tags'
-    if (!artworksRaw.length && !tagArtworks.value.length && authors.length)
+    }
+    if (!artworksRaw.length && !tagArtworks.value.length && authors.length) {
         current.value = 'authors'
+    }
 })
 
 const counts = computed(() => ({

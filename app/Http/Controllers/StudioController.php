@@ -15,6 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class StudioController extends Controller
@@ -182,7 +183,6 @@ class StudioController extends Controller
         $q  = Artwork::where('user_id',$u->id);
 
         /* ---------- фильтры ---------- */
-        /* статус: published | draft | all */
         if ($r->status === 'published') $q->where('is_published',true);
         if ($r->status === 'draft')     $q->where('is_published',false);
 
@@ -199,13 +199,14 @@ class StudioController extends Controller
             $q->where('title','like','%'.$r->search.'%');
 
         /* ---------- сортировка ---------- */
-        $sort = in_array($r->sort,['views','likes']) ? $r->sort : 'updated';
+        $sort = in_array($r->sort,['views','likes', 'updated']) ? $r->sort : 'created';
         $dir  = $r->dir === 'asc' ? 'asc' : 'desc';
 
         match ($sort) {
-            'views' => $q->orderBy('views_count',$dir),
-            'likes' => $q->orderBy('likes_count',$dir),
-            default => $q->orderBy('updated_at',$dir),
+            'views'     => $q->orderBy('views_count',$dir),
+            'likes'     => $q->orderBy('likes_count',$dir),
+            'updated'   => $q->orderBy('updated_at',$dir),
+            default => $q->orderBy('created_at',$dir),
         };
 
         /* ---------- пагинация ---------- */
@@ -234,13 +235,14 @@ class StudioController extends Controller
                         .($tags->count()>2 ? ' +' . ($tags->count()-2) : ''),
                     'thumb_url'     => $a->thumb_url,
                     'original_url'     => $a->original_url,
+                    'updated_date'     => $a->updated_at,
                 ];
             });
 
         return inertia('Studio/Manager', [
             'artworks' => $artworks,
             'filters'  => $r->only('visibility','type','search','status','sort','dir')
-                + ['visibility'=>'all','type'=>'all','status'=>'all','sort'=>'updated','dir'=>'desc'],
+                + ['visibility'=>'all','type'=>'all','status'=>'all','sort'=>'created','dir'=>'desc'],
             'collections'=> Collection::where('user_id',$u->id)->orderBy('name')->get(['id','name']),
         ]);
     }
@@ -249,61 +251,64 @@ class StudioController extends Controller
     {
         $user = $request->user();
 
-        // фильтры
         $filters = $request->validate([
-            'visibility' => 'nullable|in:all,public,private',
-            'search'     => 'nullable|string|max:100',
-            'sort'       => 'nullable|in:updated,items',
-            'dir'        => 'nullable|in:asc,desc',
-            'page'       => 'nullable|integer',
+            'visibility' => ['nullable', 'in:all,public,private'],
+            'search'     => ['nullable', 'string', 'max:100'],
+            'sort'       => ['nullable', Rule::in(['created', 'items', 'updated'])],
+            'dir'        => ['nullable', 'in:asc,desc'],
+            'page'       => ['nullable', 'integer'],
         ]);
 
         $query = Collection::where('user_id', $user->id)
             ->withCount('artworks')
             ->with(['artworks.media' => fn($q) => $q->take(1)]);
 
-        if (($filters['visibility'] ?? 'all') !== 'all') {
-            $query->where('is_private', $filters['visibility'] === 'private');
+        $visibility = $filters['visibility'] ?? 'all';
+        if ($visibility !== 'all') {
+            $query->where('is_private', $visibility === 'private');
         }
 
         if (!empty($filters['search'])) {
             $query->where('name', 'like', '%'.$filters['search'].'%');
         }
 
-        // сортировка
-        $sort = $filters['sort'] ?? 'updated';
+        $sort = $filters['sort'] ?? 'created';
         $dir  = $filters['dir']  ?? 'desc';
-        if ($sort === 'items') {
-            $query->orderBy('artworks_count', $dir);
-        } else {
-            $query->orderBy('updated_at', $dir);
-        }
 
-        $collections = $query->paginate(10)->through(function ($c) {
-            $thumb = '';
-            if ($c->artworks->isNotEmpty()) {
-                $media = $c->artworks->first()->getFirstMedia('artworks');
-                $thumb = $media?->getFullUrl('thumb') ?? $media?->getFullUrl();
-            }
-            return [
-                'id'            => $c->id,
-                'name'          => $c->name,
-                'is_private'    => (bool) $c->is_private,
-                'artworks_count'=> $c->artworks_count,
-                'thumb'         => $thumb,
-                'updated_at'    => $c->updated_at,
-            ];
-        });
+        match ($sort) {
+            'items'   => $query->orderBy('artworks_count', $dir),
+            'updated' => $query->orderBy('updated_at',      $dir),
+            default   => $query->orderBy('created_at',      $dir),
+        };
+
+        $collections = $query
+            ->paginate(10)
+            ->withQueryString()
+            ->through(function ($c) {
+                $thumb = '';
+                if ($c->artworks->isNotEmpty()) {
+                    $media = $c->artworks->first()->getFirstMedia('artworks');
+                    $thumb = $media?->getFullUrl('thumb') ?? $media?->getFullUrl();
+                }
+
+                return [
+                    'id'              => $c->id,
+                    'name'            => $c->name,
+                    'is_private'      => (bool) $c->is_private,
+                    'artworks_count'  => $c->artworks_count,
+                    'thumb'           => $thumb,
+                    'updated_date'    => $c->updated_at,
+                ];
+            });
 
         return Inertia::render('Studio/CollectionManager', [
             'collections' => $collections,
             'filters'     => [
                 'visibility' => $filters['visibility'] ?? 'all',
-                'search'     => $filters['search'] ?? '',
+                'search'     => $filters['search']     ?? '',
                 'sort'       => $sort,
                 'dir'        => $dir,
             ],
         ]);
     }
-
 }

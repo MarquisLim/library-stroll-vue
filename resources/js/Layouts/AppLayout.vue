@@ -2,8 +2,6 @@
 import { Head, Link, usePage, router } from '@inertiajs/vue3'
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import axios from 'axios'
-import Dropdown from '@/Components/Dropdown.vue'
-import DropdownLink from '@/Components/DropdownLink.vue'
 import GlobalModals from '@/Components/Common/GlobalModals.vue'
 import Footer from '@/Components/Footer.vue'
 import AuthModal from '@/Components/AuthModal.vue'
@@ -114,7 +112,7 @@ function logout() {
 
                     <!-- Logo -->
                     <Link :href="route('home')" class="hidden lg:block">
-                        <img src="/logo.png?v=2" alt="logo" class="h-9 sm:h-12" />
+                        <img src="/logo.png?v=2" alt="logo" class="h-9 sm:h-10" />
                     </Link>
 
                     <!-- Навигация -->
@@ -151,7 +149,7 @@ function logout() {
                 </div>
                 <!-- Right -->
                 <div class="flex items-center ml-auto space-x-2">
-                    <button @click="isDark=!isDark" class="hidden sm:block p-2 rounded hover:bg-base-200">
+                    <button @click="isDark=!isDark" class="p-2 rounded hover:bg-base-200">
                         <component :is="isDark?SunIcon:MoonIcon" class="w-6 h-6"/>
                     </button>
 
@@ -230,12 +228,12 @@ function logout() {
         <AuthModal :show="actions.showAuthModal" @close="actions.showAuthModal = false" />
 
         <!-- Drawer для профиля -->
-        <div class="drawer drawer-end z-50 lg:hidden pt-safe-t">
+        <div class="drawer drawer-end z-50 lg:hidden">
             <input id="profile-drawer" type="checkbox" class="drawer-toggle" />
             <div class="drawer-side">
                 <label for="profile-drawer" class="drawer-overlay"></label>
                 <div class="menu bg-base-200 w-80 min-h-full p-4 space-y-2">
-                    <div class="flex items-center gap-3 mb-4">
+                    <div class="flex items-center gap-3 mb-4 pt-safe-t">
                         <label for="profile-drawer" class="btn btn-ghost btn-sm p-0">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none"
                                  viewBox="0 0 24 24" stroke="currentColor">

@@ -1,4 +1,5 @@
 <script setup>
+import axios             from 'axios'
 import { Head, Link, router, usePage } from '@inertiajs/vue3'
 import { ref, watch, computed } from 'vue'
 
@@ -9,42 +10,37 @@ import { useArtworkActions } from '@/stores/useArtworkActions'
 
 defineOptions({ layout: DashboardLayout })
 
-// props
 const props = defineProps({
     artworks: Object,
     filters: Object,
     collections: Array,
 })
 
-// filters state
 const visibility = ref(props.filters.visibility)
 const type       = ref(props.filters.type)
 const status     = ref(props.filters.status)
 const search     = ref(props.filters.search)
 const sort       = ref(props.filters.sort)
 const dir        = ref(props.filters.dir)
-const page = usePage()
+const page       = usePage()
 
-// computed
 const hasActiveFilters = computed(() =>
     visibility.value !== 'all' ||
     type.value       !== 'all' ||
     status.value     !== 'all' ||
-    sort.value       !== 'updated' ||
+    sort.value       !== 'created' ||
     dir.value        !== 'desc'
 )
 
-// sync collections
 const { setCollections } = useArtworkActions()
-if (props.collections?.length) setCollections(props.collections)
+if (props.collections?.length) {
+    setCollections(props.collections)
+}
 
 const isAdmin = computed(() => page.props.isAdminView === true)
 
-// fetch helper
 function fetch(pageNum = 1) {
-    const routeName = isAdmin.value
-        ? 'admin.artworks.manager'
-        : 'studio.manager'
+    const routeName = isAdmin.value ? 'admin.artworks.manager' : 'studio.manager'
 
     router.get(
         route(routeName),
@@ -64,9 +60,9 @@ function fetch(pageNum = 1) {
         }
     )
 }
+
 watch([visibility, type, status], () => fetch())
 
-// sorting
 function toggle(col) {
     if (sort.value === col) {
         dir.value = dir.value === 'asc' ? 'desc' : 'asc'
@@ -77,21 +73,21 @@ function toggle(col) {
     fetch()
 }
 
-// reset
 function resetFilters() {
     visibility.value = 'all'
     type.value       = 'all'
     status.value     = 'all'
     search.value     = ''
-    sort.value       = 'updated'
+    sort.value       = 'created'
     dir.value        = 'desc'
     fetch()
 }
 
-// modals
+// модалки
 const editArt = ref(null)
 const delId   = ref(null)
-const saved   = () => fetch(props.artworks.current_page)
+
+const saved = () => fetch(props.artworks.current_page)
 </script>
 
 <template>
@@ -150,6 +146,7 @@ const saved   = () => fetch(props.artworks.current_page)
                 </div>
             </div>
         </section>
+
         <div>
             <button
                 v-if="hasActiveFilters"
@@ -210,12 +207,18 @@ const saved   = () => fetch(props.artworks.current_page)
                     </th>
                     <th class="text-center">Доступ</th>
                     <th @click="toggle('views')" class="text-center cursor-pointer">
-                        <i class="mdi mdi-eye-outline"></i> <SortIcon v-if="sort==='views'" :dir="dir"/>
+                        <i class="mdi mdi-eye-outline"></i>
+                        <SortIcon v-if="sort==='views'" :dir="dir"/>
                     </th>
                     <th @click="toggle('likes')" class="text-center cursor-pointer">
-                        <i class="mdi mdi-heart-outline"></i> <SortIcon v-if="sort==='likes'" :dir="dir"/>
+                        <i class="mdi mdi-heart-outline"></i>
+                        <SortIcon v-if="sort==='likes'" :dir="dir"/>
                     </th>
                     <th class="text-center">Статус</th>
+                    <th @click="toggle('updated')" class="text-center cursor-pointer">
+                        Дата обновления
+                        <SortIcon v-if="sort==='updated'" :dir="dir"/>
+                    </th>
                     <th></th>
                 </tr>
                 </thead>
@@ -226,7 +229,7 @@ const saved   = () => fetch(props.artworks.current_page)
                     class="hover"
                 >
                     <td>{{ props.artworks.from + i }}</td>
-                    <td><img :src="a.thumb_url" class="h-12 w-12 rounded mx-auto"/></td>
+                    <td><img :src="a.thumb_url" class="h-12 w-12 rounded mx-auto object-cover"/></td>
                     <td class="text-left">
                         <Link
                             :href="a.is_published ? route('artworks.show', a.id) : route('studio.index')"
@@ -240,8 +243,8 @@ const saved   = () => fetch(props.artworks.current_page)
                             <span class="badge badge-outline m-1">{{ tag.name }}</span>
                         </template>
                         <span v-if="a.tags.length > 2" class="badge badge-outline">
-                +{{ a.tags.length - 2 }}
-              </span>
+                            +{{ a.tags.length - 2 }}
+                        </span>
                     </td>
                     <td class="text-center">{{ a.type==='image' ? 'Изобр.' : 'Видео' }}</td>
                     <td class="text-center">
@@ -252,6 +255,9 @@ const saved   = () => fetch(props.artworks.current_page)
                     <td class="text-center">
                         <span v-if="a.is_published" class="badge badge-success">Опубл.</span>
                         <span v-else class="badge badge-warning">Черн.</span>
+                    </td>
+                    <td class="text-center">
+                        <span>{{ a.updated_date ? new Date(a.updated_date).toLocaleString() : '—' }}</span>
                     </td>
                     <td class="space-x-1 text-center">
                         <button @click="editArt = a" class="btn btn-ghost btn-sm">
@@ -266,7 +272,7 @@ const saved   = () => fetch(props.artworks.current_page)
             </table>
         </div>
 
-        <!-- Mobile pagination -->
+        <!-- Пагинация для мобильных -->
         <nav v-if="props.artworks.last_page > 1" class="flex justify-between items-center md:hidden mt-4">
             <button
                 @click="fetch(props.artworks.current_page - 1)"
@@ -284,7 +290,7 @@ const saved   = () => fetch(props.artworks.current_page)
             </button>
         </nav>
 
-        <!-- Desktop pagination -->
+        <!-- Пагинация для десктопа -->
         <nav v-if="props.artworks.last_page > 1" class="hidden md:flex justify-center flex-wrap gap-1 pt-4">
             <Link
                 v-for="l in props.artworks.links.filter(l => Number(l.label))"
@@ -304,26 +310,29 @@ const saved   = () => fetch(props.artworks.current_page)
         </nav>
     </div>
 
-    <!-- Modals -->
+    <!-- Модалка редактирования -->
     <EditModal
         :open="Boolean(editArt)"
         :artwork="editArt"
         @close="editArt = null"
         @saved="saved"
     />
+
+    <!-- Модалка удаления -->
     <DeleteModal
-        v-if="delId"
+        :open="Boolean(delId)"
         @close="delId = null"
         @confirm="
-      router.delete(`/studio/draft/${delId}`, {
-        onFinish: () => { delId = null; saved() }
-      })
+        axios.delete(`/studio/draft/${delId}`).then(() => {
+          delId = null
+          saved()
+        })
     "
     />
 </template>
 
 <script>
-// сортировочный значок
+// Значок сортировки
 import { h, defineComponent } from 'vue'
 const SortIcon = defineComponent({
     props: { dir: String },

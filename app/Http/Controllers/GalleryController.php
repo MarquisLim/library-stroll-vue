@@ -17,7 +17,7 @@ class GalleryController extends Controller
 
         $artworks = Artwork::where('is_published', true)
             ->where('is_private', false)
-            ->orderByDesc('updated_at')
+            ->orderByDesc('likes_count')
             ->with(['media', 'user', 'likes', 'tags', 'collections' => function($q) use ($userId) {
                 if($userId){
                     $q->where('user_id', $userId);

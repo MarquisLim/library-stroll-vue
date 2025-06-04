@@ -1,6 +1,10 @@
 <script setup>
 import { useNotifications } from '@/stores/useNotifications'
 import NotifItem from './NotifItem.vue'
+import {computed} from "vue";
+import {usePage} from "@inertiajs/vue3";
+const page = usePage()
+const isAuth = computed(() => !!page.props.auth.user)
 
 const n = useNotifications()
 </script>
@@ -15,7 +19,7 @@ const n = useNotifications()
         <p v-if="!n.list.length" class="p-4 text-center opacity-60">Нет уведомлений</p>
     </div>
 
-    <div class="p-2 space-y-2 bg-base-100">
+    <div class="p-2 space-y-2 bg-base-100" v-if="isAuth">
         <button v-if="n.hasMore" class="btn btn-outline btn-sm w-full" @click.stop="n.load">
             Загрузить ещё
         </button>

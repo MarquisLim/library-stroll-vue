@@ -1,9 +1,8 @@
 <script setup>
 import { Head, Link, router } from '@inertiajs/vue3'
-import { ref, watch, computed } from 'vue'
+import {ref, watch, computed, defineComponent, h} from 'vue'
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 
-// модалки
 import EditModal   from '@/Components/Collections/EditCollectionModal.vue'
 import DeleteModal from '@/Components/Collections/ConfirmDeleteModal.vue'
 import axios from "axios";
@@ -12,20 +11,19 @@ defineOptions({ layout: DashboardLayout })
 
 // -------- props --------
 const props = defineProps({
-    collections: Object,   // paginator
+    collections: Object,
     filters     : Object,
 })
 
-// -------- реактивные фильтры --------
-const visibility = ref(props.filters.visibility) // all / public / private
+const visibility = ref(props.filters.visibility)
 const search     = ref(props.filters.search)
-const sort       = ref(props.filters.sort)       // updated / items
-const dir        = ref(props.filters.dir)        // asc / desc
+const sort       = ref(props.filters.sort)
+const dir        = ref(props.filters.dir)
 
 const hasActiveFilters = computed(() =>
     visibility.value !== 'all' ||
     search.value.trim() !== '' ||
-    sort.value   !== 'updated' ||
+    sort.value   !== 'created' ||
     dir.value    !== 'desc'
 )
 
@@ -54,10 +52,18 @@ function toggle(col) {
 function resetFilters() {
     visibility.value='all'
     search.value=''
-    sort.value='updated'
+    sort.value='created'
     dir.value='desc'
     fetch()
 }
+
+const SortIcon = defineComponent({
+    props: { dir: String },
+    setup(p) {
+        return () =>
+            h('i', { class: p.dir === 'desc' ? 'mdi mdi-chevron-down' : 'mdi mdi-chevron-up' })
+    },
+})
 
 // модалки
 const editCol = ref(null)      // объект коллекции
@@ -102,13 +108,12 @@ const saved   = () => fetch(props.collections.current_page)
                     </button>
                 </div>
             </div>
-
-            <button v-if="hasActiveFilters"
-                    @click="resetFilters"
-                    class="btn btn-xs btn-outline hidden md:inline-flex self-end">
-                <i class="mdi mdi-filter-remove-outline mr-1"></i>Сброс
-            </button>
         </section>
+        <button v-if="hasActiveFilters"
+                @click="resetFilters"
+                class="btn btn-xs btn-outline hidden md:inline-flex self-end">
+            <i class="mdi mdi-filter-remove-outline mr-1"></i>Сброс
+        </button>
 
         <!-- Таблица -->
         <div class="overflow-x-auto rounded-lg shadow">
@@ -122,6 +127,10 @@ const saved   = () => fetch(props.collections.current_page)
                         Работ <i v-if="sort==='items'" :class="dir==='desc' ? 'mdi mdi-chevron-down' : 'mdi mdi-chevron-up'"/>
                     </th>
                     <th class="text-center">Доступ</th>
+                    <th @click="toggle('updated')" class="text-center cursor-pointer">
+                        Дата обновления
+                        <SortIcon v-if="sort==='updated'" :dir="dir"/>
+                    </th>
                     <th></th>
                 </tr>
                 </thead>
@@ -145,6 +154,9 @@ const saved   = () => fetch(props.collections.current_page)
                     <td class="text-center">{{ c.artworks_count }}</td>
                     <td class="text-center">
                         <i :class="c.is_private ? 'mdi mdi-lock text-error' : 'mdi mdi-earth text-success'"/>
+                    </td>
+                    <td class="text-center">
+                        <span>{{ c.updated_date ? new Date(c.updated_date).toLocaleString() : '—' }}</span>
                     </td>
                     <td class="space-x-1 text-center">
                         <button class="btn btn-ghost btn-sm" @click="editCol = c">
@@ -188,8 +200,8 @@ const saved   = () => fetch(props.collections.current_page)
                  :collection="delCol"
                  @close="delCol = null"
                  @confirmed="() => {
-  axios.delete(`/collections/${delCol.id}`)
-       .then(() => saved())
-       .finally(() => delCol = null)
-               }" />
+                  axios.delete(`/collections/${delCol.id}`)
+                       .then(() => saved())
+                       .finally(() => delCol = null)
+                               }" />
 </template>
