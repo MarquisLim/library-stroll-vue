@@ -1,3 +1,4 @@
+// resources/js/stores/useNotifications.js
 import { defineStore } from 'pinia'
 import { ref, nextTick } from 'vue'
 import axios from 'axios'
@@ -11,8 +12,11 @@ export const useNotifications = defineStore('notifications', () => {
     const page    = ref(1)
     const hasMore = ref(true)
     const show    = ref(false)
-    const box     = ref(null)              // контейнер со скроллом
+    const box     = ref(null)
     const isMobile = ref(window.innerWidth < 640)
+
+    // флаг, чтобы не подписываться дважды
+    const _subscribed = ref(false)
 
     /* --- helpers --- */
     function syncUnread() {
@@ -43,7 +47,6 @@ export const useNotifications = defineStore('notifications', () => {
         unread.value = 0
     }
 
-    /** отмечаем элементы, которые целиком видны в `box` */
     function markVisible() {
         nextTick(() => {
             const el = box.value
@@ -56,18 +59,21 @@ export const useNotifications = defineStore('notifications', () => {
         })
     }
 
-    /* --- Echo подписка --- */
+    /** запускаем подписку по Echo один раз */
     function initEcho() {
-        const page   = usePage()
-        const userId = page.props.auth.user?.id
-        if (!userId || !window.Echo) return   // нет Echo → тихо выходим
+        const pageData = usePage()
+        const userId = pageData.props.auth.user?.id
 
-        load()                                // первая страница
+        if (!userId || !window.Echo || _subscribed.value) {
+            return
+        }
 
-        // теперь подписываемся
+        _subscribed.value = true
+        load() // подгружаем первую страницу списка уведомлений
+
         window.Echo.private(`user.${userId}`)
             .notification(n => {
-                // получаем стандартный payload BroadcastNotificationCreated
+                // payload из BroadcastNotificationCreated
                 list.value.unshift({
                     id:         n.id,
                     type:       n.type.split('\\').pop(),

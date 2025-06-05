@@ -1,33 +1,33 @@
-// resources/js/stores/artworkActions.js
+// resources/js/stores/useArtworkActions.js
+
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import axios from 'axios'
 import { usePage } from '@inertiajs/vue3'
 
 export const useArtworkActions = defineStore('artworkActions', () => {
-    const collections     = ref([])
-    const showSelector    = ref(false)
-    const selectorPos     = ref({ top: 0, left: 0 })
-    const selectedArt     = ref(null)
+    /* state */
+    const collections       = ref([])
+    const showSelector      = ref(false)
+    const selectorPos       = ref({ top: 0, left: 0 })
+    const selectedArt       = ref(null)
+    // toast как объект { visible, message, type }
+    const toast             = ref({ visible: false, message: '', type: 'success' })
+    const showCreateModal   = ref(false)
+    const pageData          = usePage()
+    const showAuthModal     = ref(false)
+    const pendingAction     = ref(null)
 
-    // toast: { message, type, visible }
-    const toast           = ref({ message: '', type: 'success', visible: false })
-
-    const showCreateModal = ref(false)
-    const page            = usePage()
-    const showAuthModal   = ref(false)
-    const pendingAction   = ref(null)
-
+    // Вспомогательная переменная для управления таймаутом
     let toastTimeout = null
 
-    function notify(message, type = 'success') {
+    /* helpers */
+    function notify(txt, type = 'success') {
+        // Если уже висит таймаут, очищаем, чтобы новый показ был полноценным
         if (toastTimeout) {
             clearTimeout(toastTimeout)
-            toastTimeout = null
         }
-
-        toast.value = { message, type, visible: true }
-
+        toast.value = { visible: true, message: txt, type }
         toastTimeout = setTimeout(() => {
             toast.value.visible = false
             toastTimeout = null
@@ -35,7 +35,7 @@ export const useArtworkActions = defineStore('artworkActions', () => {
     }
 
     function requireAuth(cb) {
-        if (!page.props.auth?.user) {
+        if (!pageData.props.auth?.user) {
             pendingAction.value = cb
             showAuthModal.value = true
             return false
@@ -43,19 +43,33 @@ export const useArtworkActions = defineStore('artworkActions', () => {
         return true
     }
 
+    /* public actions */
     function setCollections(list) {
         collections.value = list
     }
 
     async function toggleLike(art) {
         if (!requireAuth(() => toggleLike(art))) return
+
+        // сохраняем предыдущие значения, чтобы откатить при ошибке
+        const prevCount  = art.likes_count
+        const prevLiked  = art.liked_by_user
+
+        // оптимистично переключаем локальное состояние
+        art.liked_by_user = !prevLiked
+        art.likes_count   = prevLiked ? prevCount - 1 : prevCount + 1
+        notify(art.liked_by_user ? 'Лайкнуто' : 'Лайк удален', 'success')
+
         try {
             const { data } = await axios.post(`/artworks/${art.id}/like`)
+            // синхронизируем с авторитетными данными с сервера
             art.likes_count   = data.likes_count
             art.liked_by_user = data.liked
-            notify(data.liked ? 'Лайкнуто' : 'Лайк удален', 'success')
-        } catch {
-            notify('Не удалось поставить лайк', 'error')
+        } catch (e) {
+            // откатываем на предыдущие значения
+            art.likes_count   = prevCount
+            art.liked_by_user = prevLiked
+            notify('Не удалось поставить/убрать лайк', 'error')
         }
     }
 
@@ -64,7 +78,7 @@ export const useArtworkActions = defineStore('artworkActions', () => {
         selectedArt.value = art
         selectorPos.value = {
             top: rect.bottom + window.scrollY,
-            left: rect.left   + window.scrollX
+            left: rect.left   + window.scrollX,
         }
         showSelector.value = true
     }
@@ -78,17 +92,13 @@ export const useArtworkActions = defineStore('artworkActions', () => {
     }
 
     async function saveToCollections(ids) {
-        try {
-            const { data } = await axios.post(
-                `/artworks/${selectedArt.value.id}/add-to-collection`,
-                { collections: ids }
-            )
-            selectedArt.value.in_collections = data.in_collections
-            showSelector.value = false
-            notify('Добавлено в коллекцию', 'success')
-        } catch {
-            notify('Ошибка при сохранении в коллекцию', 'error')
-        }
+        const { data } = await axios.post(
+            `/artworks/${selectedArt.value.id}/add-to-collection`,
+            { collections: ids }
+        )
+        selectedArt.value.in_collections = data.in_collections
+        showSelector.value = false
+        notify('Обновление коллекции успешна', 'success')
     }
 
     function openCreateModal()  { showCreateModal.value = true }
@@ -108,7 +118,6 @@ export const useArtworkActions = defineStore('artworkActions', () => {
         selectedArt,
         toast,
         showCreateModal,
-
         setCollections,
         toggleLike,
         openSelector,
@@ -118,6 +127,6 @@ export const useArtworkActions = defineStore('artworkActions', () => {
         openCreateModal,
         addNewCollection,
         closeCreateModal,
-        notify
+        notify,
     }
 })

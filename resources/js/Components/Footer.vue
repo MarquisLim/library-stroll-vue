@@ -21,7 +21,7 @@
 
             <div>
                 <h3 class="font-bold mb-2">Контакты</h3>
-                <p class="text-sm">1333guesswhp1333@gmail.com</p>
+                <p class="text-sm">1333guesswho1333@gmail.com</p>
             </div>
 
             <div class="flex flex-col items-center">
