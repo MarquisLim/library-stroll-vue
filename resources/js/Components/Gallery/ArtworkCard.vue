@@ -1,5 +1,4 @@
 <template>
-    <!-- clickable anchor -->
     <a
         ref="rootEl"
         :href="draft ? '/studio' : `/artworks/${art.id}`"
@@ -9,140 +8,119 @@
         @touchstart="mobileHover = true"
         @touchend="mobileHover = false"
     >
-        <!-- draft badge -->
+        <!-- Бейдж «Черновик» -->
         <span
             v-if="draft"
             class="absolute top-2 left-2 z-20 bg-error text-error-content text-xs px-2 py-0.5 rounded-full shadow"
         >Черновик</span>
 
-        <!-- media -->
-        <div class="relative">
+        <!-- Медиа-обёртка -->
+        <div
+            class="relative overflow-hidden w-full bg-base-200 dark:bg-base-800"
+            :style="{ paddingBottom: aspectRatio + '%' }"
+        >
+            <!-- Скелетон -->
+            <div
+                v-if="!loaded"
+                class="absolute inset-0 skeleton animate-pulse"
+            ></div>
+
+            <!-- Статичное изображение (фрейм) -->
             <template v-if="!showVideo">
                 <img
                     :src="thumbOrOriginal"
-                    class="w-full object-cover md:rounded rounded-t-lg"
-                    loading="lazy"
                     :alt="art.title"
+                    loading="lazy"
+                    class="absolute inset-0 w-full h-full object-cover md:rounded rounded-t-lg transition-opacity duration-300"
+                    :class="{ 'opacity-0': !loaded, 'opacity-100': loaded }"
+                    @load="onLoad"
                 />
             </template>
+
+            <!-- Короткое превью-видео -->
             <template v-else>
                 <video
                     :poster="thumbOrOriginal"
                     :src="previewSrc"
                     preload="metadata"
-                    class="w-full object-cover md:rounded rounded-t-lg"
-                    muted
-                    autoplay
-                    loop
-                    playsinline
+                    muted autoplay loop playsinline
+                    class="absolute inset-0 w-full h-full object-cover md:rounded rounded-t-lg transition-opacity duration-300"
+                    :class="{ 'opacity-0': !loaded, 'opacity-100': loaded }"
+                    @loadeddata="onLoad"
                 />
             </template>
 
-            <!-- duration -->
+            <!-- Метка длительности видео --------------------------------------->
             <span
                 v-if="art.video_duration_formatted && (!showVideo || isMobile)"
-                class="absolute bottom-2 right-2 bg-black bg-opacity-50 text-white text-[11px] px-1.5 py-0.5 rounded flex items-center"
+                class="absolute bottom-2 right-2 bg-black/50 text-white text-[11px] px-1.5 py-0.5 rounded flex items-center"
             >
         ⏱ {{ art.video_duration_formatted }}
       </span>
         </div>
 
-        <!-- dark overlay -->
+        <!-- Тёмный оверлей для ховера (desktop) ------------------------------->
         <div
             class="absolute inset-0 bg-black bg-opacity-0 md:group-hover:bg-opacity-50 transition-opacity pointer-events-none"
         ></div>
 
-        <!-- desktop hover info -->
+        <!-- Информация при ховере (desktop) ----------------------------------->
         <div
             class="absolute inset-0 hidden md:flex flex-col justify-between p-3 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity"
         >
-            <h3 class="text-white text-lg font-bold truncate" :title="art.title">
-                {{ art.title }}
-            </h3>
+            <h3 class="text-white text-lg font-bold truncate" :title="art.title">{{ art.title }}</h3>
             <div class="flex justify-between items-center text-white">
                 <div class="flex items-center space-x-2 overflow-hidden max-w-full">
-                    <img
-                        :src="art.user.profile_photo_url"
-                        class="h-8 w-8 rounded-full object-cover flex-shrink-0"
-                    />
+                    <img :src="art.user.profile_photo_url" class="h-8 w-8 rounded-full object-cover flex-shrink-0" />
                     <span class="text-sm font-medium truncate">{{ art.user.name }}</span>
                 </div>
-                <div
-                    class="flex items-center space-x-2 text-sm font-semibold flex-shrink-0"
-                >
+                <div class="flex items-center space-x-2 text-sm font-semibold flex-shrink-0">
                     <div class="flex items-center space-x-1">
                         <img src="/images/icons/views.svg" class="w-5 h-5" alt="views" />
                         <span>{{ art.views_count || 0 }}</span>
                     </div>
                     <div class="flex items-center space-x-1">
-                        <img
-                            :src="
-                art.liked_by_user
-                  ? '/images/icons/liked.svg'
-                  : '/images/icons/like.svg'
-              "
-                            class="w-5 h-5"
-                            alt="likes"
-                        />
+                        <img :src="art.liked_by_user ? '/images/icons/liked.svg' : '/images/icons/like.svg'" class="w-5 h-5" alt="likes" />
                         <span>{{ art.likes_count || 0 }}</span>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- desktop hover buttons -->
+        <!-- Кнопки при ховере (desktop) --------------------------------------->
         <div
             class="absolute top-2 right-2 hidden md:flex flex-col space-y-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
         >
             <button
-                class="pointer-events-auto rounded-full bg-black bg-opacity-60 hover:bg-opacity-80 text-white w-9 h-9 flex items-center justify-center"
+                class="pointer-events-auto rounded-full bg-black/60 hover:bg-black/80 text-white w-9 h-9 flex items-center justify-center"
                 @click.stop.prevent="saveToCollection"
                 @mouseenter="animateButton('collection')"
                 @mouseleave="resetButton('collection')"
             >
-                <img
-                    src="/images/icons/plus-btn-white.svg"
-                    class="w-5 h-5"
-                    :class="collectionAnim"
-                />
+                <img src="/images/icons/plus-btn-white.svg" class="w-5 h-5" :class="collectionAnim" />
             </button>
             <button
-                class="pointer-events-auto rounded-full bg-black bg-opacity-60 hover:bg-opacity-80 text-white w-9 h-9 flex items-center justify-center"
+                class="pointer-events-auto rounded-full bg-black/60 hover:bg-black/80 text-white w-9 h-9 flex items-center justify-center"
                 @click.stop.prevent="likeWithAnimation"
                 @mouseenter="animateButton('like')"
                 @mouseleave="resetButton('like')"
             >
-                <img
-                    :src="art.liked_by_user ? '/images/icons/liked.svg' : '/images/icons/like.svg'"
-                    class="w-5 h-5"
-                    :class="likeAnim"
-                />
+                <img :src="art.liked_by_user ? '/images/icons/liked.svg' : '/images/icons/like.svg'" class="w-5 h-5" :class="likeAnim" />
             </button>
         </div>
 
-        <!-- mobile footer -->
+        <!-- Мобильный футер ---------------------------------------------------->
         <div class="block md:hidden bg-black/80 text-white px-3 py-2 rounded-b-lg shadow-lg z-10 flex items-center justify-between">
             <div class="flex items-center space-x-2 overflow-hidden pr-1 flex-1">
-                <img
-                    :src="art.user.profile_photo_url"
-                    class="h-6 w-6 rounded-full object-cover flex-shrink-0"
-                />
+                <img :src="art.user.profile_photo_url" class="h-6 w-6 rounded-full object-cover flex-shrink-0" />
                 <div class="min-w-0">
-                    <p class="text-sm font-semibold truncate" :title="art.title">
-                        {{ art.title }}
-                    </p>
+                    <p class="text-sm font-semibold truncate" :title="art.title">{{ art.title }}</p>
                     <p class="text-[11px] truncate">{{ art.user.name }}</p>
                 </div>
             </div>
             <div class="flex items-center space-x-2 mr-1">
-                <button
-                    class="flex items-center space-x-0.5 text-[16px]"
-                    @click.stop.prevent="likeWithAnimation"
-                >
-                    <img
-                        :src="art.liked_by_user ? '/images/icons/liked.svg' : '/images/icons/like.svg'"
-                        class="w-6 h-6"
-                    />
+                <button class="flex items-center space-x-0.5 text-[16px]" @click.stop.prevent="likeWithAnimation">
+                    <img :src="art.liked_by_user ? '/images/icons/liked.svg' : '/images/icons/like.svg'" class="w-6 h-6" />
                     <span>{{ art.likes_count || 0 }}</span>
                 </button>
                 <div class="flex items-center space-x-0.5 text-[16px]">
@@ -162,9 +140,19 @@ import { ref, computed, defineProps, onMounted, onBeforeUnmount } from 'vue'
 import { useArtworkActions } from '@/stores/useArtworkActions'
 
 const props = defineProps({ art: Object })
-
 const { toggleLike, openSelector } = useArtworkActions()
 
+/* ------------------------ Skeleton / Aspect ratio ----------------------- */
+const loaded = ref(false)
+function onLoad() { loaded.value = true }
+
+const aspectRatio = computed(() => {
+    const w = props.art.thumb_width || 1
+    const h = props.art.thumb_height || 1
+    return (h / w) * 100 // padding-bottom %
+})
+
+/* ------------------------ Ховер / мобильный режим ---------------------- */
 const hover = ref(false)
 const mobileHover = ref(false)
 const inView = ref(false)
@@ -181,9 +169,7 @@ let observer
 onMounted(() => {
     if ('IntersectionObserver' in window) {
         observer = new IntersectionObserver(
-            entries => {
-                entries.forEach(e => (inView.value = e.isIntersecting))
-            },
+            entries => entries.forEach(e => (inView.value = e.isIntersecting)),
             { threshold: 0.6 }
         )
         if (rootEl.value) observer.observe(rootEl.value)
@@ -194,6 +180,7 @@ onBeforeUnmount(() => {
     window.removeEventListener('resize', updateIsMobile)
 })
 
+/* ------------------------ Видео / превью ------------------------------- */
 const isVideo = computed(() => props.art.type === 'video')
 const previewExists = computed(() => !!props.art.preview_url)
 const showVideo = computed(() => {
@@ -201,23 +188,22 @@ const showVideo = computed(() => {
     return isMobile.value ? mobileHover.value || inView.value : hover.value
 })
 
+/* ------------------------ URL-ы медиа ---------------------------------- */
 const thumbOrOriginal = computed(() => {
-    const m = props.art.media[0]
+    const m = props.art.media?.[0]
     if (!m) return null
     return props.art.thumb_url
         ? `${props.art.thumb_url}?v=${m.updated_at}`
         : `${m.original_url}?v=${m.updated_at}`
 })
 const previewSrc = computed(() =>
-    previewExists.value
-        ? `${props.art.preview_url}?v=${props.art.media[0].updated_at}`
-        : null
+    previewExists.value ? `${props.art.preview_url}?v=${props.art.media[0].updated_at}` : null
 )
 
+/* -- Действия «лайк / коллекция» -- */
 function saveToCollection(evt) {
     openSelector(props.art, evt.currentTarget.getBoundingClientRect())
 }
-
 const collectionAnim = ref('')
 const likeAnim = ref('')
 function likeWithAnimation() {
@@ -238,45 +224,23 @@ const draft = computed(() => !props.art.is_published)
 </script>
 
 <style scoped>
+/* Анимация «тряска» кнопки */
 @keyframes shake {
-    0%,
-    100% {
-        transform: translateX(0);
-    }
-    20% {
-        transform: translateX(-2px);
-    }
-    40% {
-        transform: translateX(2px);
-    }
-    60% {
-        transform: translateX(-2px);
-    }
-    80% {
-        transform: translateX(2px);
-    }
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-2px); }
+    40% { transform: translateX(2px); }
+    60% { transform: translateX(-2px); }
+    80% { transform: translateX(2px); }
 }
-.animate-shake {
-    animation: shake 0.4s ease;
-}
+.animate-shake { animation: shake 0.4s ease; }
+
+/* Анимация «лайк» */
 @keyframes like {
-    0% {
-        transform: scale(1);
-    }
-    25% {
-        transform: scale(1.2);
-    }
-    50% {
-        transform: scale(0.9);
-    }
-    75% {
-        transform: scale(1.05);
-    }
-    100% {
-        transform: scale(1);
-    }
+    0% { transform: scale(1); }
+    25% { transform: scale(1.2); }
+    50% { transform: scale(0.9); }
+    75% { transform: scale(1.05); }
+    100% { transform: scale(1); }
 }
-.animate-like {
-    animation: like 0.4s ease;
-}
+.animate-like { animation: like 0.4s ease; }
 </style>

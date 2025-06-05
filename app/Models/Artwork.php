@@ -21,7 +21,8 @@ class Artwork extends Model implements HasMedia
         'user_id','title','description','type','is_published','allow_download','allow_comments','is_adult','has_ai','is_private','views_count', 'is_blocked'
     ];
 
-    protected $appends = ['thumb_url', 'preview_url', 'video_duration_formatted','liked_by_user', 'in_collections'];
+    protected $appends = ['thumb_url', 'preview_url',   'thumb_width',
+        'thumb_height', 'video_duration_formatted','liked_by_user', 'in_collections'];
 
     protected static function booted()
     {
@@ -124,7 +125,7 @@ class Artwork extends Model implements HasMedia
             return;
         }
 
-        // Image
+        // Image: указываем только ширину, Spatie сохранит пропорции
         if (str_starts_with($media->mime_type, 'image/')) {
             $this->addMediaConversion('thumb')
                 ->width(300)
@@ -132,9 +133,8 @@ class Artwork extends Model implements HasMedia
                 ->nonQueued();
         }
 
-        // Video
+        // Video: случайный кадр, ширина 300px
         if (str_starts_with($media->mime_type, 'video/')) {
-
             $randomSecond = rand(1, 20);
             $this->addMediaConversion('thumb')
                 ->extractVideoFrameAtSecond($randomSecond)
@@ -154,6 +154,43 @@ class Artwork extends Model implements HasMedia
             ->addMediaCollection('preview')
             ->singleFile()
             ->useDisk('public');
+    }
+
+    public function getThumbWidthAttribute(): ?int
+    {
+        $media = $this->getFirstMedia('artworks');
+        if (! $media || ! $media->hasGeneratedConversion('thumb')) {
+            return null;
+        }
+
+        // путь до файла конверсии "thumb"
+        $path = $media->getPath('thumb');
+        if (! file_exists($path)) {
+            return null;
+        }
+
+        [$w, $h] = getimagesize($path);
+        return $w;
+    }
+
+    /**
+     * Высота файла thumb в px (если конверсия уже есть на диске).
+     */
+    public function getThumbHeightAttribute(): ?int
+    {
+        $media = $this->getFirstMedia('artworks');
+        if (! $media || ! $media->hasGeneratedConversion('thumb')) {
+            return null;
+        }
+
+        // путь до файла конверсии "thumb"
+        $path = $media->getPath('thumb');
+        if (! file_exists($path)) {
+            return null;
+        }
+
+        [$w, $h] = getimagesize($path);
+        return $h;
     }
 
 }

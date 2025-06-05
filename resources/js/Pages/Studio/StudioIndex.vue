@@ -14,6 +14,8 @@ const page = usePage()
 const drafts = ref([...page.props.drafts])
 const collections = ref([...page.props.collections])
 const artworkStore  = useArtworkActions()
+const MAX_SIZE = 20 * 1024 * 1024
+const errorMessages = ref([])
 
 const showList = ref(true)
 const showCollectionModal        = ref(false)
@@ -51,7 +53,16 @@ function scheduleAutoSave() {
     successMessage.value = 'Сохранение...'
 }
 
-// …
+function validateFile (file) {
+    if (!file) return false
+    if (file.size > MAX_SIZE) {
+        errorMessages.value.push('Файл превышает 20 МБ и будет отклонён.')
+        setTimeout(() => errorMessages.value = [], 5000)
+        return false
+    }
+    return true
+}
+
 function saveSelectedCollections(ids) {
     selectedCollections.value = ids
     scheduleAutoSave()
@@ -119,7 +130,7 @@ function determineFileType(url) {
 /* ===== Создание нового черновика ===== */
 function onDropFileCreate(e) {
     const file = e.dataTransfer.files[0]
-    if (file) tempFile.value = file
+    if (validateFile(file)) tempFile.value = file
 }
 const createFileInput = ref(null)
 function browseFileCreate() {
@@ -127,7 +138,7 @@ function browseFileCreate() {
 }
 function onFileChangeCreate(e) {
     const file = e.target.files[0]
-    if (file) tempFile.value = file
+    if (validateFile(file)) tempFile.value = file
 }
 function createArtFromFile() {
     if (!tempFile.value) return
@@ -199,6 +210,7 @@ function publishDraft() {
 
 /* ===== Загрузка файла к уже существующему черновику ===== */
 function uploadFile(file) {
+    if (!validateFile(file)) return
     isUploading.value = true
     uploadProgress.value = 0
     const formData = new FormData()
@@ -438,6 +450,8 @@ onMounted(() => {
                         @publish="publishDraft"
                         @destroyDraft="destroyDraft"
                         @uploadFile="uploadFile"
+                        :errorMessages="errorMessages"
+                        :validateFile="validateFile"
                     />
                     <p v-if="successMessage" class="text-success mt-2">{{ successMessage }}</p>
                 </main>
@@ -464,9 +478,10 @@ onMounted(() => {
                         />
                         <p v-if="!tempFile">Перетащите файл или нажмите</p>
                         <p v-else>Выбран файл: {{ tempFile.name }}</p>
+                        <p v-if="errorMessages.length" class="text-error mt-2">{{ errorMessages[0] }}</p>
                         <progress
                             v-if="isUploading"
-                            class="progress w-full progress-primary absolute bottom-4 left-4 right-4"
+                            class="progress w-full progress-primary mt-4"
                             :value="uploadProgress"
                             max="100"
                         />

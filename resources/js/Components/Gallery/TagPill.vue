@@ -4,7 +4,7 @@
         :class="[
       active
         ? 'bg-primary text-primary-content'
-        : 'bg-gray-100 text-gray-700 hover:bg-gray-200 md:bg-base-200 md:text-base-content md:hover:bg-base-300'
+        : 'bg-base-200 text-base-content hover:bg-base-300'
     ]"
         class="flex items-center rounded-full overflow-hidden font-medium whitespace-nowrap
            text-sm md:text-base

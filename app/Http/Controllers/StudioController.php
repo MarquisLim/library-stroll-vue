@@ -60,7 +60,7 @@ class StudioController extends Controller
         $artwork = Artwork::firstOrNew([
             'id' => $request->draftId,
             'user_id' => auth()->id(),
-        ], ['is_published'=>false]);
+        ], ['is_published'=>false, 'allow_comments'=>true]);
         $artwork->save();
         $artwork->clearMediaCollection('artworks');
 
@@ -111,8 +111,6 @@ class StudioController extends Controller
 
         // Коллекции
         $collections=$request->collections ?? [];
-        $all=Collection::firstOrCreate(['user_id'=>Auth::id(),'name'=>'Все'],['is_private'=>false]);
-        if(!in_array($all->id,$collections)) $collections[]=$all->id;
         $draft->collections()->sync($collections);
 
         $draft->load('media','tags','collections');

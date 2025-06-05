@@ -18,10 +18,14 @@ const props = defineProps({
     isUploading: Boolean,
     uploadProgress: Number,
     showCollectionModal: Boolean,
+    errorMessages : { type:Array, default:() => [] },
+    validateFile  : { type:Function, required:true }
 })
 
 const emit = defineEmits([
     'uploadFile',
+    'handleError',
+    'validateFile',
     'publish',
     'update:title',
     'update:description',
@@ -38,8 +42,14 @@ const emit = defineEmits([
 const fileInput = ref(null)
 
 function browseFile()      { fileInput.value.click() }
-function onFileChange(e)   { if (e.target.files[0]) emit('uploadFile', e.target.files[0]) }
-function onDrop(e)         { if (e.dataTransfer.files[0]) emit('uploadFile', e.dataTransfer.files[0]) }
+function onFileChange(e)   {
+    const f = e.target.files[0]
+    if (props.validateFile(f)) emit('uploadFile', f)
+}
+function onDrop(e) {
+    const f = e.dataTransfer.files[0]
+    if (props.validateFile(f)) emit('uploadFile', f)
+}
 function emitPublish()     { emit('publish') }
 function emitUpdateTitle(v){ emit('update:title', v) }
 function emitUpdateDescription(v){ emit('update:description', v) }
@@ -70,6 +80,9 @@ defineExpose({ fileInput })
                 ref="fileInput"
                 @change="onFileChange"
             />
+            <p v-if="props.errorMessages.length" class="text-error mt-2">
+                {{ props.errorMessages[0] }}
+            </p>
             <p v-if="!previewUrl">Перетащите файл или нажмите</p>
             <p v-else class="font-semibold">Файл загружен</p>
 

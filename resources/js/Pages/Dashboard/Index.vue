@@ -1,6 +1,7 @@
 <script setup>
 import { Head, Link, router } from '@inertiajs/vue3'
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { _adapters } from 'chart.js'
 import StatTile                  from '@/Components/Dashboard/StatTile.vue'
 import ProfileCard               from '@/Components/Dashboard/ProfileCard.vue'
 import ArtworkCard               from '@/Components/Gallery/ArtworkCard.vue'
@@ -38,7 +39,6 @@ watch(commentsSel, push)
 
 const parseDate = d => new Date(d)
 
-/* массивы с объектами {x: date, y: value} */
 const likesDataset = computed(() =>
     Object.entries(props.likesChart).map(([date, val]) => ({ x: date, y: val }))
 )
@@ -46,15 +46,12 @@ const commentsDataset = computed(() =>
     Object.entries(props.commentsChart).map(([date, val]) => ({ x: date, y: val }))
 )
 
-/* Canvas refs */
 const likesCanvas    = ref(null)
 const commentsCanvas = ref(null)
 
-/* Chart.js instances */
 let likesChartInstance = null
 let commentsChartInstance = null
 
-/* строим конфиг на основе диапазона дней и данных */
 const buildConfig = (dataset, days, color) => {
     const unit = days === 365 ? 'month' : 'day'
     return {
@@ -85,10 +82,10 @@ const buildConfig = (dataset, days, color) => {
                     type: 'time',
                     time: {
                         unit,
-                        tooltipFormat: days === 365 ? 'd MMM yyyy' : 'dd.MM.yyyy',
+                        tooltipFormat: days === 365 ? 'MM.yyyy' : 'dd.MM.yyyy',
                         displayFormats: {
-                            day: 'dd',
-                            month: 'MMM'
+                            day: 'dd.MM',
+                            month: 'MM.yyyy'
                         }
                     },
                     ticks: {
@@ -206,7 +203,7 @@ useArtworkActions().setCollections(props.collections)
                 <div class="bg-base-200 dark:bg-base-800 rounded-xl p-6 shadow space-y-4">
                     <div class="flex justify-between items-center">
                         <h2 class="font-semibold">Лайки</h2>
-                        <select v-model.number="likesSel" class="select">
+                        <select v-model.number="likesSel" class="select ms-4">
                             <option :value="7">7 дн.</option>
                             <option :value="30">30 дн.</option>
                             <option :value="365">Год</option>
@@ -220,7 +217,7 @@ useArtworkActions().setCollections(props.collections)
                 <div class="bg-base-200 dark:bg-base-800 rounded-xl p-6 shadow space-y-4">
                     <div class="flex justify-between items-center">
                         <h2 class="font-semibold">Комментарии</h2>
-                        <select v-model.number="commentsSel" class="select">
+                        <select v-model.number="commentsSel" class="select ms-4">
                             <option :value="7">7 дн.</option>
                             <option :value="30">30 дн.</option>
                             <option :value="365">Год</option>
