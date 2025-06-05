@@ -27,6 +27,7 @@ const isAuth        = computed(() => !!page.props.auth.user)
 const user          = computed(() => page.props.auth.user || {})
 const myId          = page.props.auth.user?.id
 const isDark        = ref(false)
+const isLoggingOut = ref(false)
 
 const isMobile      = ref(window.innerWidth < 640)
 const isLoading = ref(false)
@@ -93,12 +94,22 @@ function onSearchEnter(){
 }
 
 function logout() {
+    if (isLoggingOut.value) return
+    isLoggingOut.value = true
+
     axios.post(route('logout'))
-        .then(() => window.location.reload())
+        .then(() => {
+            actions.notify('Вы вышли из профиля', 'success')
+            setTimeout(() => window.location.reload(), 800)
+        })
         .catch(e => {
             if (e.response?.status === 419) window.location.reload()
         })
+        .finally(() => {
+            isLoggingOut.value = false
+        })
 }
+
 
 </script>
 

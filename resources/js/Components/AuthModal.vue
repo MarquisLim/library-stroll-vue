@@ -1,11 +1,13 @@
 <script setup>
 import { ref, watch, nextTick } from 'vue'
 import axios from 'axios'
+import { useArtworkActions } from '@/stores/useArtworkActions'
 
 const emit = defineEmits(['close'])
 const props = defineProps({ show: Boolean })
 
 const dialogRef  = ref(null)
+const actions = useArtworkActions()
 const tab        = ref('login')
 const loginData  = ref({ email: '', password: '' })
 const regData    = ref({ name: '', email: '', password: '', password_confirmation: '', terms: false })
@@ -32,7 +34,11 @@ function submitLogin() {
     loading.value = true
     loginErr.value = {}
     axios.post(route('login'), loginData.value)
-        .then(() => window.location.reload())
+        .then(() => {
+            actions.notify('Вы успешно вошли', 'success')
+            close()
+            setTimeout(() => window.location.reload(), 500)
+        })
         .catch(e => {
             if (e.response?.status === 422) loginErr.value = e.response.data.errors
             if (e.response?.status === 419) window.location.reload()
@@ -44,7 +50,11 @@ function submitRegister() {
     loading.value = true
     regErr.value = {}
     axios.post(route('register'), regData.value)
-        .then(() => window.location.reload())
+        .then(() => {
+            actions.notify('Вы успешно зарегистрировались', 'success')
+            close()
+            setTimeout(() => window.location.reload(), 500)
+        })
         .catch(e => {
             if (e.response?.status === 422) regErr.value = e.response.data.errors
             if (e.response?.status === 419) window.location.reload()

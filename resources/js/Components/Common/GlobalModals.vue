@@ -35,7 +35,7 @@ const {
         <div
             v-if="toast.visible"
             :class="[
-        'fixed bottom-16 sm:bottom-4 left-1/2 -translate-x-1/2 z-[9999] px-4 py-3 rounded shadow-lg flex items-center gap-2',
+        'fixed top-16 right-4 z-[9999] px-4 py-3 rounded shadow-lg flex items-center gap-2',
         toast.type === 'success'
           ? 'bg-green-500 text-white'
           : 'bg-red-500 text-white'
