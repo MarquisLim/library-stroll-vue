@@ -1,9 +1,16 @@
 <?php
 
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Broadcasting\BroadcastServiceProvider;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Request;
+use Inertia\Inertia;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -32,5 +39,31 @@ return Application::configure(basePath: dirname(__DIR__))
         BroadcastServiceProvider::class,
     ])
     ->withExceptions(function (Exceptions $exceptions) {
-        //
+        $exceptions->render(function (ModelNotFoundException $e, Request $request) {
+            return Inertia::render('Errors/NotFound', ['status' => 404])
+                ->toResponse($request)
+                ->setStatusCode(404);
+        });
+
+        $exceptions->render(function (NotFoundHttpException $e, Request $request) {
+            return Inertia::render('Errors/NotFound', ['status' => 404])
+                ->toResponse($request)
+                ->setStatusCode(404);
+        });
+
+
+        $exceptions->render(function (HttpException $e, Request $request) {
+            if ($e->getStatusCode() === 403) {
+                return Inertia::render('Errors/Forbidden', ['status' => 403])
+                    ->toResponse($request)
+                    ->setStatusCode(403);
+            }
+            if ($e->getStatusCode() === 404) {
+                return Inertia::render('Errors/NotFound', ['status' => 404])
+                    ->toResponse($request)
+                    ->setStatusCode(404);
+            }
+            return null;
+        });
+
     })->create();

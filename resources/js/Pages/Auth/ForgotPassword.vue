@@ -30,7 +30,7 @@ const submit = () => {
                 <AuthenticationCardLogo />
             </template>
 
-            <div class="mb-4 text-sm text-gray-600">
+            <div class="mb-4 text-sm text-base-content">
                 Забыли пароль? Нет проблем. Просто сообщите нам свой адрес электронной почты, и мы вышлем вам ссылку для сброса пароля, которая позволит вам выбрать новый.
             </div>
 

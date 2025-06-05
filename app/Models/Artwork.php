@@ -127,14 +127,19 @@ class Artwork extends Model implements HasMedia
         // Image
         if (str_starts_with($media->mime_type, 'image/')) {
             $this->addMediaConversion('thumb')
+                ->width(300)
+                ->format('webp')
                 ->nonQueued();
         }
 
         // Video
         if (str_starts_with($media->mime_type, 'video/')) {
+
             $randomSecond = rand(1, 20);
             $this->addMediaConversion('thumb')
                 ->extractVideoFrameAtSecond($randomSecond)
+                ->width(300)
+                ->format('jpg')
                 ->nonQueued();
         }
     }

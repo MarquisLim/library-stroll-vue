@@ -52,7 +52,7 @@ const closeModal = () => {
         </template>
 
         <template #content>
-            <div class="max-w-xl text-sm text-gray-600">
+            <div class="max-w-xl text-sm text-base">
               После удаления вашей учетной записи все ее ресурсы и данные будут удалены без возможности восстановления. Прежде чем удалять свою учетную запись, загрузите все данные или информацию, которую вы хотите сохранить.            </div>
 
             <div class="mt-5">

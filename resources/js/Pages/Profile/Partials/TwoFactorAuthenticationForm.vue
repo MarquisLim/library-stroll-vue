@@ -119,19 +119,19 @@ const disableTwoFactorAuthentication = () => {
         </template>
 
         <template #content>
-            <h3 v-if="twoFactorEnabled && ! confirming" class="text-lg font-medium text-gray-900">
+            <h3 v-if="twoFactorEnabled && ! confirming" class="text-lg font-medium text-base-300">
                 Вы включили двухфакторную аутентификацию.
             </h3>
 
-            <h3 v-else-if="twoFactorEnabled && confirming" class="text-lg font-medium text-gray-900">
+            <h3 v-else-if="twoFactorEnabled && confirming" class="text-lg font-medium text-base-300">
                 Завершите включение двухфакторной аутентификации.
             </h3>
 
-            <h3 v-else class="text-lg font-medium text-gray-900">
+            <h3 v-else class="text-lg font-medium text-base">
                 Вы не включили двухфакторную аутентификацию.
             </h3>
 
-            <div class="mt-3 max-w-xl text-sm text-gray-600">
+            <div class="mt-3 max-w-xl text-sm text-base">
                 <p>
                   Если включена двухфакторная аутентификация, во время аутентификации вам будет предложено ввести безопасный случайный токен. Вы можете получить этот токен из приложения Google Authenticator вашего телефона.
                 </p>
@@ -149,7 +149,7 @@ const disableTwoFactorAuthentication = () => {
                         </p>
                     </div>
 
-                    <div class="mt-4 p-2 inline-block bg-white" v-html="qrCode" />
+                    <div class="mt-4 p-2 inline-block bg-base-100 shadow-lg ring-1 ring-base-300" v-html="qrCode" />
 
                     <div v-if="setupKey" class="mt-4 max-w-xl text-sm text-gray-600">
                         <p class="font-semibold">

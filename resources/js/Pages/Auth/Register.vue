@@ -7,7 +7,7 @@ import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
-import AppLayout from "@/Layouts/AppLayout.vue";
+import AppLayout from '@/Layouts/AppLayout.vue';
 
 const form = useForm({
     name: '',
@@ -40,7 +40,7 @@ const submit = () => {
                         id="name"
                         v-model="form.name"
                         type="text"
-                        class="mt-1 block w-full"
+                        class="mt-1 w-full"
                         required
                         autofocus
                         autocomplete="name"
@@ -54,7 +54,7 @@ const submit = () => {
                         id="email"
                         v-model="form.email"
                         type="email"
-                        class="mt-1 block w-full"
+                        class="mt-1 w-full"
                         required
                         autocomplete="username"
                     />
@@ -67,7 +67,7 @@ const submit = () => {
                         id="password"
                         v-model="form.password"
                         type="password"
-                        class="mt-1 block w-full"
+                        class="mt-1 w-full"
                         required
                         autocomplete="new-password"
                     />
@@ -80,51 +80,55 @@ const submit = () => {
                         id="password_confirmation"
                         v-model="form.password_confirmation"
                         type="password"
-                        class="mt-1 block w-full"
+                        class="mt-1 w-full"
                         required
                         autocomplete="new-password"
                     />
                     <InputError class="mt-2" :message="form.errors.password_confirmation" />
                 </div>
 
-                <InputLabel for="terms">
-                    <div class="flex items-center">
+                <div class="mt-4">
+                    <label class="flex items-center gap-2">
                         <Checkbox
                             id="terms"
                             v-model:checked="form.terms"
                             name="terms"
                             required
                         />
-
-                        <div class="ms-2 text-sm">
+                        <span class="text-sm text-base-content">
                             Я принимаю
                             <a
                                 target="_blank"
                                 :href="route('terms')"
-                                class="underline text-gray-600 hover:text-gray-900"
+                                class="link link-hover text-primary"
                             >
-                                Пользовательское соглашение
+                                пользовательское соглашение
                             </a>
                             и
                             <a
                                 target="_blank"
                                 :href="route('privacy')"
-                                class="underline text-gray-600 hover:text-gray-900"
+                                class="link link-hover text-primary"
                             >
-                                Политику конфиденциальности
+                                политику конфиденциальности
                             </a>
-                        </div>
-                    </div>
-                </InputLabel>
+                        </span>
+                    </label>
+                    <InputError class="mt-2" :message="form.errors.terms" />
+                </div>
 
-                <div class="flex items-center justify-end mt-4">
-                    <Link :href="route('login')" class="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                <div class="flex items-center justify-between mt-6">
+                    <Link
+                        :href="route('login')"
+                        class="link text-sm text-base-content hover:text-primary"
+                    >
                         Уже зарегистрированы?
                     </Link>
 
-                    <PrimaryButton class="ms-4"
-                                   :class="{ 'opacity-25': form.processing || !form.terms }"
-                                   :disabled="form.processing || !form.terms"
+                    <PrimaryButton
+                        class="ms-4"
+                        :class="{ 'opacity-25': form.processing || !form.terms }"
+                        :disabled="form.processing || !form.terms"
                     >
                         Зарегистрироваться
                     </PrimaryButton>

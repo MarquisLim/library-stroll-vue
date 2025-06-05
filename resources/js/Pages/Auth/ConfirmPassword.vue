@@ -35,7 +35,7 @@ const submit = () => {
                 <AuthenticationCardLogo />
             </template>
 
-            <div class="mb-4 text-sm text-gray-600">
+            <div class="mb-4 text-sm text-base-content">
                 Это защищенная область приложения. Пожалуйста, подтвердите свой пароль, прежде чем продолжить.
             </div>
 

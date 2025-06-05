@@ -1,13 +1,14 @@
 <script setup>
 import { Head, Link, router } from '@inertiajs/vue3'
-import { ref, computed, watch }   from 'vue'
-import ApexChart                 from 'vue3-apexcharts'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import StatTile                  from '@/Components/Dashboard/StatTile.vue'
 import ProfileCard               from '@/Components/Dashboard/ProfileCard.vue'
 import ArtworkCard               from '@/Components/Gallery/ArtworkCard.vue'
 import MasonryGrid               from '@/Components/MasonryGrid.vue'
 import DashboardLayout           from '@/Layouts/DashboardLayout.vue'
 import { useArtworkActions }     from '@/stores/useArtworkActions'
+import Chart                     from 'chart.js/auto'
+import 'chartjs-adapter-date-fns'
 
 defineOptions({ layout: DashboardLayout })
 
@@ -23,11 +24,9 @@ const props = defineProps({
     collections:    Array
 })
 
-/* выбранные диапазоны */
 const likesSel    = ref(props.likesDays)
 const commentsSel = ref(props.commentsDays)
 
-/* навигация c сохранением селекторов */
 const push = () =>
     router.get(
         route('dashboard'),
@@ -37,56 +36,146 @@ const push = () =>
 watch(likesSel,    push)
 watch(commentsSel, push)
 
-/* конвертер для подписи оси X */
-const monthFmt = new Intl.DateTimeFormat('ru-RU', { month:'short' })
-const day2     = v => String(v).padStart(2, '0')
+const parseDate = d => new Date(d)
 
-const label = (days, dateObj, idx) => {
-    if (days === 365)
-        return dateObj.getDate() === 1 ? monthFmt.format(dateObj) : ''
-    if (days === 30)
-        return idx % 2 ? '' : day2(dateObj.getDate())
-    return day2(dateObj.getDate())
+/* массивы с объектами {x: date, y: value} */
+const likesDataset = computed(() =>
+    Object.entries(props.likesChart).map(([date, val]) => ({ x: date, y: val }))
+)
+const commentsDataset = computed(() =>
+    Object.entries(props.commentsChart).map(([date, val]) => ({ x: date, y: val }))
+)
+
+/* Canvas refs */
+const likesCanvas    = ref(null)
+const commentsCanvas = ref(null)
+
+/* Chart.js instances */
+let likesChartInstance = null
+let commentsChartInstance = null
+
+/* строим конфиг на основе диапазона дней и данных */
+const buildConfig = (dataset, days, color) => {
+    const unit = days === 365 ? 'month' : 'day'
+    return {
+        type: 'line',
+        data: {
+            datasets: [{
+                label: '',
+                data: dataset,
+                fill: true,
+                borderColor: color,
+                backgroundColor: ctx => {
+                    const g = ctx.chart.ctx.createLinearGradient(0, 0, 0, 200)
+                    g.addColorStop(0, color + '80')
+                    g.addColorStop(1, color + '10')
+                    return g
+                },
+                tension: 0.4,
+                borderWidth: 2,
+                pointRadius: 3,
+                pointBackgroundColor: color,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    type: 'time',
+                    time: {
+                        unit,
+                        tooltipFormat: days === 365 ? 'd MMM yyyy' : 'dd.MM.yyyy',
+                        displayFormats: {
+                            day: 'dd',
+                            month: 'MMM'
+                        }
+                    },
+                    ticks: {
+                        color: '#7480ff',
+                        font: { size: 11 }
+                    },
+                    grid: {
+                        color: '#7480ff33',
+                        borderDash: [3]
+                    },
+                    border: { color: 'var(--tw-prose-body)' }
+                },
+                y: {
+                    ticks: {
+                        color: '#7480ff',
+                        font: { size: 11 }
+                    },
+                    grid: {
+                        color: '#7480ff33',
+                        borderDash: [3]
+                    },
+                    border: { color: 'var(--tw-prose-body)' }
+                }
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        title(context) {
+                            const dt = context[0].parsed.x
+                            const dateObj = new Date(dt)
+                            if (days === 365) {
+                                return new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: 'long', year: 'numeric' }).format(dateObj)
+                            }
+                            return new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(dateObj)
+                        },
+                        label(context) {
+                            return context.parsed.y + ' '
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
-/* серии данных */
-const likesSeries    = computed(() => [{ name:'Лайки',       data:Object.values(props.likesChart)    }])
-const commentsSeries = computed(() => [{ name:'Комментарии', data:Object.values(props.commentsChart) }])
-const fullCats = Object.keys
+const initLikesChart = () => {
+    if (likesChartInstance) likesChartInstance.destroy()
+    likesChartInstance = new Chart(likesCanvas.value, buildConfig(
+        likesDataset.value,
+        likesSel.value,
+        '#3B82F6'
+    ))
+}
 
-/* билд опций графика */
-const buildOpts = (cats, color) => ({
-    chart : { type:'area', height:240, toolbar:{show:false}, background:'transparent',
-        foreColor:'var(--tw-prose-body)'},
-    stroke: { curve:'smooth', width:3, colors:[color] },
-    fill  : { type:'gradient',
-        gradient:{ shadeIntensity:.4, opacityFrom:.45, opacityTo:.05,
-            stops:[0,90,100],
-            colorStops:[{offset:0,color},{offset:100,color}] } },
-    dataLabels:{ enabled:false },
-    grid : { borderColor:'#7480ff', strokeDashArray:3 },
+const initCommentsChart = () => {
+    if (commentsChartInstance) commentsChartInstance.destroy()
+    commentsChartInstance = new Chart(commentsCanvas.value, buildConfig(
+        commentsDataset.value,
+        commentsSel.value,
+        '#F97316'
+    ))
+}
 
-    /* --- главное изменение здесь --- */
-    xaxis:{
-        categories: cats,
-        labels:{ formatter: val => val,   /* <— выводим как есть */
-            style:{ colors:'#7480ff', fontSize:'11px' } },
-        tooltip:{ enabled:true },
-        axisBorder:{ show:true, color:'var(--tw-prose-body)' },
-        axisTicks :{ show:true, color:'var(--tw-prose-body)' }
-    },
-    yaxis:{ labels:{ style:{ colors:'#7480ff', fontSize:'11px' } },
-        axisBorder:{ show:true, color:'var(--tw-prose-body)' },
-        axisTicks :{ show:true, color:'var(--tw-prose-body)' } },
-    responsive:[{ breakpoint:768, options:{ chart:{ height:180 }, stroke:{ width:2 } } }]
+onMounted(async () => {
+    await nextTick()
+    initLikesChart()
+    initCommentsChart()
 })
 
-const likeOpts    = computed(() =>
-    buildOpts(fullCats(props.likesChart),    '#3B82F6')
-)
-const commentOpts = computed(() =>
-    buildOpts(fullCats(props.commentsChart), '#F97316')
-)
+watch([likesDataset, likesSel], () => {
+    if (likesChartInstance) {
+        likesChartInstance.data.datasets[0].data = likesDataset.value
+        likesChartInstance.options.scales.x.time.unit = likesSel.value === 365 ? 'month' : 'day'
+        likesChartInstance.options.scales.x.time.tooltipFormat = likesSel.value === 365 ? 'd MMM yyyy' : 'dd.MM.yyyy'
+        likesChartInstance.update()
+    }
+})
+
+watch([commentsDataset, commentsSel], () => {
+    if (commentsChartInstance) {
+        commentsChartInstance.data.datasets[0].data = commentsDataset.value
+        commentsChartInstance.options.scales.x.time.unit = commentsSel.value === 365 ? 'month' : 'day'
+        commentsChartInstance.options.scales.x.time.tooltipFormat = commentsSel.value === 365 ? 'd MMM yyyy' : 'dd.MM.yyyy'
+        commentsChartInstance.update()
+    }
+})
 
 useArtworkActions().setCollections(props.collections)
 </script>
@@ -96,7 +185,7 @@ useArtworkActions().setCollections(props.collections)
 
     <div class="flex bg-base-100 dark:bg-base-900 min-h-screen">
         <main class="flex-1 p-4 md:p-6 space-y-12">
-            <h1 class="text-3xl font-bold">Панель&nbsp;управления</h1>
+            <h1 class="text-3xl font-bold">Панель управления</h1>
 
             <section class="grid lg:grid-cols-3 gap-6">
                 <div class="lg:col-span-2 grid grid-cols-2 gap-4">
@@ -118,24 +207,28 @@ useArtworkActions().setCollections(props.collections)
                     <div class="flex justify-between items-center">
                         <h2 class="font-semibold">Лайки</h2>
                         <select v-model.number="likesSel" class="select">
-                            <option :value="7">7&nbsp;дн.</option>
-                            <option :value="30">30&nbsp;дн.</option>
+                            <option :value="7">7 дн.</option>
+                            <option :value="30">30 дн.</option>
                             <option :value="365">Год</option>
                         </select>
                     </div>
-                    <ApexChart type="area" :series="likesSeries" :options="likeOpts"/>
+                    <div class="relative h-60">
+                        <canvas ref="likesCanvas"></canvas>
+                    </div>
                 </div>
 
                 <div class="bg-base-200 dark:bg-base-800 rounded-xl p-6 shadow space-y-4">
                     <div class="flex justify-between items-center">
                         <h2 class="font-semibold">Комментарии</h2>
                         <select v-model.number="commentsSel" class="select">
-                            <option :value="7">7&nbsp;дн.</option>
-                            <option :value="30">30&nbsp;дн.</option>
+                            <option :value="7">7 дн.</option>
+                            <option :value="30">30 дн.</option>
                             <option :value="365">Год</option>
                         </select>
                     </div>
-                    <ApexChart type="area" :series="commentsSeries" :options="commentOpts"/>
+                    <div class="relative h-60">
+                        <canvas ref="commentsCanvas"></canvas>
+                    </div>
                 </div>
             </section>
 

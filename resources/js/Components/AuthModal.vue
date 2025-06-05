@@ -174,11 +174,11 @@ function submitRegister() {
                         <input type="checkbox" v-model="regData.terms" class="checkbox checkbox-primary mr-2" />
                         <div class="ms-2 text-sm flex flex-wrap">
                             Я принимаю
-                            <a target="_blank" :href="route('terms')" class="underline text-gray-600 hover:text-gray-900 mx-1">
+                            <a target="_blank" :href="route('terms')" class="underline text-primary hover:text-primary-900 mx-1">
                                 Пользовательское соглашение
                             </a>
                             и
-                            <a target="_blank" :href="route('privacy')" class="underline text-gray-600 hover:text-gray-900 mx-1">
+                            <a target="_blank" :href="route('privacy')" class="underline text-primary hover:text-primary-900 mx-1">
                                 Политику конфиденциальности
                             </a>
                         </div>

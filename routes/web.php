@@ -46,8 +46,13 @@ Route::get('/privacy', function () {
 })->name('privacy');
 
 
+Route::get('/404', function () {
+    return Inertia::render('Errors/NotFound', ['status' => 404]);
+})->name('404');
+
+// При незахваченных маршрутах отдаем Inertia-404
 Route::fallback(function () {
-    return Inertia::render('Errors/NotFound')
+    return Inertia::render('Errors/NotFound', ['status' => 404])
         ->toResponse(request())
         ->setStatusCode(404);
 });
