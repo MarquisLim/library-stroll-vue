@@ -1,5 +1,5 @@
 <script setup>
-import {ref, nextTick, onMounted} from 'vue'
+import {ref, nextTick, onMounted, computed} from 'vue'
 import {Link, usePage, router} from '@inertiajs/vue3'
 import axios from 'axios'
 
@@ -23,6 +23,8 @@ import ArtworkCard from '@/Components/Gallery/ArtworkCard.vue'
 import CommentsSection from '@/Components/Comments/CommentsSection.vue'
 import ShareModal from '@/Components/Messenger/ShareModal.vue'
 import ComplaintModal from '@/Components/ComplaintModal.vue'
+import Plyr from 'plyr'
+import 'plyr/dist/plyr.css'
 
 // Pinia store
 import {useArtworkActions} from '@/stores/useArtworkActions'
@@ -38,6 +40,16 @@ const author = page.props.author
 const complaintTypes  = page.props.complaintTypes
 const showComplaint   = ref(false)
 const showShare = ref(false)
+const plyrVideo = ref(null)
+
+const loaded = ref(false)
+const onMediaLoad = () => (loaded.value = true)
+
+const aspectRatio = computed(() => {
+    const w = artwork.value.thumb_width || 1
+    const h = artwork.value.thumb_height || 1
+    return (h / w) * 100 // аналогично artworkcard
+})
 
 function openComplaint() {
     if (!requireAuth(openComplaint)) return;
@@ -161,6 +173,23 @@ onMounted(async () => {
         img.src = URL.createObjectURL(blob)
     }
 })
+
+
+onMounted(() => {
+    if (artwork.value.type === 'video') {
+        nextTick(() => {
+            if (plyrVideo.value) {
+                new Plyr(plyrVideo.value, {
+                    autoplay: true,
+                    muted: true,
+                    loop: { active: true },
+                    controls: ['play', 'progress', 'current-time', 'mute', 'volume', 'fullscreen'],
+                })
+            }
+        })
+    }
+})
+
 </script>
 
 <template>
@@ -183,17 +212,19 @@ onMounted(async () => {
                 >
                     <!-- video with no-download -->
                     <video
+                        ref="plyrVideo"
                         v-if="artwork.type==='video'"
-                        :src="artwork.media[0]?.original_url"
-                        class="max-h-[80vh] w-full rounded-xl select-none"
+                        class="plyr-video max-h-[80vh] w-full rounded-xl select-none"
                         controls
                         controlsList="nodownload"
-                        muted
                         autoplay
+                        muted
                         loop
                         playsinline
                         @contextmenu.prevent
-                    />
+                    >
+                        <source :src="artwork.media[0]?.original_url" type="video/mp4" />
+                    </video>
                     <img
                         v-else-if="artwork.media[0]?.mime_type === 'image/gif'"
                         :src="artwork.media[0]?.original_url"
