@@ -108,7 +108,7 @@ class GalleryController extends Controller
         /* --- 4. Sort --- */
         match ($sort) {
             'views'   => $q->orderByDesc('views_count'),
-            'latest'  => $q->orderByDesc('updated_at'),
+            'latest'  => $q->orderByDesc('published_at'),
             default   => $q->orderByDesc('likes_count'), // popular
         };
 

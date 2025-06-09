@@ -11,6 +11,7 @@ use Inertia\Inertia;
 
 class ProfileController extends Controller
 {
+    /* --- Профиль пользователя --- */
     public function show(User $user)
     {
         $userId = Auth::id();
@@ -56,7 +57,7 @@ class ProfileController extends Controller
         ]);
     }
 
-
+    /* --- Список лайков --- */
     public function likes(User $user)
     {
         $userId = Auth::id();

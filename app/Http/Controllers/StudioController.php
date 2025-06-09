@@ -20,6 +20,7 @@ use Inertia\Inertia;
 
 class StudioController extends Controller
 {
+    /* --- Данные --- */
     public function initialData()
     {
         $drafts = Artwork::where('user_id',Auth::id())
@@ -37,11 +38,13 @@ class StudioController extends Controller
         return ['drafts' => $drafts, 'collections' => $collections];
     }
 
+    /* --- Главная страница Студии --- */
     public function index()
     {
         return inertia('Studio/StudioIndex', $this->initialData());
     }
 
+    /* --- Пустой черновик --- */
     public function createEmptyDraft(Request $request)
     {
         $artwork = new Artwork();
@@ -55,6 +58,7 @@ class StudioController extends Controller
         ]);
     }
 
+    /* --- Загрузка файла --- */
     public function uploadFile(UploadArtworkRequest $request)
     {
         $artwork = Artwork::firstOrNew([
@@ -72,6 +76,7 @@ class StudioController extends Controller
         $artwork->type = explode('/', $media->mime_type)[0];
         $artwork->save();
 
+        /* --- Условие для превью видео --- */
         if ($artwork->type === 'video') {
             ProcessVideoPreviewJob::dispatch($media);
         }
@@ -82,6 +87,7 @@ class StudioController extends Controller
         ]);
     }
 
+    /* --- Обновления черновика --- */
     public function updateDraft(Request $request, $id)
     {
         $user = Auth::user();
@@ -117,6 +123,7 @@ class StudioController extends Controller
         return response()->json(['message'=>'Черновик обновлен','artwork'=>$draft]);
     }
 
+    /* --- Публикация --- */
     public function publish(Request $request, $id)
     {
         $user = Auth::user();
@@ -132,6 +139,7 @@ class StudioController extends Controller
             return response()->json(['error'=>'Добавьте название'],422);
 
         $art->is_published = true;
+        $art->published_at = now();
         $art->save();
 
         return response()->json([
@@ -139,6 +147,7 @@ class StudioController extends Controller
         ]);
     }
 
+    /* --- Удаление черновика --- */
     public function destroyDraft(Request $request, $id)
     {
         $user = Auth::user();
@@ -150,6 +159,7 @@ class StudioController extends Controller
         return response()->json(['message'=>'Черновик удален']);
     }
 
+    /* --- Обновление списка --- */
     public function reorderDrafts(Request $request)
     {
         $order = $request->draft_order ?? [];
@@ -159,6 +169,7 @@ class StudioController extends Controller
         return response()->json(['message'=>'Порядок обновлен']);
     }
 
+    /* --- Поиск тегов --- */
     public function searchTags(Request $request)
     {
         $query = $request->query('query','');
@@ -166,6 +177,7 @@ class StudioController extends Controller
         return response()->json(['tags'=>$tags]);
     }
 
+    /* --- Поиск коллекций --- */
     public function searchCollections(Request $request)
     {
         $query = $request->query('query','');
@@ -175,6 +187,7 @@ class StudioController extends Controller
         return response()->json(['collections'=>$collections]);
     }
 
+    /* --- Менеджер артворков --- */
     public function manager(Request $r)
     {
         $u  = $r->user();
@@ -245,6 +258,7 @@ class StudioController extends Controller
         ]);
     }
 
+    /* --- Менеджер коллекции --- */
     public function collectionsManager(Request $request)
     {
         $user = $request->user();

@@ -13,11 +13,11 @@ use Inertia\Inertia;
 
 class SearchController extends Controller
 {
-    /* ---------- ajax для модального окна ---------- */
+    /* --- ajax для модального окна --- */
     public function suggestions(Request $request)
     {
         $q    = trim($request->input('q',''));
-        $type = $request->input('type','all');          // all | artwork | author | tag
+        $type = $request->input('type','all');
 
         if ($q === '') {
             return response()->json(['suggestions' => []]);
@@ -25,7 +25,7 @@ class SearchController extends Controller
 
         $out = collect();
 
-        /* --- теги --- */
+        /* --- Теги --- */
         if (in_array($type,['all','tag'])) {
             Tag::where('name','like',"%{$q}%")
                 ->take(6)
@@ -37,7 +37,7 @@ class SearchController extends Controller
                 ]));
         }
 
-        /* --- авторы --- */
+        /* --- Авторы --- */
         if (in_array($type,['all','author'])) {
             User::where('name','like',"%{$q}%")
                 ->take(6)
@@ -50,7 +50,7 @@ class SearchController extends Controller
                 ]));
         }
 
-        /* --- артворки --- */
+        /* --- Артворки --- */
         if (in_array($type,['all','artwork'])) {
             Artwork::where('is_published',true)
                 ->where('title','like',"%{$q}%")
@@ -60,7 +60,7 @@ class SearchController extends Controller
                 ->each(fn($a) => $out->push([
                     'id'    => $a->id,
                     'name'  => $a->title ?: 'Без названия',
-                    'thumb' => $a->thumb_url,      // см. аксессор ниже
+                    'thumb' => $a->thumb_url,
                     'type'  => 'artwork',
                 ]));
         }
@@ -68,13 +68,13 @@ class SearchController extends Controller
         return response()->json(['suggestions' => $out->values()]);
     }
 
-    /* -------- страница /search -------- */
+    /* --- Поиск ---  */
     public function index(Request $request)
     {
         $q = $request->get('q','');
         $userId = Auth::id();
 
-        /* ---------- 1. Работы ---------- */
+        /*  --- Артворки --- */
         $artworks = Artwork::query()
             ->when($q, fn($qB)=>$qB->where('title','like',"%$q%"))
             ->with(['user','media','likes','collections'])
@@ -83,13 +83,13 @@ class SearchController extends Controller
             ->get()
             ->map(fn($a)=>$this->markUserData($a,$userId));
 
-        /* ---------- 2. Авторы ---------- */
+        /* --- Авторы --- */
         $authors = User::query()
             ->when($q, fn($qB)=>$qB->where('name','like',"%$q%"))
             ->take(60)
             ->get(['id','name','profile_photo_path']);
 
-        /* ---------- 3. Теги ---------- */
+        /* --- Теги --- */
         $tags = Tag::query()
             ->when($q, fn($qb) => $qb->where('name','like',"%$q%"))
             ->with(['artworks' => function($qArt) use ($userId) {
@@ -104,7 +104,7 @@ class SearchController extends Controller
             ->each(fn($tag) => $tag->artworks
                 ->transform(fn($a) => $this->markUserData($a,$userId)));
 
-        /* ---------- recommended ---------- */
+        /* --- Рекомендации --- */
         $recommended = !$q
             ? Artwork::with(['user','media'])->inRandomOrder()->take(30)->get()
                 ->map(fn($a)=>$this->markUserData($a,$userId))

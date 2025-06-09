@@ -12,6 +12,7 @@ use Inertia\Inertia;
 
 class HomeController extends Controller
 {
+    /* ---Главная страница--- */
     public function index()
     {
         $userId = Auth::id();
@@ -25,7 +26,7 @@ class HomeController extends Controller
                     }
                 }])
                 ->withCount('likes')
-                ->orderByDesc('updated_at')
+                ->orderByDesc('published_at')
                 ->take(20)
                 ->get()
                 ->map(function($artwork) use ($userId) {

@@ -18,7 +18,7 @@ class Artwork extends Model implements HasMedia
     use HasFactory, InteractsWithMedia;
 
     protected $fillable = [
-        'user_id','title','description','type','is_published','allow_download','allow_comments','is_adult','has_ai','is_private','views_count', 'is_blocked'
+        'user_id','title','description','type','is_published','allow_download','allow_comments','is_adult','has_ai','is_private','views_count', 'is_blocked', 'published_at'
     ];
 
     protected $appends = ['thumb_url', 'preview_url',   'thumb_width',

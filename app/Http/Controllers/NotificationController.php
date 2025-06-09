@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Response;
 
 class NotificationController extends Controller
 {
+    /* --- Список уведомлений --- */
     public function index()
     {
         return auth()->user()->notifications()
@@ -24,6 +25,7 @@ class NotificationController extends Controller
             });
     }
 
+    /* --- Непрочитанные уведомления --- */
     public function unread()
     {
         return Auth::user()->unreadNotifications
@@ -36,12 +38,14 @@ class NotificationController extends Controller
             ]);
     }
 
+    /* --- Функция прочитать все --- */
     public function markAllRead()
     {
         Auth::user()->unreadNotifications->markAsRead();
         return response()->json();
     }
 
+    /* --- Функция прочитать определенное уведомление --- */
     public function markRead(string $id)
     {
         $notification = Auth::user()
