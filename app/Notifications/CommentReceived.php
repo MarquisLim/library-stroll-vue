@@ -34,8 +34,8 @@ class CommentReceived extends Notification implements ShouldBroadcast
             'commenter_name' => $c->user->name,
             'avatar'         => $c->user->profile_photo_url,
 
-            // для фронта удобно сразу знать, к кому ответ:
             'parent_id'      => $c->parent_id,
+            'parent_user_id'  => $c->parent?->user->id,
             'parent_name'    => $c->parent?->user->name,
         ];
     }
@@ -54,10 +54,8 @@ class CommentReceived extends Notification implements ShouldBroadcast
     public function broadcastOn(): PrivateChannel
     {
         if ($this->comment->parent_id) {
-            // это реплай — идём к parent->user
             $recipient = $this->comment->parent->user;
         } else {
-            // это корневой — к автору арта
             $recipient = $this->comment->commentable->user;
         }
 
