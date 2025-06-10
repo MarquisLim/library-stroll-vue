@@ -38,21 +38,25 @@ function openComplaint(id) {
 }
 
 function renderText(t) {
-    const esc = t.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    const esc = t
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
     return esc
-        .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" class="text-primary hover:underline">$1</a>')
+        .replace(/(https?:\/\/[^\s]+)/g,
+            `<a href="$1" target="_blank" class="text-primary hover:underline">$1</a>`)
+        .replace(/@([\p{L}\w]+)/gu,
+            `<a href="/profile/$1" class="text-primary hover:underline">@$1</a>`)
         .replace(/\n/g, '<br>')
 }
-
 function toggleExpand(id) {
     expanded.value[id] = !expanded.value[id]
 }
 
 function toggleReply(id, userName) {
     Object.keys(isReplying.value).forEach(k => (isReplying.value[k] = false))
-    isReplying.value[id] = true
-    replyTarget.value[id] = userName
-    replyText.value[id] = ''
+    isReplying.value[id]    = true
+    replyTarget.value[id]   = userName
+    replyText.value[id]     = `@${userName} `      // ← вставляем упоминание
     nextTick(() => document.getElementById(`reply-${id}`)?.focus())
 }
 

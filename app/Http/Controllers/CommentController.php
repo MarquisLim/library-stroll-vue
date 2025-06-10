@@ -75,24 +75,22 @@ class CommentController extends Controller
     public function reply(Request $request, $id)
     {
         $user   = Auth::user() ?: abort(403);
-        $parent = Comment::with('parent')->findOrFail($id);
+        $parent = Comment::findOrFail($id);
 
         $request->validate(['text' => 'required|string|max:1000']);
 
-        $root = $parent->parent_id ? $parent->parent : $parent;
-
+        // создаём reply
         $reply = Comment::create([
             'user_id'          => $user->id,
-            'commentable_id'   => $root->commentable_id,
+            'commentable_id'   => $parent->commentable_id,
             'commentable_type' => Artwork::class,
-            'parent_id'        => $root->id,
+            'parent_id'        => $parent->id,
             'text'             => $request->text,
         ]);
-
-        $owner   = $reply->commentable->user;
-        $owner->notify(new CommentReceived($reply));
-
         $reply->load(['user', 'parent.user']);
+
+        $parent->user->notify(new CommentReceived($reply));
+
         return response()->json(['reply' => $reply]);
     }
 

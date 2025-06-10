@@ -12,13 +12,24 @@ export default function notifInfo(n){
             };
 
         case 'CommentReceived':
-            return {
-                html:
-                    `<a class="link no-underline text-blue-500" href="/profile/${d.commenter_id}">${d.commenter_name}</a>
-                        прокомментировал ваш
-                     <a class="link no-underline text-blue-500 ml-1" href="${d.artwork_url}">«${d.artwork_title}»</a>`,
-                extra: d.excerpt
-            };
+            if (d.parent_id) {
+                return {
+                    html:
+                        `<a class="link no-underline text-blue-500" href="/profile/${d.commenter_id}">${d.commenter_name}</a>
+                         ответил <a class="link no-underline text-blue-500" href="/profile/${d.parent_id}">@${d.parent_name}</a>
+                         в комментарии к
+                         <a class="link no-underline text-blue-500 ml-1" href="${d.artwork_url}">«${d.artwork_title}»</a>`,
+                    extra: d.excerpt
+                };
+            } else {
+                return {
+                    html:
+                        `<a class="link no-underline text-blue-500" href="/profile/${d.commenter_id}">${d.commenter_name}</a>
+                         прокомментировал ваш
+                         <a class="link no-underline text-blue-500 ml-1" href="${d.artwork_url}">«${d.artwork_title}»</a>`,
+                    extra: d.excerpt
+                };
+            }
 
         case 'ComplaintCreated':
             return {

@@ -65,74 +65,13 @@ if (page.props.collections) setCollections(page.props.collections)
 // tabs
 const tabs = ['comments', 'author', 'similar']
 const activeTab = ref('comments')
-
-// pagination for author & similar
-const authorWorks = ref([]), authorPage = ref(1), moreAuthor = ref(true), loadAuthor = ref(false)
-const similarWorks = ref([]), similarPage = ref(1), moreSimilar = ref(true), loadSimilar = ref(false)
-const authorKey = ref('aw-1'), similarKey = ref('sim-1')
-
-function observe(el, cb) {
-    if (!el) return
-    const io = new IntersectionObserver(
-        entries => entries[0].isIntersecting && cb(),
-        { rootMargin: '300px' }
-    )
-    io.observe(el)
-}
-
-const sentinelAuthor = ref(null)
-const sentinelSimilar = ref(null)
-
-onMounted(() => {
-    observe(sentinelAuthor.value, fetchAuthor)
-    observe(sentinelSimilar.value, fetchSimilar)
-})
-
-function fetchAuthor() {
-    if (loadAuthor.value || !moreAuthor.value) return
-    loadAuthor.value = true
-    axios
-        .get(`/author/${author.id}/works`, {
-            params: { page: authorPage.value, per_page: 12, exclude_artwork_id: artwork.value.id },
-        })
-        .then(({ data }) => {
-            if (data.artworks?.length) {
-                authorWorks.value.push(...data.artworks)
-                authorPage.value++
-                authorKey.value = `aw-${authorPage.value}`
-                if (data.artworks.length < 12) moreAuthor.value = false
-            } else moreAuthor.value = false
-        })
-        .finally(() => {
-            loadAuthor.value = false
-            nextTick(() => window.dispatchEvent(new Event('resize')))
-        })
-}
-
-function fetchSimilar() {
-    if (loadSimilar.value || !moreSimilar.value) return
-    loadSimilar.value = true
-    axios
-        .get(`/artworks/${artwork.value.id}/similar`, { params: { page: similarPage.value, per_page: 12 } })
-        .then(({ data }) => {
-            if (data.artworks?.length) {
-                similarWorks.value.push(...data.artworks)
-                similarPage.value++
-                similarKey.value = `sim-${similarPage.value}`
-                if (data.artworks.length < 12) moreSimilar.value = false
-            } else moreSimilar.value = false
-        })
-        .finally(() => {
-            loadSimilar.value = false
-            nextTick(() => window.dispatchEvent(new Event('resize')))
-        })
-}
-
 function openTab(t) {
     activeTab.value = t
-    if (t === 'author' && !authorWorks.value.length) fetchAuthor()
-    if (t === 'similar' && !similarWorks.value.length) fetchSimilar()
 }
+const initialAuthorWorks  = page.props.authorWorks  || []
+const initialSimilarWorks = page.props.similarWorks || []
+const authorWorks  = ref([...initialAuthorWorks])
+const similarWorks = ref([...initialSimilarWorks])
 
 // helpers
 const expanded = ref(false)
@@ -390,68 +329,35 @@ onMounted(() => {
             </section>
 
             <!-- AUTHOR WORKS -->
-            <section v-show="activeTab === 'author'" class="space-y-4">
-                <!-- mobile — горизонтальный скролл -->
-                <div class="md:hidden">
-                    <div class="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-3 scrollbar-hide">
-                        <ArtworkCard
-                            v-for="item in authorWorks"
-                            :key="item.id"
-                            :art="item"
-                            class="shrink-0 w-60 snap-start"
-                        />
-                    </div>
-                </div>
-
-                <!-- desktop — masonry -->
+            <section v-show="activeTab === 'author'">
                 <MasonryGrid
-                    :key="authorKey"
                     :items="authorWorks"
-                    class="hidden md:block w-full"
-                >
-                    <template #default="{ item }">
-                        <ArtworkCard :art="item" />
-                    </template>
-                </MasonryGrid>
-
-                <div class="flex justify-center">
-                    <button
-                        v-if="moreAuthor"
-                        id="load-author"
-                        class="btn btn-outline"
-                        :disabled="loadAuthor"
-                        @click="fetchAuthor"
-                    >
-                        <span v-if="loadAuthor" class="loading loading-spinner loading-xs"></span>
-                        <span v-else>Загрузить ещё</span>
-                    </button>
-                </div>
-            </section>
-
-            <!-- SIMILAR WORKS -->
-            <section v-show="activeTab === 'similar'" class="space-y-4">
-                <MasonryGrid
-                    :key="similarKey"
-                    :items="similarWorks"
+                    :start-page="authorWorks.length ? 1 : 0"
+                    :load-more-url="`/author/${author.id}/works?exclude_artwork_id=${artwork.id}`"
+                    :per-page="12"
+                    @update:items="authorWorks = $event"
                     class="w-full"
                 >
                     <template #default="{ item }">
                         <ArtworkCard :art="item" />
                     </template>
                 </MasonryGrid>
+            </section>
 
-                <div class="flex justify-center">
-                    <button
-                        v-if="moreSimilar"
-                        id="load-similar"
-                        class="btn btn-outline"
-                        :disabled="loadSimilar"
-                        @click="fetchSimilar"
-                    >
-                        <span v-if="loadSimilar" class="loading loading-spinner loading-xs"></span>
-                        <span v-else>Загрузить ещё</span>
-                    </button>
-                </div>
+            <!-- SIMILAR WORKS -->
+            <section v-show="activeTab === 'similar'">
+                <MasonryGrid
+                    :items="similarWorks"
+                    :start-page="similarWorks.length ? 1 : 0"
+                    :load-more-url="`/artworks/${artwork.id}/similar`"
+                    :per-page="12"
+                    @update:items="similarWorks = $event"
+                    class="w-full"
+                >
+                    <template #default="{ item }">
+                        <ArtworkCard :art="item" />
+                    </template>
+                </MasonryGrid>
             </section>
         </div>
     </AppLayout>

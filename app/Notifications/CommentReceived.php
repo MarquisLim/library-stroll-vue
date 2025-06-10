@@ -6,9 +6,7 @@ use App\Models\Comment;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\BroadcastMessage;
-use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Str;
 
@@ -20,23 +18,25 @@ class CommentReceived extends Notification implements ShouldBroadcast
 
     public function via($notifiable): array
     {
-        return ['database','broadcast'];
+        return ['database', 'broadcast'];
     }
 
     public function toArray($notifiable): array
     {
-        $art = $this->comment->commentable;
+        $c = $this->comment;
         return [
-            'comment_id'      => $this->comment->id,
-            'excerpt'         => Str::limit($this->comment->text,50),
+            'comment_id'     => $c->id,
+            'excerpt'        => Str::limit($c->text, 50),
+            'artwork_id'     => $c->commentable->id,
+            'artwork_title'  => $c->commentable->title ?: 'Без названия',
+            'artwork_url'    => route('artworks.show', $c->commentable->id),
+            'commenter_id'   => $c->user->id,
+            'commenter_name' => $c->user->name,
+            'avatar'         => $c->user->profile_photo_url,
 
-            'artwork_id'      => $art->id,
-            'artwork_title'   => $art->title ?: 'Без названия',
-            'artwork_url'     => route('artworks.show', $art->id),
-
-            'commenter_id'    => $this->comment->user->id,
-            'commenter_name'  => $this->comment->user->name,
-            'avatar'          => $this->comment->user->profile_photo_url,
+            // для фронта удобно сразу знать, к кому ответ:
+            'parent_id'      => $c->parent_id,
+            'parent_name'    => $c->parent?->user->name,
         ];
     }
 
@@ -53,8 +53,14 @@ class CommentReceived extends Notification implements ShouldBroadcast
 
     public function broadcastOn(): PrivateChannel
     {
-        $owner = $this->comment->commentable->user;
-        return new PrivateChannel('user.'.$owner->id);
-    }
+        if ($this->comment->parent_id) {
+            // это реплай — идём к parent->user
+            $recipient = $this->comment->parent->user;
+        } else {
+            // это корневой — к автору арта
+            $recipient = $this->comment->commentable->user;
+        }
 
+        return new PrivateChannel('user.' . $recipient->id);
+    }
 }
