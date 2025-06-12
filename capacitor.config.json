@@ -3,16 +3,6 @@
     "appName": "Library Stroll",
     "webDir": "public/build",
     "server": {
-        "url": "http://34.44.66.31:81"
-    },
-    "plugins": {
-        "SplashScreen": {
-            "launchShowDuration": 3000,
-            "launchAutoHide": false,
-            "backgroundColor": "#ffffff",
-            "androidScaleType": "CENTER_CROP",
-            "splashFullScreen": true,
-            "splashImmersive": true
-        }
+        "url": "https://librarystroll.duckdns.org/"
     }
 }
