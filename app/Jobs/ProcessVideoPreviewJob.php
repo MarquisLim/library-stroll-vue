@@ -42,6 +42,7 @@ class ProcessVideoPreviewJob implements ShouldQueue
 
         $format = new X264('aac');
         $format->setKiloBitrate(300);
+        $format->setAdditionalParameters(['-preset', 'veryfast']);
 
         $video->save($format, $tmpFile);
 
