@@ -8,7 +8,7 @@
                 alt="avatar"
                 class="w-8 h-8 rounded-full object-cover"
             />
-            <div v-else class="w-8 h-8 bg-base-200 rounded-full flex items-center justify-center">
+            <div v-else class="w-8 h-8 bg-base-200 text-base-content rounded-full flex items-center justify-center">
                 <UserIcon class="w-5 h-5 text-base-content/40" />
             </div>
             <h2 class="text-lg font-semibold">{{ otherUser?.name || '—' }}</h2>
@@ -21,7 +21,7 @@
                 alt="group avatar"
                 class="w-8 h-8 rounded-full object-cover"
             />
-            <div v-else class="w-8 h-8 bg-base-200 rounded-full flex items-center justify-center">
+            <div v-else class="w-8 h-8 bg-base-200 text-base-content rounded-full flex items-center justify-center">
                 <svg
                     xmlns="http://www.w3.org/2000/svg"
                     class="w-5 h-5 text-base-content/40"

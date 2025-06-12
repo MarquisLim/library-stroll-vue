@@ -128,6 +128,7 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
 
             Route::post('messages/{message}/reaction', [ReactionController::class, 'toggle'])->name('messages.reaction');
             Route::post('attachments', [AttachmentController::class, 'store'])->name('attachments.store');
+            Route::patch('conversations/{conversation}/update', [ConversationController::class, 'update'])->name('conversations.update');
             Route::patch('conversations/{conversation}/avatar', [GroupAvatarController::class, 'update'])->name('conversations.avatar.update');
             Route::post('conversations/{conversation}/add-user', [ConversationController::class, 'addUser'])->name('conversations.addUser');
             Route::post('conversations/{conversation}/remove-user', [ConversationController::class, 'removeUser'])->name('conversations.removeUser');

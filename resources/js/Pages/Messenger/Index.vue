@@ -39,7 +39,7 @@
             <div class="flex-1 flex flex-col">
 
                 <!-- Header (скрыт, если conversation = null) -->
-                <div class="flex items-center border border-base-300 px-2 fixed z-10 bg-base-100/80 w-full">
+                <div class="flex items-center border border-base-300 px-2 fixed z-10 bg-base-100 bg-opacity-80 backdrop-blur-md w-full">
                     <button
                         @click="showSidebar = !showSidebar"
                         class="sm:hidden p-2"
@@ -83,11 +83,14 @@
                                         <li>
                                             <button
                                                 @click="toggleBlock"
-                                                class="flex items-center gap-2 w-full text-left px-4 py-2 hover:bg-base-200 text-sm"
-                                                :class="isBlockedByMe ? 'text-green-600' : 'text-red-600'"
+                                                class="flex items-center gap-2 px-4 py-2 hover:bg-base-200 text-sm"
+                                                :class="isBlockedByMe
+                                                ? 'text-green-600'
+                                                : 'text-red-600'"
                                             >
                                                 {{ isBlockedByMe ? 'Разблокировать' : 'Заблокировать' }}
                                             </button>
+
                                         </li>
                                         <li>
                                             <button
@@ -139,9 +142,24 @@
                     />
                     <div
                         v-else
-                        class="flex-1 flex items-center justify-center text-base-content/60"
+                        class="flex-1 flex flex-col items-center justify-center text-base-content/60 space-y-4"
                     >
-                        Выберите чат слева
+                        <!-- Mobile button -->
+                        <button
+                            @click="showSidebar = true"
+                            class="sm:hidden flex flex-col items-center px-6 py-4 border border-base-300 rounded-lg hover:bg-base-200 transition"
+                        >
+                            <img src="/niko.webp" alt="niko" class="w-24 h-24 mb-2" />
+                            <span class="font-medium mb-1">Выберите чат слева</span>
+                            <ChevronLeftIcon class="w-6 h-6" />
+                        </button>
+
+                        <!-- Desktop hint -->
+                        <div class="hidden sm:flex flex-row items-center space-x-4">
+                            <ChevronLeftIcon class="w-8 h-8 animate-pulse" />
+                            <img src="/niko.webp" alt="niko" class="w-24 h-24" />
+                            <span class="text-lg font-medium">Выберите чат слева</span>
+                        </div>
                     </div>
                 </div>
 
@@ -208,36 +226,28 @@ const otherUser = computed(() => {
     return conversation?.users?.find((u) => u.id !== authId) || null
 })
 
-const isBlockedByMe = computed(() => {
-    if (!conversation) return false
-    if (conversation.type === 'dialog') {
-        const other = conversation.users.find((u) => u.id !== authId)
-        return other?.pivot?.blocked_me === true
-    }
-    return false
-})
+const isBlockedByMe = computed(() =>
+    otherUser.value?.is_blocked_by_me === true
+)
 
-const hasBlockedMe = computed(() => {
-    if (!conversation) return false
-    if (conversation.type === 'dialog') {
-        const other = conversation.users.find((u) => u.id !== authId)
-        return other?.pivot?.blocked_me === true
-    }
-    return false
-})
-
+const hasBlockedMe = computed(() =>
+    otherUser.value?.has_blocked_me === true
+)
 function toggleBlock() {
     if (!otherUser.value) return
-    const userId = otherUser.value.id
+    const id = otherUser.value.id
     const action = isBlockedByMe.value ? 'unblock' : 'block'
-    const text = isBlockedByMe.value
+    const confirmText = isBlockedByMe.value
         ? 'Разблокировать пользователя?'
         : 'Заблокировать пользователя?'
-    if (!confirm(text)) return
-    axios.post(`/users/${userId}/${action}`).then(() => {
-        otherUser.value.pivot.blocked_by_me = !isBlockedByMe.value
-    })
+    if (!confirm(confirmText)) return
+
+    axios.post(`/users/${id}/${action}`)
+        .then(() => {
+            otherUser.value.is_blocked_by_me = !isBlockedByMe.value
+        })
 }
+
 
 function deleteChat() {
     if (!conversation) return

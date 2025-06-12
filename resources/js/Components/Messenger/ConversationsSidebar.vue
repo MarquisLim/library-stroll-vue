@@ -7,29 +7,41 @@
             class="flex items-center px-4 py-3 hover:bg-base-200 transition"
             :class="{ 'bg-base-200': chat.id === activeId }"
         >
-            <!-- Аватар слева -->
-            <template v-if="chat.type === 'dialog'">
-                <img
-                    :src="avatarUrl(chat)"
-                    alt="avatar"
-                    class="w-10 h-10 rounded-full object-cover mr-3"
-                />
-            </template>
-            <template v-else>
-                <img
-                    :src="randomGroupAvatar(chat.id)"
-                    alt="group avatar"
-                    class="w-10 h-10 rounded-full object-cover mr-3"
-                />
-            </template>
+            <!-- Аватар -->
+            <div class="w-10 h-10 rounded-full mr-3 flex-shrink-0">
+                <template v-if="chat.type === 'dialog'">
+                    <img
+                        v-if="getDialogAvatar(chat)"
+                        :src="getDialogAvatar(chat)"
+                        alt="avatar"
+                        class="w-10 h-10 rounded-full object-cover"
+                    />
+                    <div v-else class="w-10 h-10 bg-base-300 rounded-full"></div>
+                </template>
+                <template v-else>
+                    <img
+                        v-if="chat.avatar_url"
+                        :src="chat.avatar_url"
+                        alt="group avatar"
+                        class="w-10 h-10 rounded-full object-cover"
+                    />
+                    <div v-else class="w-10 h-10 bg-base-300 rounded-full"></div>
+                </template>
+            </div>
 
-            <!-- Название и превью -->
+            <!-- Название + бейдж + превью -->
             <div class="flex-1">
-                <h3 class="font-medium">{{ displayTitle(chat) }}</h3>
+                <h3 class="font-medium flex items-center">
+                    {{ displayTitle(chat) }}
+                    <span
+                        v-if="chat.type === 'group'"
+                        class="ml-2 text-xs text-base-content/60 border border-base-content/60 rounded px-1"
+                    >Группа</span>
+                </h3>
                 <p class="text-xs text-base-content/60 truncate">{{ preview(chat) }}</p>
             </div>
 
-            <!-- Бейдж непрочитанных -->
+            <!-- Непрочитанные -->
             <span
                 v-if="chat.unread > 0 && chat.id !== activeId"
                 class="badge badge-primary"
@@ -45,33 +57,22 @@ import { usePage, Link } from '@inertiajs/vue3'
 
 const props = defineProps({
     items: Array,
-    activeId: { type: Number, default: null }
+    activeId: { type: Number, default: null },
 })
 const meId = usePage().props.auth.user.id
 
 function displayTitle(c) {
     if (c.type === 'dialog') {
         const p = c.users.find(u => u.id !== meId)
-        return p?.name ?? '—'
+        return p?.name || '—'
     }
-    return c.title || 'Группа'
+    return c.title || '—'
 }
 
-function avatarUrl(c) {
-    if (c.type === 'dialog') {
-        const p = c.users.find(u => u.id !== meId)
-        return p?.profile_photo_url || defaultAvatar()
-    }
-    return defaultAvatar()
-}
-
-function randomGroupAvatar(id) {
-    // Используем сервис генерации случайных аватаров по id чата
-    return `https://i.pravatar.cc/40?u=${id}`
-}
-
-function defaultAvatar() {
-    return 'https://i.pravatar.cc/40?u=default'
+// возвращает URL аватара собеседника
+function getDialogAvatar(c) {
+    const p = c.users.find(u => u.id !== meId)
+    return p?.profile_photo_url || null
 }
 
 function preview(c) {

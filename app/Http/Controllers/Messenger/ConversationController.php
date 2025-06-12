@@ -148,6 +148,22 @@ class ConversationController extends Controller
         return redirect()->route('messenger', $conv->id);
     }
 
+    public function update(Request $request, Conversation $conversation)
+    {
+        $this->authorize('update', $conversation);
+
+        $data = $request->validate([
+            'title' => 'required|string|max:100',
+        ]);
+
+        $conversation->update(['title' => $data['title']]);
+
+        return response()->json([
+            'title'      => $conversation->title,
+            'avatar_url' => $conversation->avatar_url,
+        ]);
+    }
+
     public function addUser(Request $request, Conversation $conversation)
     {
         $this->authorize('view', $conversation);
@@ -197,10 +213,7 @@ class ConversationController extends Controller
         $this->authorize('view', $conversation);
         $user = Auth::user();
         $pivot = $conversation->users()->where('user_id', $user->id)->first()->pivot;
-        // Если админ и он последний – не позволит выйти (или удалит всю группу)
         if ($pivot->role === 'admin') {
-            // Если хотите разрешить «админам» выходить, но сначала назначать нового админа,
-            // нужно дописать логику здесь. Пока запретим админу «самоуход».
             return response()->json(['message' => 'Админ не может просто выйти'], 422);
         }
 

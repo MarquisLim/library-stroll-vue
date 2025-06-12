@@ -34,10 +34,13 @@
           isMine ? 'bg-primary text-primary-content' : 'bg-base-200 dark:bg-base-800'
         ]"
             >
-                <!-- 1. Цитата, если есть reply_to -->
+                <!-- Если есть reply_to -->
                 <div
                     v-if="msg.reply_to"
-                    class="mb-2 p-2 bg-base-300 dark:bg-base-700 rounded text-sm text-base-content/70 cursor-pointer break-all whitespace-pre-wrap"
+                    class="mb-2 p-2
+                         bg-base-200 dark:bg-base-800
+                         rounded text-sm text-base-content opacity-70
+                         cursor-pointer break-all whitespace-pre-wrap"
                     @click.stop="$emit('go-to', msg.reply_to.id)"
                 >
                     <div v-if="msg.reply_to.artwork">
@@ -50,6 +53,7 @@
                         {{ msg.reply_to.attachments[0].path.split('/').pop() }}
                     </div>
                 </div>
+
 
                 <!-- 2. Текст сообщения -->
                 <p v-if="msg.body" class="break-all whitespace-pre-wrap">
