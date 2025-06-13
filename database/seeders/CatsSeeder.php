@@ -20,7 +20,7 @@ class CatsSeeder extends Seeder
      */
     public function run(): void
     {
-        $faker = Faker::create();
+        $faker = Faker::create('ru_RU');
 
         $tagMap = [
             'cats'   => ['котики', 'мимими', 'пушистик'],
@@ -80,12 +80,13 @@ class CatsSeeder extends Seeder
 
                     $art = new Artwork([
                         'user_id'        => $user->id,
-                        'title'          => $faker->sentence(rand(2, 5)),
-                        'description'    => $faker->paragraph(rand(1, 2)),
+                        'title'          => Str::limit($faker->realText(30), 30),
+                        'description'    => $faker->realText(120),
                         'is_published'   => true,
                         'allow_download' => $faker->boolean(80),
                         'allow_comments' => $faker->boolean(90),
                         'views_count'    => rand(10, 500),
+                        'published_at' => now(),
                     ]);
                     $art->save();
 
