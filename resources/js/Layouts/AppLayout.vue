@@ -39,6 +39,7 @@ function resize() { isMobile.value = window.innerWidth < 640 }
 
 
 // Messages
+const subscribedConvs = new Set()
 const msgUnread     = ref(page.props.unreadCount || 0)
 
 // Theme
@@ -51,6 +52,14 @@ watch(isDark, v => {
     setTheme()
 })
 
+function subscribeToConversation(id) {
+    if (!myId || subscribedConvs.has(id)) return
+    window.Echo.private(`conversation.${id}`)
+        .listen('.MessageSent', ({ message }) => {
+            if (message.user_id !== myId) msgUnread.value++
+        })
+    subscribedConvs.add(id)
+}
 
 onMounted(() => window.addEventListener('resize', resize))
 onUnmounted(() => window.removeEventListener('resize', resize))
@@ -59,15 +68,21 @@ onMounted(() => {
     isDark.value = localStorage.getItem('theme') === 'dark'
     setTheme()
 
-    if (!myId) return
+    page.props.conversationIds?.forEach(subscribeToConversation)
 
-    page.props.conversationIds?.forEach(id =>
-        Echo.private(`conversation.${id}`)
-            .listen('.MessageSent', ({ message }) => {
-                if (message.user_id !== myId) msgUnread.value++
+    if (myId) {
+        window.Echo.private(`user.${myId}`)
+            .listen('.ConversationCreated', ({ conversation }) => {
+                subscribeToConversation(conversation.id)
+                msgUnread.value++
             })
-    )
+    }
 })
+
+watch(
+    () => page.props.conversationIds,
+    ids => ids?.forEach(subscribeToConversation)
+)
 
 // Search
 const searchQ       = ref('')
@@ -83,15 +98,6 @@ watch([searchQ, searchTab], async ([q,tab])=>{
     suggestions.value = data.suggestions
     showSugBox.value  = suggestions.value.length>0
 })
-
-function selectSuggestion(s){
-    router.get(route('search.index'), { q: s.name, type: searchTab.value })
-    showSugBox.value = false
-}
-function onSearchEnter(){
-    router.get(route('search.index'), { q: searchQ.value, type: searchTab.value })
-    showSugBox.value = false
-}
 
 function logout() {
     if (isLoggingOut.value) return

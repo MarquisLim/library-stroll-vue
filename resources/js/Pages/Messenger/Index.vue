@@ -1,4 +1,3 @@
-<!-- resources/js/Pages/Messenger/Index.vue -->
 <template>
     <AppLayout title="Чат">
         <div class="flex h-full">
@@ -201,7 +200,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { reactive } from 'vue'
 import axios from 'axios'
 import { usePage, Link, router } from '@inertiajs/vue3'
@@ -315,21 +314,25 @@ async function leaveGroup() {
 
 onMounted(() => {
     const myId = authId
+
     page.props.conversations.data.forEach((item) => {
-        window.Echo.private(`conversation.${item.id}`).listen(
-            '.MessageSent',
-            ({ message }) => {
-                const conv = conversations.find((x) => x.id === item.id)
+        window.Echo.private(`conversation.${item.id}`)
+            .listen('.MessageSent', ({ message }) => {
+                const conv = conversations.find(x => x.id === item.id)
                 if (!conv) return
+
                 conv.last_message = message
-                if (
-                    message.user_id !== myId &&
-                    item.id !== conversation?.id
-                ) {
+
+                if (message.user_id !== myId && item.id !== conversation?.id) {
                     conv.unread = (conv.unread || 0) + 1
                 }
-            }
-        )
+
+                const idx = conversations.indexOf(conv)
+                if (idx > 0) {
+                    conversations.splice(idx, 1)
+                    conversations.unshift(conv)
+                }
+            })
     })
     window.Echo.private(`user.${myId}`).listen(
         '.ConversationCreated',
@@ -342,4 +345,29 @@ onMounted(() => {
         }
     )
 })
+
+watch(
+    () => conversation?.id,
+    async (newId) => {
+        if (!newId) return
+
+        const lastId = conversation.pivot?.last_read_id
+            ? conversation.pivot.last_read_id
+            : conversation.last_message_id
+
+        // PATCH /messenger/conversations/{conversation}/read
+        try {
+            await axios.patch(
+                route('messenger.conversations.read', conversation.id),
+                { message_id: lastId }
+            )
+            // локальное обнуление непрочитанных
+            const conv = conversations.find(c => c.id === conversation.id)
+            if (conv) conv.unread = 0
+        } catch (e) {
+            console.error('Не удалось пометить сообщения прочитанными', e)
+        }
+    },
+    { immediate: true }
+)
 </script>

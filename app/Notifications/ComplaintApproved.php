@@ -11,7 +11,7 @@ use Illuminate\Notifications\Notification;
 use Illuminate\Notifications\Messages\BroadcastMessage;
 use Illuminate\Broadcasting\PrivateChannel;
 
-class ComplaintRejected extends Notification implements ShouldBroadcast
+class ComplaintApproved extends Notification implements ShouldBroadcast
 {
     use Queueable;
 
@@ -22,10 +22,7 @@ class ComplaintRejected extends Notification implements ShouldBroadcast
         protected User      $moderator,
         int $recipientId = null
     ) {
-        // если $recipientId не передан явно, берём его из жалобы
         $this->recipientId = $recipientId ?? $this->complaint->user_id;
-
-        // грузим всё необходимое для формирования полезной нагрузки
         $this->complaint->load('complaintable', 'user');
     }
 
@@ -34,14 +31,14 @@ class ComplaintRejected extends Notification implements ShouldBroadcast
         return ['database', 'broadcast'];
     }
 
-    public function toDatabase($notifiable): array
+    protected function payload(): array
     {
         $info = ComplaintSubjectInfo::for($this->complaint->complaintable);
 
         return [
-            'message'      => "Ваша жалоба на {$info['type']} отклонена",
+            'message'      => "Ваша жалоба на {$info['type']} принята",
             'note'         => $this->complaint->moderator_note,
-            'type'         => 'complaint_rejected',
+            'type'         => 'complaint_approved',
             'avatar'       => $this->moderator->profile_photo_url,
             'title'        => $info['title'],
             'url'          => $info['url'],
@@ -49,11 +46,16 @@ class ComplaintRejected extends Notification implements ShouldBroadcast
         ];
     }
 
+    public function toDatabase($notifiable): array
+    {
+        return $this->payload();
+    }
+
     public function toBroadcast($notifiable): BroadcastMessage
     {
         return new BroadcastMessage([
             'id'         => $this->id,
-            'data'       => $this->toDatabase($notifiable),
+            'data'       => $this->payload(),
             'read_at'    => null,
             'created_at' => now()->toDateTimeString(),
             'type'       => class_basename(static::class),

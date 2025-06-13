@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Artwork;
 use App\Models\Collection;
+use App\Models\Models\Complaint\ComplaintType;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -48,12 +49,16 @@ class ProfileController extends Controller
             }])
             ->get();
 
+        $complaintTypes = ComplaintType::select('slug', 'name')->get();
+
+
         return inertia('Profile/ProfileShow', [
             'profileUser' => $user->only('id', 'name', 'profile_photo_url', 'created_at'),
             'artworks' => $artworks,
             'collections' => $collections,
             'isOwner' => $isOwner,
-            'userCollections' => $userCollections
+            'userCollections' => $userCollections,
+            'complaintTypes' => $complaintTypes,
         ]);
     }
 

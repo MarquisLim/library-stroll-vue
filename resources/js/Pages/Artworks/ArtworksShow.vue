@@ -48,7 +48,7 @@ const onMediaLoad = () => (loaded.value = true)
 const aspectRatio = computed(() => {
     const w = artwork.value.thumb_width || 1
     const h = artwork.value.thumb_height || 1
-    return (h / w) * 100 // аналогично artworkcard
+    return (h / w) * 100
 })
 
 function openComplaint() {

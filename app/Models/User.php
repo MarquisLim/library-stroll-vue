@@ -34,6 +34,7 @@ class User extends Authenticatable
         'email',
         'password',
         'description',
+        'is_blocked',
         'views_count'
     ];
 
@@ -137,5 +138,17 @@ class User extends Authenticatable
     public function hasBlocked(User $user): bool
     {
         return $this->blockedUsers()->where('blocked_id', $user->id)->exists();
+    }
+
+    public function block(): void
+    {
+        $this->is_blocked = true;
+        $this->save();
+    }
+
+    public function unblock(): void
+    {
+        $this->is_blocked = false;
+        $this->save();
     }
 }

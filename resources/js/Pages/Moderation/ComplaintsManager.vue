@@ -69,6 +69,17 @@ function subjectLink(c) {
 
     return '#'
 }
+
+function complaintSubjectLabel(c) {
+    const type = c.complaintable_type.split('\\').pop()?.toLowerCase()
+    const entity = c.complaintable
+
+    if (type === 'artwork') return `Артворк: ${entity?.title ?? '—'}`
+    if (type === 'user') return `Профиль: ${entity?.name ?? '—'}`
+    if (type === 'comment') return `Комментарий к: ${entity?.commentable?.title ?? '—'}`
+    return `${type} #${c.complaintable_id}`
+}
+
 </script>
 
 <template>
@@ -109,8 +120,8 @@ function subjectLink(c) {
                 <thead>
                 <tr>
                     <th>ID</th>
-                    <th>Кто</th>
-                    <th>Что</th>
+                    <th>Жалобщик</th>
+                    <th>Объект</th>
                     <th>Тип</th>
                     <th>Описание</th>
                     <th>Статус</th>
@@ -130,7 +141,7 @@ function subjectLink(c) {
                     </td>
                     <td>
                         <Link :href="subjectLink(c)" class="link link-primary">
-                            {{ c.complaintable_type.split('\\').pop() }} #{{ c.complaintable_id }}
+                            {{ complaintSubjectLabel(c) }}
                         </Link>
                     </td>
                     <td>{{ c.type.name }}</td>
@@ -172,12 +183,12 @@ function subjectLink(c) {
                     <Link :href="route('moderation.complaints.show', c.id)"
                           class="btn btn-xs btn-outline">→</Link>
                 </div>
-                <p><strong>Кто:</strong>
+                <p><strong>Жалобщик:</strong>
                     <Link :href="route('user.profile.show', c.user.id)" class="link">
                         {{ c.user.name }}
                     </Link>
                 </p>
-                <p><strong>Что:</strong>
+                <p><strong>Объект:</strong>
                     <Link :href="subjectLink(c)" class="link">
                         {{ c.complaintable_type.split('\\').pop() }} #{{ c.complaintable_id }}
                     </Link>

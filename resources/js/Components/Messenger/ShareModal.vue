@@ -1,4 +1,3 @@
-<!-- resources/js/Components/Messenger/ShareModal.vue -->
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import axios from 'axios'

@@ -66,7 +66,9 @@ class StudioController extends Controller
             'user_id' => auth()->id(),
         ], ['is_published'=>false, 'allow_comments'=>true]);
         $artwork->save();
+
         $artwork->clearMediaCollection('artworks');
+        $artwork->clearMediaCollection('preview');
 
         $media = $artwork
             ->addMedia($request->file('file'))

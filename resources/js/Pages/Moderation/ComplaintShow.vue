@@ -68,10 +68,10 @@ const resourceLink = computed(() => {
 
             <!-- левая колонка -->
             <div class="space-y-2">
-                <p><strong>Кто</strong>: {{ complaint.user.name }}</p>
+                <p><strong>Жалобщик</strong>: {{ complaint.user.name }}</p>
 
                 <p>
-                    <strong>Что</strong>:
+                    <strong>Объект</strong>:
                     <Link
                         :href="resourceLink"
                         class="link link-primary"

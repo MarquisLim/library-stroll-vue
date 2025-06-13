@@ -35,8 +35,9 @@ class ConversationController extends Controller
             ->withCount([
                 'messages as unread' => function ($q) use ($user) {
                     $q->where('user_id', '!=', $user->id)
-                        ->when(function ($query) use ($user) {
-                            $query->whereColumn('created_at', '>', 'conversation_user.last_read_at');
+                        ->where(function($q2) {
+                            $q2->whereColumn('created_at', '>', 'conversation_user.last_read_at')
+                                ->orWhereNull('conversation_user.last_read_at');
                         });
                 }
             ])
@@ -70,10 +71,6 @@ class ConversationController extends Controller
                 ])
                 ->take(50)
                 ->latest('id')->get()->reverse()->values();
-        }
-
-        foreach ($messages as $m) {
-            Log::info('Message ID='.$m->id.' replyTo_id=' . ($m->replyTo ? $m->replyTo->id : 'null'));
         }
 
         $collections = Collection::where('user_id', Auth::id())

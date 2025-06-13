@@ -33,7 +33,7 @@ class ComplaintSubjectInfo
             $subject instanceof User    => [
                 'type'  => 'profile',
                 'title' => $subject->name,
-                'url'   => route('profile.show', $subject->id),
+                'url'   => route('user.profile.show', $subject->id),
             ],
 
             default => [

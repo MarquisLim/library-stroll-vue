@@ -26,11 +26,9 @@ class Artwork extends Model implements HasMedia
 
     protected static function booted()
     {
-        static::addGlobalScope('not_blocked', function (Builder $builder) {
-            $builder->where('is_blocked', false)
-                ->whereDoesntHave('user', function ($q) {
-                    $q->where('is_blocked', true);
-                });
+        static::addGlobalScope('not_blocked', function (Builder $q) {
+            $q->where('is_blocked', false)
+                ->whereDoesntHave('user', fn($uq) => $uq->where('is_blocked', true));
         });
     }
 
@@ -50,9 +48,10 @@ class Artwork extends Model implements HasMedia
 
     public function user()
     {
-        return $this->belongsTo(User::class);
+        return $this
+            ->belongsTo(User::class)
+            ->withoutGlobalScope('not_blocked');
     }
-
     public function tags()
     {
         return $this->belongsToMany(Tag::class,'artwork_tag');

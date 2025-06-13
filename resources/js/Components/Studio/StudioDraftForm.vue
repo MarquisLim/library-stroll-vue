@@ -19,7 +19,9 @@ const props = defineProps({
     uploadProgress: Number,
     showCollectionModal: Boolean,
     errorMessages : { type:Array, default:() => [] },
-    validateFile  : { type:Function, required:true }
+    validateFile  : { type:Function, required:true },
+    isSaving      : Boolean,
+    isDirty       : Boolean,
 })
 
 const emit = defineEmits([
@@ -229,7 +231,12 @@ defineExpose({ fileInput })
                 <button
                     class="btn btn-success"
                     @click="emitPublish"
-                    :disabled="!title.trim() || !previewUrl"
+                    :disabled="
+                        !title.trim() ||
+                        !previewUrl   ||
+                        props.isDirty ||
+                        props.isSaving
+                    "
                 >
                     Опубликовать
                 </button>

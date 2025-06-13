@@ -47,6 +47,7 @@
         "fullpage.js": "^4.0.35",
         "gsap": "^3.13.0",
         "imagesloaded": "^5.0.0",
+        "lodash.debounce": "^4.0.8",
         "masonry-layout": "^4.2.2",
         "pinia": "^3.0.2",
         "plyr": "^3.7.8",

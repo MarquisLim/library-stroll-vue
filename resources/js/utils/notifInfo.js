@@ -38,6 +38,14 @@ export default function notifInfo(n){
                      на <a class="link no-underline text-blue-500" href="${d.subject_url}">«${d.subject_title}»</a>`
             };
 
+        case 'ComplaintApproved':
+            return {
+                html:
+                    `${d.message}
+                     <a class="link no-underline text-blue-500 ml-1" href="${d.url}">«${d.title}»</a>`,
+                extra: d.note
+            };
+
         case 'ContentBlocked':
             return {
                 html:

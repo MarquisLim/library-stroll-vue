@@ -16,6 +16,31 @@
                       class="mt-1 text-secondary hover:text-secondary-focus underline">
                     Настройки профиля
                 </Link>
+
+                <!--  Пожаловаться  -->
+                <div v-if="!isOwner" class="">
+                    <div class="dropdown dropdown-end">
+                        <label tabindex="0" class="btn btn-ghost btn-circle btn-sm">
+                            <EllipsisHorizontalIcon class="w-6 h-6"/>
+                        </label>
+                        <ul tabindex="0"
+                            class="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-40">
+                            <li>
+                                <button @click="openComplaint" class="flex items-center gap-2 w-full text-left">
+                                    Пожаловаться
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+                <ComplaintModal
+                    :show="showComplaint"
+                    :types="complaintTypes"
+                    targetType="profile"
+                    :targetId="profileUser.id"
+                    @close="showComplaint = false"
+                    @submitted="() => notify('Жалоба отправлена')"
+                />
             </div>
             <div v-if="collections.length">
                 <!-- ───────── коллекции (слайдер) ───────── -->
@@ -111,16 +136,17 @@ import ArtworkCard       from '@/Components/Gallery/ArtworkCard.vue'
 import CollectionCard    from '@/Components/Collections/CollectionCard.vue'
 import EditCollectionModal from '@/Components/Collections/EditCollectionModal.vue'
 import ConfirmDeleteModal  from '@/Components/Collections/ConfirmDeleteModal.vue'
+import ComplaintModal from '@/Components/ComplaintModal.vue'
 import { Swiper, SwiperSlide } from 'swiper/vue'
 import 'swiper/css'
 import 'swiper/css/navigation'
 import 'swiper/css/pagination'
 import { Navigation, Pagination, Mousewheel } from 'swiper/modules'
-import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/vue/24/outline'
+import { ChevronLeftIcon, ChevronRightIcon, EllipsisHorizontalIcon } from '@heroicons/vue/24/outline'
 
 /* Pinia store */
 import { useArtworkActions } from '@/stores/useArtworkActions'
-const { setCollections, toggleLike } = useArtworkActions()
+const { setCollections, toggleLike, requireAuth, notify, showAuthModal } = useArtworkActions()
 
 /* server props */
 const { props }      = usePage()
@@ -128,6 +154,13 @@ const profileUser    = props.profileUser
 const artworks       = props.artworks || []
 const collections    = ref(props.collections || [])
 const isOwner        = props.isOwner || false
+const complaintTypes = props.complaintTypes
+const showComplaint  = ref(false)
+
+function openComplaint() {
+    if (!requireAuth(openComplaint)) return
+    showComplaint.value = true
+}
 
 /* initialize Pinia collections for selector */
 if (props.userCollections) {

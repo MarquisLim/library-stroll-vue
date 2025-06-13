@@ -8,6 +8,7 @@ use App\Models\Comment;
 use App\Models\Models\Complaint\Complaint;
 use App\Models\Models\Complaint\ComplaintType;
 use App\Models\User;
+use App\Notifications\ComplaintApproved;
 use App\Notifications\ComplaintRejected;
 use App\Notifications\ContentBlocked;
 use Illuminate\Http\Request;
@@ -84,6 +85,7 @@ class ComplaintController extends Controller
         if ($data['status'] === 'approved') {
             optional($subject)->block();
             $owner->notify(new ContentBlocked($complaint, $request->user()));
+            $complaint->user->notify(new ComplaintApproved($complaint, $request->user()));
         } else {
             optional($subject)->unblock();
             $complaint->user->notify(

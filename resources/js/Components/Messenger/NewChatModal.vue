@@ -19,8 +19,8 @@ const isSearching = ref(false)
 
 // Для группы
 const groupName = ref('')
-const groupAvatar = ref(null)        // локально выбранный файл
-const groupAvatarPreview = ref(null) // data-url для превью
+const groupAvatar = ref(null)
+const groupAvatarPreview = ref(null)
 const selectedGroupUsers = ref([])
 
 const error = ref(null)
