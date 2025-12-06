@@ -1,0 +1,1288 @@
+{
+  "metamodel": {
+    "version": "1.0",
+    "name": "Library Stroll Domain Model",
+    "description": "Модель предметной области платформы для художников Library Stroll"
+  },
+  "entities": [
+    {
+      "name": "User",
+      "description": "Пользователь платформы (художник/дизайнер)",
+      "attributes": [
+        {
+          "name": "id",
+          "type": "String",
+          "constraints": [
+            "PK",
+            "AutoIncrement"
+          ],
+          "nullable": false,
+          "default": null,
+          "maxLength": null,
+          "values": null,
+          "references": null,
+          "required": true
+        },
+        {
+          "name": "name",
+          "type": "String",
+          "constraints": [
+            "Required"
+          ],
+          "nullable": false,
+          "default": null,
+          "maxLength": 255,
+          "values": null,
+          "references": null,
+          "required": false
+        },
+        {
+          "name": "email",
+          "type": "String",
+          "constraints": [
+            "Required",
+            "Unique"
+          ],
+          "nullable": false,
+          "default": null,
+          "maxLength": 255,
+          "values": null,
+          "references": null,
+          "required": false
+        },
+        {
+          "name": "password",
+          "type": "String",
+          "constraints": [
+            "Required",
+            "Hashed"
+          ],
+          "nullable": false,
+          "default": null,
+          "maxLength": 255,
+          "values": null,
+          "references": null,
+          "required": false
+        },
+        {
+          "name": "description",
+          "type": "String",
+          "constraints": [],
+          "nullable": true,
+          "default": null,
+          "maxLength": null,
+          "values": null,
+          "references": null,
+          "required": false
+        },
+        {
+          "name": "is_blocked",
+          "type": "String",
+          "constraints": [],
+          "nullable": false,
+          "default": false,
+          "maxLength": null,
+          "values": null,
+          "references": null,
+          "required": false
+        },
+        {
+          "name": "views_count",
+          "type": "String",
+          "constraints": [],
+          "nullable": false,
+          "default": 0,
+          "maxLength": null,
+          "values": null,
+          "references": null,
+          "required": false
+        }
+      ],
+      "relationships": [
+        {
+          "type": "OneToMany",
+          "target": "Artwork",
+          "name": "artworks",
+          "cardinality": "1:N",
+          "foreignKey": null,
+          "pivotTable": null,
+          "pivotAttributes": null,
+          "polymorphic": false,
+          "morphType": null,
+          "selfReference": false,
+          "onDelete": "Cascade"
+        },
+        {
+          "type": "OneToMany",
+          "target": "Collection",
+          "name": "collections",
+          "cardinality": "1:N",
+          "foreignKey": null,
+          "pivotTable": null,
+          "pivotAttributes": null,
+          "polymorphic": false,
+          "morphType": null,
+          "selfReference": false,
+          "onDelete": "Cascade"
+        },
+        {
+          "type": "OneToMany",
+          "target": "Comment",
+          "name": "comments",
+          "cardinality": "1:N",
+          "foreignKey": null,
+          "pivotTable": null,
+          "pivotAttributes": null,
+          "polymorphic": false,
+          "morphType": null,
+          "selfReference": false,
+          "onDelete": null
+        },
+        {
+          "type": "OneToMany",
+          "target": "Like",
+          "name": "likes",
+          "cardinality": "1:N",
+          "foreignKey": null,
+          "pivotTable": null,
+          "pivotAttributes": null,
+          "polymorphic": false,
+          "morphType": null,
+          "selfReference": false,
+          "onDelete": null
+        },
+        {
+          "type": "ManyToMany",
+          "target": "Conversation",
+          "name": "conversations",
+          "cardinality": "N:M",
+          "foreignKey": null,
+          "pivotTable": "conversation_user",
+          "pivotAttributes": [
+            "joined_at",
+            "role",
+            "last_read_at"
+          ],
+          "polymorphic": false,
+          "morphType": null,
+          "selfReference": false,
+          "onDelete": null
+        }
+      ]
+    },
+    {
+      "name": "Artwork",
+      "description": "Художественная работа (изображение, видео, GIF)",
+      "attributes": [
+        {
+          "name": "id",
+          "type": "String",
+          "constraints": [
+            "PK",
+            "AutoIncrement"
+          ],
+          "nullable": false,
+          "default": null,
+          "maxLength": null,
+          "values": null,
+          "references": null,
+          "required": true
+        },
+        {
+          "name": "user_id",
+          "type": "String",
+          "constraints": [
+            "FK",
+            "Required"
+          ],
+          "nullable": false,
+          "default": null,
+          "maxLength": null,
+          "values": null,
+          "references": "User.id",
+          "required": false
+        },
+        {
+          "name": "title",
+          "type": "String",
+          "constraints": [],
+          "nullable": true,
+          "default": null,
+          "maxLength": 255,
+          "values": null,
+          "references": null,
+          "required": false
+        },
+        {
+          "name": "description",
+          "type": "String",
+          "constraints": [],
+          "nullable": true,
+          "default": null,
+          "maxLength": null,
+          "values": null,
+          "references": null,
+          "required": false
+        },
+        {
+          "name": "type",
+          "type": "String",
+          "constraints": [],
+          "nullable": false,
+          "default": "image",
+          "maxLength": null,
+          "values": [
+            "image",
+            "video",
+            "gif"
+          ],
+          "references": null,
+          "required": false
+        },
+        {
+          "name": "is_published",
+          "type": "String",
+          "constraints": [],
+          "nullable": false,
+          "default": false,
+          "maxLength": null,
+          "values": null,
+          "references": null,
+          "required": false
+        },
+        {
+          "name": "allow_download",
+          "type": "String",
+          "constraints": [],
+          "nullable": false,
+          "default": true,
+          "maxLength": null,
+          "values": null,
+          "references": null,
+          "required": false
+        },
+        {
+          "name": "allow_comments",
+          "type": "String",
+          "constraints": [],
+          "nullable": false,
+          "default": true,
+          "maxLength": null,
+          "values": null,
+          "references": null,
+          "required": false
+        },
+        {
+          "name": "is_adult",
+          "type": "String",
+          "constraints": [],
+          "nullable": false,
+          "default": false,
+          "maxLength": null,
+          "values": null,
+          "references": null,
+          "required": false
+        },
+        {
+          "name": "has_ai",
+          "type": "String",
+          "constraints": [],
+          "nullable": false,
+          "default": false,
+          "maxLength": null,
+          "values": null,
+          "references": null,
+          "required": false
+        },
+        {
+          "name": "is_private",
+          "type": "String",
+          "constraints": [],
+          "nullable": false,
+          "default": false,
+          "maxLength": null,
+          "values": null,
+          "references": null,
+          "required": false
+        },
+        {
+          "name": "is_blocked",
+          "type": "String",
+          "constraints": [],
+          "nullable": false,
+          "default": false,
+          "maxLength": null,
+          "values": null,
+          "references": null,
+          "required": false
+        },
+        {
+          "name": "views_count",
+          "type": "String",
+          "constraints": [],
+          "nullable": false,
+          "default": 0,
+          "maxLength": null,
+          "values": null,
+          "references": null,
+          "required": false
+        },
+        {
+          "name": "published_at",
+          "type": "String",
+          "constraints": [],
+          "nullable": true,
+          "default": null,
+          "maxLength": null,
+          "values": null,
+          "references": null,
+          "required": false
+        }
+      ],
+      "relationships": [
+        {
+          "type": "ManyToOne",
+          "target": "User",
+          "name": "user",
+          "cardinality": "N:1",
+          "foreignKey": "user_id",
+          "pivotTable": null,
+          "pivotAttributes": null,
+          "polymorphic": false,
+          "morphType": null,
+          "selfReference": false,
+          "onDelete": null
+        },
+        {
+          "type": "ManyToMany",
+          "target": "Tag",
+          "name": "tags",
+          "cardinality": "N:M",
+          "foreignKey": null,
+          "pivotTable": "artwork_tag",
+          "pivotAttributes": null,
+          "polymorphic": false,
+          "morphType": null,
+          "selfReference": false,
+          "onDelete": null
+        },
+        {
+          "type": "ManyToMany",
+          "target": "Collection",
+          "name": "collections",
+          "cardinality": "N:M",
+          "foreignKey": null,
+          "pivotTable": "artwork_collection",
+          "pivotAttributes": null,
+          "polymorphic": false,
+          "morphType": null,
+          "selfReference": false,
+          "onDelete": null
+        },
+        {
+          "type": "OneToMany",
+          "target": "Comment",
+          "name": "comments",
+          "cardinality": "1:N",
+          "foreignKey": null,
+          "pivotTable": null,
+          "pivotAttributes": null,
+          "polymorphic": true,
+          "morphType": "commentable",
+          "selfReference": false,
+          "onDelete": "Cascade"
+        },
+        {
+          "type": "OneToMany",
+          "target": "Like",
+          "name": "likes",
+          "cardinality": "1:N",
+          "foreignKey": null,
+          "pivotTable": null,
+          "pivotAttributes": null,
+          "polymorphic": false,
+          "morphType": null,
+          "selfReference": false,
+          "onDelete": "Cascade"
+        },
+        {
+          "type": "OneToMany",
+          "target": "Complaint",
+          "name": "complaints",
+          "cardinality": "1:N",
+          "foreignKey": null,
+          "pivotTable": null,
+          "pivotAttributes": null,
+          "polymorphic": true,
+          "morphType": "complaintable",
+          "selfReference": false,
+          "onDelete": null
+        }
+      ]
+    },
+    {
+      "name": "Collection",
+      "description": "Коллекция художественных работ",
+      "attributes": [
+        {
+          "name": "id",
+          "type": "String",
+          "constraints": [
+            "PK",
+            "AutoIncrement"
+          ],
+          "nullable": false,
+          "default": null,
+          "maxLength": null,
+          "values": null,
+          "references": null,
+          "required": true
+        },
+        {
+          "name": "user_id",
+          "type": "String",
+          "constraints": [
+            "FK",
+            "Required"
+          ],
+          "nullable": false,
+          "default": null,
+          "maxLength": null,
+          "values": null,
+          "references": "User.id",
+          "required": false
+        },
+        {
+          "name": "name",
+          "type": "String",
+          "constraints": [
+            "Required"
+          ],
+          "nullable": false,
+          "default": null,
+          "maxLength": 255,
+          "values": null,
+          "references": null,
+          "required": false
+        },
+        {
+          "name": "is_private",
+          "type": "String",
+          "constraints": [],
+          "nullable": false,
+          "default": false,
+          "maxLength": null,
+          "values": null,
+          "references": null,
+          "required": false
+        }
+      ],
+      "relationships": [
+        {
+          "type": "ManyToOne",
+          "target": "User",
+          "name": "user",
+          "cardinality": "N:1",
+          "foreignKey": "user_id",
+          "pivotTable": null,
+          "pivotAttributes": null,
+          "polymorphic": false,
+          "morphType": null,
+          "selfReference": false,
+          "onDelete": null
+        },
+        {
+          "type": "ManyToMany",
+          "target": "Artwork",
+          "name": "artworks",
+          "cardinality": "N:M",
+          "foreignKey": null,
+          "pivotTable": "artwork_collection",
+          "pivotAttributes": null,
+          "polymorphic": false,
+          "morphType": null,
+          "selfReference": false,
+          "onDelete": null
+        }
+      ]
+    },
+    {
+      "name": "Tag",
+      "description": "Тег для категоризации работ",
+      "attributes": [
+        {
+          "name": "id",
+          "type": "String",
+          "constraints": [
+            "PK",
+            "AutoIncrement"
+          ],
+          "nullable": false,
+          "default": null,
+          "maxLength": null,
+          "values": null,
+          "references": null,
+          "required": true
+        },
+        {
+          "name": "name",
+          "type": "String",
+          "constraints": [
+            "Required",
+            "Unique"
+          ],
+          "nullable": false,
+          "default": null,
+          "maxLength": 255,
+          "values": null,
+          "references": null,
+          "required": false
+        }
+      ],
+      "relationships": [
+        {
+          "type": "ManyToMany",
+          "target": "Artwork",
+          "name": "artworks",
+          "cardinality": "N:M",
+          "foreignKey": null,
+          "pivotTable": "artwork_tag",
+          "pivotAttributes": null,
+          "polymorphic": false,
+          "morphType": null,
+          "selfReference": false,
+          "onDelete": null
+        }
+      ]
+    },
+    {
+      "name": "Comment",
+      "description": "Комментарий к работе или ответ на другой комментарий",
+      "attributes": [
+        {
+          "name": "id",
+          "type": "String",
+          "constraints": [
+            "PK",
+            "AutoIncrement"
+          ],
+          "nullable": false,
+          "default": null,
+          "maxLength": null,
+          "values": null,
+          "references": null,
+          "required": true
+        },
+        {
+          "name": "user_id",
+          "type": "String",
+          "constraints": [
+            "FK",
+            "Required"
+          ],
+          "nullable": false,
+          "default": null,
+          "maxLength": null,
+          "values": null,
+          "references": "User.id",
+          "required": false
+        },
+        {
+          "name": "text",
+          "type": "String",
+          "constraints": [
+            "Required"
+          ],
+          "nullable": false,
+          "default": null,
+          "maxLength": null,
+          "values": null,
+          "references": null,
+          "required": false
+        },
+        {
+          "name": "parent_id",
+          "type": "String",
+          "constraints": [
+            "FK"
+          ],
+          "nullable": true,
+          "default": null,
+          "maxLength": null,
+          "values": null,
+          "references": "Comment.id",
+          "required": false
+        },
+        {
+          "name": "commentable_id",
+          "type": "String",
+          "constraints": [
+            "Required"
+          ],
+          "nullable": false,
+          "default": null,
+          "maxLength": null,
+          "values": null,
+          "references": null,
+          "required": false
+        },
+        {
+          "name": "commentable_type",
+          "type": "String",
+          "constraints": [
+            "Required"
+          ],
+          "nullable": false,
+          "default": null,
+          "maxLength": null,
+          "values": null,
+          "references": null,
+          "required": false
+        },
+        {
+          "name": "is_blocked",
+          "type": "String",
+          "constraints": [],
+          "nullable": false,
+          "default": false,
+          "maxLength": null,
+          "values": null,
+          "references": null,
+          "required": false
+        }
+      ],
+      "relationships": [
+        {
+          "type": "ManyToOne",
+          "target": "User",
+          "name": "user",
+          "cardinality": "N:1",
+          "foreignKey": "user_id",
+          "pivotTable": null,
+          "pivotAttributes": null,
+          "polymorphic": false,
+          "morphType": null,
+          "selfReference": false,
+          "onDelete": null
+        },
+        {
+          "type": "ManyToOne",
+          "target": "Comment",
+          "name": "parent",
+          "cardinality": "N:1",
+          "foreignKey": "parent_id",
+          "pivotTable": null,
+          "pivotAttributes": null,
+          "polymorphic": false,
+          "morphType": null,
+          "selfReference": true,
+          "onDelete": null
+        },
+        {
+          "type": "OneToMany",
+          "target": "Comment",
+          "name": "replies",
+          "cardinality": "1:N",
+          "foreignKey": null,
+          "pivotTable": null,
+          "pivotAttributes": null,
+          "polymorphic": false,
+          "morphType": null,
+          "selfReference": true,
+          "onDelete": null
+        },
+        {
+          "type": "Polymorphic",
+          "target": "Artwork",
+          "name": "commentable",
+          "cardinality": "N:1",
+          "foreignKey": null,
+          "pivotTable": null,
+          "pivotAttributes": null,
+          "polymorphic": false,
+          "morphType": "commentable",
+          "selfReference": false,
+          "onDelete": null
+        },
+        {
+          "type": "OneToMany",
+          "target": "Complaint",
+          "name": "complaints",
+          "cardinality": "1:N",
+          "foreignKey": null,
+          "pivotTable": null,
+          "pivotAttributes": null,
+          "polymorphic": true,
+          "morphType": "complaintable",
+          "selfReference": false,
+          "onDelete": null
+        }
+      ]
+    },
+    {
+      "name": "Like",
+      "description": "Лайк работы пользователем",
+      "attributes": [
+        {
+          "name": "id",
+          "type": "String",
+          "constraints": [
+            "PK",
+            "AutoIncrement"
+          ],
+          "nullable": false,
+          "default": null,
+          "maxLength": null,
+          "values": null,
+          "references": null,
+          "required": true
+        },
+        {
+          "name": "user_id",
+          "type": "String",
+          "constraints": [
+            "FK",
+            "Required"
+          ],
+          "nullable": false,
+          "default": null,
+          "maxLength": null,
+          "values": null,
+          "references": "User.id",
+          "required": false
+        },
+        {
+          "name": "artwork_id",
+          "type": "String",
+          "constraints": [
+            "FK",
+            "Required"
+          ],
+          "nullable": false,
+          "default": null,
+          "maxLength": null,
+          "values": null,
+          "references": "Artwork.id",
+          "required": false
+        }
+      ],
+      "relationships": [
+        {
+          "type": "ManyToOne",
+          "target": "User",
+          "name": "user",
+          "cardinality": "N:1",
+          "foreignKey": "user_id",
+          "pivotTable": null,
+          "pivotAttributes": null,
+          "polymorphic": false,
+          "morphType": null,
+          "selfReference": false,
+          "onDelete": null
+        },
+        {
+          "type": "ManyToOne",
+          "target": "Artwork",
+          "name": "artwork",
+          "cardinality": "N:1",
+          "foreignKey": "artwork_id",
+          "pivotTable": null,
+          "pivotAttributes": null,
+          "polymorphic": false,
+          "morphType": null,
+          "selfReference": false,
+          "onDelete": null
+        }
+      ]
+    },
+    {
+      "name": "Conversation",
+      "description": "Беседа (диалог или группа) между пользователями",
+      "attributes": [
+        {
+          "name": "id",
+          "type": "String",
+          "constraints": [
+            "PK",
+            "AutoIncrement"
+          ],
+          "nullable": false,
+          "default": null,
+          "maxLength": null,
+          "values": null,
+          "references": null,
+          "required": true
+        },
+        {
+          "name": "type",
+          "type": "String",
+          "constraints": [
+            "Required"
+          ],
+          "nullable": false,
+          "default": null,
+          "maxLength": null,
+          "values": [
+            "dialog",
+            "group"
+          ],
+          "references": null,
+          "required": false
+        },
+        {
+          "name": "title",
+          "type": "String",
+          "constraints": [],
+          "nullable": true,
+          "default": null,
+          "maxLength": 255,
+          "values": null,
+          "references": null,
+          "required": false
+        },
+        {
+          "name": "avatar",
+          "type": "String",
+          "constraints": [],
+          "nullable": true,
+          "default": null,
+          "maxLength": null,
+          "values": null,
+          "references": null,
+          "required": false
+        },
+        {
+          "name": "last_message_id",
+          "type": "String",
+          "constraints": [
+            "FK"
+          ],
+          "nullable": true,
+          "default": null,
+          "maxLength": null,
+          "values": null,
+          "references": "Message.id",
+          "required": false
+        }
+      ],
+      "relationships": [
+        {
+          "type": "ManyToMany",
+          "target": "User",
+          "name": "users",
+          "cardinality": "N:M",
+          "foreignKey": null,
+          "pivotTable": "conversation_user",
+          "pivotAttributes": [
+            "joined_at",
+            "role",
+            "last_read_at",
+            "last_read_id"
+          ],
+          "polymorphic": false,
+          "morphType": null,
+          "selfReference": false,
+          "onDelete": null
+        },
+        {
+          "type": "OneToMany",
+          "target": "Message",
+          "name": "messages",
+          "cardinality": "1:N",
+          "foreignKey": null,
+          "pivotTable": null,
+          "pivotAttributes": null,
+          "polymorphic": false,
+          "morphType": null,
+          "selfReference": false,
+          "onDelete": "Cascade"
+        },
+        {
+          "type": "ManyToOne",
+          "target": "Message",
+          "name": "lastMessage",
+          "cardinality": "N:1",
+          "foreignKey": "last_message_id",
+          "pivotTable": null,
+          "pivotAttributes": null,
+          "polymorphic": false,
+          "morphType": null,
+          "selfReference": false,
+          "onDelete": null
+        }
+      ]
+    },
+    {
+      "name": "Message",
+      "description": "Сообщение в беседе",
+      "attributes": [
+        {
+          "name": "id",
+          "type": "String",
+          "constraints": [
+            "PK",
+            "AutoIncrement"
+          ],
+          "nullable": false,
+          "default": null,
+          "maxLength": null,
+          "values": null,
+          "references": null,
+          "required": true
+        },
+        {
+          "name": "conversation_id",
+          "type": "String",
+          "constraints": [
+            "FK",
+            "Required"
+          ],
+          "nullable": false,
+          "default": null,
+          "maxLength": null,
+          "values": null,
+          "references": "Conversation.id",
+          "required": false
+        },
+        {
+          "name": "user_id",
+          "type": "String",
+          "constraints": [
+            "FK",
+            "Required"
+          ],
+          "nullable": false,
+          "default": null,
+          "maxLength": null,
+          "values": null,
+          "references": "User.id",
+          "required": false
+        },
+        {
+          "name": "body",
+          "type": "String",
+          "constraints": [
+            "Required"
+          ],
+          "nullable": false,
+          "default": null,
+          "maxLength": null,
+          "values": null,
+          "references": null,
+          "required": false
+        },
+        {
+          "name": "reply_to_id",
+          "type": "String",
+          "constraints": [
+            "FK"
+          ],
+          "nullable": true,
+          "default": null,
+          "maxLength": null,
+          "values": null,
+          "references": "Message.id",
+          "required": false
+        },
+        {
+          "name": "artwork_id",
+          "type": "String",
+          "constraints": [
+            "FK"
+          ],
+          "nullable": true,
+          "default": null,
+          "maxLength": null,
+          "values": null,
+          "references": "Artwork.id",
+          "required": false
+        },
+        {
+          "name": "has_attachments",
+          "type": "String",
+          "constraints": [],
+          "nullable": false,
+          "default": false,
+          "maxLength": null,
+          "values": null,
+          "references": null,
+          "required": false
+        }
+      ],
+      "relationships": [
+        {
+          "type": "ManyToOne",
+          "target": "Conversation",
+          "name": "conversation",
+          "cardinality": "N:1",
+          "foreignKey": "conversation_id",
+          "pivotTable": null,
+          "pivotAttributes": null,
+          "polymorphic": false,
+          "morphType": null,
+          "selfReference": false,
+          "onDelete": null
+        },
+        {
+          "type": "ManyToOne",
+          "target": "User",
+          "name": "user",
+          "cardinality": "N:1",
+          "foreignKey": "user_id",
+          "pivotTable": null,
+          "pivotAttributes": null,
+          "polymorphic": false,
+          "morphType": null,
+          "selfReference": false,
+          "onDelete": null
+        },
+        {
+          "type": "ManyToOne",
+          "target": "Message",
+          "name": "replyTo",
+          "cardinality": "N:1",
+          "foreignKey": "reply_to_id",
+          "pivotTable": null,
+          "pivotAttributes": null,
+          "polymorphic": false,
+          "morphType": null,
+          "selfReference": true,
+          "onDelete": null
+        },
+        {
+          "type": "OneToMany",
+          "target": "Message",
+          "name": "replies",
+          "cardinality": "1:N",
+          "foreignKey": null,
+          "pivotTable": null,
+          "pivotAttributes": null,
+          "polymorphic": false,
+          "morphType": null,
+          "selfReference": true,
+          "onDelete": null
+        },
+        {
+          "type": "ManyToOne",
+          "target": "Artwork",
+          "name": "artwork",
+          "cardinality": "N:1",
+          "foreignKey": "artwork_id",
+          "pivotTable": null,
+          "pivotAttributes": null,
+          "polymorphic": false,
+          "morphType": null,
+          "selfReference": false,
+          "onDelete": null
+        }
+      ]
+    },
+    {
+      "name": "Complaint",
+      "description": "Жалоба на контент или пользователя",
+      "attributes": [
+        {
+          "name": "id",
+          "type": "String",
+          "constraints": [
+            "PK",
+            "AutoIncrement"
+          ],
+          "nullable": false,
+          "default": null,
+          "maxLength": null,
+          "values": null,
+          "references": null,
+          "required": true
+        },
+        {
+          "name": "complaint_type_id",
+          "type": "String",
+          "constraints": [
+            "FK",
+            "Required"
+          ],
+          "nullable": false,
+          "default": null,
+          "maxLength": null,
+          "values": null,
+          "references": "ComplaintType.id",
+          "required": false
+        },
+        {
+          "name": "user_id",
+          "type": "String",
+          "constraints": [
+            "FK",
+            "Required"
+          ],
+          "nullable": false,
+          "default": null,
+          "maxLength": null,
+          "values": null,
+          "references": "User.id",
+          "required": false
+        },
+        {
+          "name": "complaintable_id",
+          "type": "String",
+          "constraints": [
+            "Required"
+          ],
+          "nullable": false,
+          "default": null,
+          "maxLength": null,
+          "values": null,
+          "references": null,
+          "required": false
+        },
+        {
+          "name": "complaintable_type",
+          "type": "String",
+          "constraints": [
+            "Required"
+          ],
+          "nullable": false,
+          "default": null,
+          "maxLength": null,
+          "values": null,
+          "references": null,
+          "required": false
+        },
+        {
+          "name": "status",
+          "type": "String",
+          "constraints": [],
+          "nullable": false,
+          "default": "pending",
+          "maxLength": null,
+          "values": [
+            "pending",
+            "approved",
+            "rejected"
+          ],
+          "references": null,
+          "required": false
+        },
+        {
+          "name": "reason",
+          "type": "String",
+          "constraints": [],
+          "nullable": true,
+          "default": null,
+          "maxLength": null,
+          "values": null,
+          "references": null,
+          "required": false
+        }
+      ],
+      "relationships": [
+        {
+          "type": "ManyToOne",
+          "target": "ComplaintType",
+          "name": "type",
+          "cardinality": "N:1",
+          "foreignKey": "complaint_type_id",
+          "pivotTable": null,
+          "pivotAttributes": null,
+          "polymorphic": false,
+          "morphType": null,
+          "selfReference": false,
+          "onDelete": null
+        },
+        {
+          "type": "ManyToOne",
+          "target": "User",
+          "name": "user",
+          "cardinality": "N:1",
+          "foreignKey": "user_id",
+          "pivotTable": null,
+          "pivotAttributes": null,
+          "polymorphic": false,
+          "morphType": null,
+          "selfReference": false,
+          "onDelete": null
+        },
+        {
+          "type": "Polymorphic",
+          "target": [
+            "Artwork",
+            "Comment",
+            "User"
+          ],
+          "name": "complaintable",
+          "cardinality": "N:1",
+          "foreignKey": null,
+          "pivotTable": null,
+          "pivotAttributes": null,
+          "polymorphic": false,
+          "morphType": "complaintable",
+          "selfReference": false,
+          "onDelete": null
+        }
+      ]
+    },
+    {
+      "name": "ComplaintType",
+      "description": "Тип жалобы (категория нарушения)",
+      "attributes": [
+        {
+          "name": "id",
+          "type": "String",
+          "constraints": [
+            "PK",
+            "AutoIncrement"
+          ],
+          "nullable": false,
+          "default": null,
+          "maxLength": null,
+          "values": null,
+          "references": null,
+          "required": true
+        },
+        {
+          "name": "slug",
+          "type": "String",
+          "constraints": [
+            "Required",
+            "Unique"
+          ],
+          "nullable": false,
+          "default": null,
+          "maxLength": 255,
+          "values": null,
+          "references": null,
+          "required": false
+        },
+        {
+          "name": "name",
+          "type": "String",
+          "constraints": [
+            "Required"
+          ],
+          "nullable": false,
+          "default": null,
+          "maxLength": 255,
+          "values": null,
+          "references": null,
+          "required": false
+        }
+      ],
+      "relationships": [
+        {
+          "type": "OneToMany",
+          "target": "Complaint",
+          "name": "complaints",
+          "cardinality": "1:N",
+          "foreignKey": null,
+          "pivotTable": null,
+          "pivotAttributes": null,
+          "polymorphic": false,
+          "morphType": null,
+          "selfReference": false,
+          "onDelete": null
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,357 @@
+{
+  "classes": [
+    {
+      "name": "1ВалидацияФайла",
+      "methods": [
+        {
+          "name": "1ВалидацияФайла",
+          "parameters": [
+            {
+              "name": "файл",
+              "type": "Object"
+            }
+          ],
+          "return_type": "Валидный файл",
+          "visibility": "public"
+        }
+      ],
+      "attributes": [],
+      "associations": []
+    },
+    {
+      "name": "2Изображения",
+      "methods": [
+        {
+          "name": "2Изображения",
+          "parameters": [
+            {
+              "name": "изображение",
+              "type": "Object"
+            }
+          ],
+          "return_type": "Обработанное изображение",
+          "visibility": "public"
+        }
+      ],
+      "attributes": [],
+      "associations": []
+    },
+    {
+      "name": "3СохранениеВХранилище",
+      "methods": [
+        {
+          "name": "3СохранениеВХранилище",
+          "parameters": [
+            {
+              "name": "файл",
+              "type": "Object"
+            },
+            {
+              "name": "путь",
+              "type": "Object"
+            }
+          ],
+          "return_type": "Путь к файлу",
+          "visibility": "public"
+        },
+        {
+          "name": "saveToФайловое хранилище",
+          "parameters": [
+            {
+              "name": "data",
+              "type": "Object"
+            }
+          ],
+          "return_type": "void",
+          "visibility": "public"
+        },
+        {
+          "name": "getFromФайловое хранилище",
+          "parameters": [
+            {
+              "name": "id",
+              "type": "int"
+            }
+          ],
+          "return_type": "Object",
+          "visibility": "public"
+        }
+      ],
+      "attributes": [
+        "Файловое хранилище"
+      ],
+      "associations": []
+    },
+    {
+      "name": "4СозданиеЗаписиВБд",
+      "methods": [
+        {
+          "name": "4СозданиеЗаписиВБд",
+          "parameters": [
+            {
+              "name": "метаданные",
+              "type": "Object"
+            },
+            {
+              "name": "путь_к_файлу",
+              "type": "Object"
+            }
+          ],
+          "return_type": "ID работы",
+          "visibility": "public"
+        },
+        {
+          "name": "saveToБаза данных",
+          "parameters": [
+            {
+              "name": "data",
+              "type": "Object"
+            }
+          ],
+          "return_type": "void",
+          "visibility": "public"
+        },
+        {
+          "name": "getFromБаза данных",
+          "parameters": [
+            {
+              "name": "id",
+              "type": "int"
+            }
+          ],
+          "return_type": "Object",
+          "visibility": "public"
+        }
+      ],
+      "attributes": [
+        "База данных"
+      ],
+      "associations": []
+    },
+    {
+      "name": "5ПолучениеРаботы",
+      "methods": [
+        {
+          "name": "5ПолучениеРаботы",
+          "parameters": [
+            {
+              "name": "id_работы",
+              "type": "Object"
+            }
+          ],
+          "return_type": "Данные работы",
+          "visibility": "public"
+        },
+        {
+          "name": "saveToБаза данных",
+          "parameters": [
+            {
+              "name": "data",
+              "type": "Object"
+            }
+          ],
+          "return_type": "void",
+          "visibility": "public"
+        },
+        {
+          "name": "getFromБаза данных",
+          "parameters": [
+            {
+              "name": "id",
+              "type": "int"
+            }
+          ],
+          "return_type": "Object",
+          "visibility": "public"
+        },
+        {
+          "name": "saveToФайловое хранилище",
+          "parameters": [
+            {
+              "name": "data",
+              "type": "Object"
+            }
+          ],
+          "return_type": "void",
+          "visibility": "public"
+        },
+        {
+          "name": "getFromФайловое хранилище",
+          "parameters": [
+            {
+              "name": "id",
+              "type": "int"
+            }
+          ],
+          "return_type": "Object",
+          "visibility": "public"
+        }
+      ],
+      "attributes": [
+        "База данных",
+        "Файловое хранилище"
+      ],
+      "associations": []
+    },
+    {
+      "name": "База данныхRepository",
+      "methods": [
+        {
+          "name": "create",
+          "parameters": [
+            {
+              "name": "data",
+              "type": "Object"
+            }
+          ],
+          "return_type": "Object",
+          "visibility": "public"
+        },
+        {
+          "name": "findById",
+          "parameters": [
+            {
+              "name": "id",
+              "type": "int"
+            }
+          ],
+          "return_type": "Object",
+          "visibility": "public"
+        },
+        {
+          "name": "update",
+          "parameters": [
+            {
+              "name": "id",
+              "type": "int"
+            },
+            {
+              "name": "data",
+              "type": "Object"
+            }
+          ],
+          "return_type": "Object",
+          "visibility": "public"
+        },
+        {
+          "name": "delete",
+          "parameters": [
+            {
+              "name": "id",
+              "type": "int"
+            }
+          ],
+          "return_type": "void",
+          "visibility": "public"
+        }
+      ],
+      "attributes": [],
+      "associations": [
+        "Database"
+      ]
+    },
+    {
+      "name": "Файловое хранилищеRepository",
+      "methods": [
+        {
+          "name": "create",
+          "parameters": [
+            {
+              "name": "data",
+              "type": "Object"
+            }
+          ],
+          "return_type": "Object",
+          "visibility": "public"
+        },
+        {
+          "name": "findById",
+          "parameters": [
+            {
+              "name": "id",
+              "type": "int"
+            }
+          ],
+          "return_type": "Object",
+          "visibility": "public"
+        },
+        {
+          "name": "update",
+          "parameters": [
+            {
+              "name": "id",
+              "type": "int"
+            },
+            {
+              "name": "data",
+              "type": "Object"
+            }
+          ],
+          "return_type": "Object",
+          "visibility": "public"
+        },
+        {
+          "name": "delete",
+          "parameters": [
+            {
+              "name": "id",
+              "type": "int"
+            }
+          ],
+          "return_type": "void",
+          "visibility": "public"
+        }
+      ],
+      "attributes": [],
+      "associations": [
+        "Database"
+      ]
+    }
+  ],
+  "sequence_diagrams": [
+    {
+      "name": "Sequence_2.1 Валидация файла",
+      "participants": [
+        "1ВалидацияФайла",
+        "2Изображения",
+        "3СохранениеВХранилище",
+        "4СозданиеЗаписиВБд"
+      ],
+      "messages": [
+        {
+          "from": "1ВалидацияФайла",
+          "to": "2Изображения",
+          "message": "2Изображения",
+          "parameters": [
+            "Изображение"
+          ]
+        },
+        {
+          "from": "2Изображения",
+          "to": "3СохранениеВХранилище",
+          "message": "3СохранениеВХранилище",
+          "parameters": [
+            "Файл",
+            "Путь"
+          ]
+        },
+        {
+          "from": "3СохранениеВХранилище",
+          "to": "4СозданиеЗаписиВБд",
+          "message": "4СозданиеЗаписиВБд",
+          "parameters": [
+            "Метаданные",
+            "Путь к файлу"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Sequence_2.5 Получение работы",
+      "participants": [
+        "5ПолучениеРаботы"
+      ],
+      "messages": []
+    }
+  ]
+}

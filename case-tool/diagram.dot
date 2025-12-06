@@ -1,0 +1,48 @@
+digraph DomainModel {
+  rankdir=LR;
+  node [shape=record, style=filled, fillcolor=lightblue];
+
+  User [label="{User|id: String\nname: String\nemail: String\npassword: String\ndescription: String\n...}"];
+  Artwork [label="{Artwork|id: String\nuser_id: String\ntitle: String\ndescription: String\ntype: String\n...}"];
+  Collection [label="{Collection|id: String\nuser_id: String\nname: String\nis_private: String}"];
+  Tag [label="{Tag|id: String\nname: String}"];
+  Comment [label="{Comment|id: String\nuser_id: String\ntext: String\nparent_id: String\ncommentable_id: String\n...}"];
+  Like [label="{Like|id: String\nuser_id: String\nartwork_id: String}"];
+  Conversation [label="{Conversation|id: String\ntype: String\ntitle: String\navatar: String\nlast_message_id: String}"];
+  Message [label="{Message|id: String\nconversation_id: String\nuser_id: String\nbody: String\nreply_to_id: String\n...}"];
+  Complaint [label="{Complaint|id: String\ncomplaint_type_id: String\nuser_id: String\ncomplaintable_id: String\ncomplaintable_type: String\n...}"];
+  ComplaintType [label="{ComplaintType|id: String\nslug: String\nname: String}"];
+
+  User -> Artwork [label="artworks\n1:N", arrowhead=normal];
+  User -> Collection [label="collections\n1:N", arrowhead=normal];
+  User -> Comment [label="comments\n1:N", arrowhead=normal];
+  User -> Like [label="likes\n1:N", arrowhead=normal];
+  User -> Conversation [label="conversations\nN:M", arrowhead=normal, style=dashed];
+  Artwork -> User [label="user\nN:1", arrowhead=normal, dir=back];
+  Artwork -> Tag [label="tags\nN:M", arrowhead=normal, style=dashed];
+  Artwork -> Collection [label="collections\nN:M", arrowhead=normal, style=dashed];
+  Artwork -> Comment [label="comments\n1:N", arrowhead=normal];
+  Artwork -> Like [label="likes\n1:N", arrowhead=normal];
+  Artwork -> Complaint [label="complaints\n1:N", arrowhead=normal];
+  Collection -> User [label="user\nN:1", arrowhead=normal, dir=back];
+  Collection -> Artwork [label="artworks\nN:M", arrowhead=normal, style=dashed];
+  Tag -> Artwork [label="artworks\nN:M", arrowhead=normal, style=dashed];
+  Comment -> User [label="user\nN:1", arrowhead=normal, dir=back];
+  Comment -> Comment [label="parent\nN:1", arrowhead=normal, dir=back];
+  Comment -> Comment [label="replies\n1:N", arrowhead=normal];
+  Comment -> Artwork [label="commentable\nN:1", arrowhead=normal];
+  Comment -> Complaint [label="complaints\n1:N", arrowhead=normal];
+  Like -> User [label="user\nN:1", arrowhead=normal, dir=back];
+  Like -> Artwork [label="artwork\nN:1", arrowhead=normal, dir=back];
+  Conversation -> User [label="users\nN:M", arrowhead=normal, style=dashed];
+  Conversation -> Message [label="messages\n1:N", arrowhead=normal];
+  Conversation -> Message [label="lastMessage\nN:1", arrowhead=normal, dir=back];
+  Message -> Conversation [label="conversation\nN:1", arrowhead=normal, dir=back];
+  Message -> User [label="user\nN:1", arrowhead=normal, dir=back];
+  Message -> Message [label="replyTo\nN:1", arrowhead=normal, dir=back];
+  Message -> Message [label="replies\n1:N", arrowhead=normal];
+  Message -> Artwork [label="artwork\nN:1", arrowhead=normal, dir=back];
+  Complaint -> ComplaintType [label="type\nN:1", arrowhead=normal, dir=back];
+  Complaint -> User [label="user\nN:1", arrowhead=normal, dir=back];
+  ComplaintType -> Complaint [label="complaints\n1:N", arrowhead=normal];
+}
