@@ -1,23 +1,24 @@
 <template>
     <div
-        v-if="ready"
         ref="container"
-        class="flex-1 overflow-y-auto px-4 space-y-4 my-2 scroll-smooth"
+        class="h-full min-h-0 w-full overflow-y-auto overscroll-contain px-4 py-2"
     >
-        <MessageItem
-            v-for="message in messages"
-            :key="message.id"
-            :msg="message"
-            :last-read-id="currentReadId"
-            @reply="handleReply"
-            @go-to="scrollToMessage"
-        />
-        <div ref="endOfMessages"></div>
+        <div class="space-y-4">
+            <MessageItem
+                v-for="message in messages"
+                :key="message.id"
+                :msg="message"
+                :last-read-id="currentReadId"
+                @reply="handleReply"
+                @go-to="scrollToMessage"
+            />
+            <div ref="endOfMessages" aria-hidden="true" />
+        </div>
     </div>
 </template>
 
 <script setup>
-import { ref, nextTick, onMounted, watch } from 'vue'
+import { ref, nextTick, onMounted, onUnmounted } from 'vue'
 import { useInfiniteScroll } from '@vueuse/core'
 import { usePage } from '@inertiajs/vue3'
 import axios from 'axios'
@@ -34,18 +35,35 @@ const messages = ref([...props.initial])
 const container = ref(null)
 const endOfMessages = ref(null)
 const currentReadId = ref(props.lastReadId ?? 0)
-const ready = ref(false)
+
+let echoChannel = null
+let resizeObserver = null
+let initialScrollDone = false
 
 const earliestId = () => messages.value[0]?.id ?? 0
 const hasMore = ref(true)
 
+const page = usePage()
+const authUserId = page.props.auth.user?.id
+
 async function loadPrevious() {
-    if (!hasMore.value) return
+    if (!hasMore.value || !initialScrollDone) {
+        return
+    }
+
+    const el = container.value
+    if (!el) {
+        return
+    }
+
     const beforeId = earliestId()
     if (!beforeId || beforeId === 1) {
         hasMore.value = false
         return
     }
+
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+
     const response = await axios.get(
         `/messenger/conversations/${props.conversationId}/messages`,
         { params: { before_id: beforeId } }
@@ -54,15 +72,50 @@ async function loadPrevious() {
     if (data.length) {
         messages.value = [...data, ...messages.value]
         await nextTick()
+        el.scrollTop = el.scrollHeight - el.clientHeight - distanceFromBottom
     } else {
         hasMore.value = false
     }
 }
 
 function scrollToBottom() {
-    if (endOfMessages.value) {
-        endOfMessages.value.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    const el = container.value
+    if (!el) {
+        return false
     }
+
+    el.scrollTop = el.scrollHeight
+    return el.scrollHeight - el.clientHeight - el.scrollTop < 2
+}
+
+async function scrollToBottomUntilStable(maxFrames = 12) {
+    await nextTick()
+
+    for (let i = 0; i < maxFrames; i += 1) {
+        await new Promise((resolve) => requestAnimationFrame(resolve))
+        if (scrollToBottom()) {
+            initialScrollDone = true
+            return
+        }
+    }
+
+    scrollToBottom()
+    initialScrollDone = true
+}
+
+function observeContainerResize() {
+    if (!container.value || resizeObserver) {
+        return
+    }
+
+    resizeObserver = new ResizeObserver(() => {
+        if (!initialScrollDone) {
+            if (scrollToBottom()) {
+                initialScrollDone = true
+            }
+        }
+    })
+    resizeObserver.observe(container.value)
 }
 
 async function markAllAsRead(upToId) {
@@ -77,8 +130,19 @@ async function markAllAsRead(upToId) {
     }
 }
 
-const page = usePage()
-const authUserId = page.props.auth.user.id
+async function appendMessage(message) {
+    if (!message?.id || messages.value.some(m => m.id === message.id)) {
+        return
+    }
+
+    messages.value.push(message)
+    await nextTick()
+    scrollToBottom()
+
+    if (message.user_id !== authUserId) {
+        await markAllAsRead(message.id)
+    }
+}
 
 async function handleReply(message) {
     emit('reply', message)
@@ -99,6 +163,29 @@ async function scrollToMessage(id) {
     }
 }
 
+function leaveEchoChannel() {
+    if (echoChannel) {
+        window.Echo?.leave(`conversation.${props.conversationId}`)
+        echoChannel = null
+    }
+}
+
+function subscribeToEcho() {
+    if (!window.Echo || !props.conversationId) {
+        return
+    }
+
+    leaveEchoChannel()
+
+    echoChannel = window.Echo.private(`conversation.${props.conversationId}`)
+
+    echoChannel
+        .listen('.MessageSent', ({ message }) => appendMessage(message))
+        .error((error) => {
+            console.error('Echo subscription failed for conversation', props.conversationId, error)
+        })
+}
+
 onMounted(async () => {
     const lastOnScreen = messages.value.length
         ? messages.value[messages.value.length - 1].id
@@ -106,35 +193,26 @@ onMounted(async () => {
     if (lastOnScreen) {
         await markAllAsRead(lastOnScreen)
     }
-    await nextTick()
+
+    observeContainerResize()
+    await scrollToBottomUntilStable()
+
     useInfiniteScroll(container, loadPrevious, {
-        distance: 50,
+        distance: 120,
         direction: 'top',
         immediate: false,
         throttleWait: 300,
+        canLoadMore: () => hasMore.value && initialScrollDone,
     })
-    scrollToBottom()
-    ready.value = true
-    if (!window.Echo) return
 
-    window.Echo
-        .private(`conversation.${props.conversationId}`)
-        .listen('.MessageSent', async ({ message }) => {
-            messages.value.push(message)
-            await nextTick()
-            scrollToBottom()
-            if (message.user_id !== authUserId) {
-                await markAllAsRead(message.id)
-            }
-        })
+    subscribeToEcho()
 })
 
-watch(
-    () => messages.value.length,
-    async () => {
-        await nextTick()
-        scrollToBottom()
-    },
-    { flush: 'post' }
-)
+onUnmounted(() => {
+    leaveEchoChannel()
+    resizeObserver?.disconnect()
+    resizeObserver = null
+})
+
+defineExpose({ appendMessage })
 </script>

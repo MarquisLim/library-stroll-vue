@@ -1,6 +1,6 @@
 <template>
     <AppLayout title="Чат">
-        <div class="flex h-full">
+        <div class="fixed inset-x-0 top-16 bottom-0 z-0 flex overflow-hidden bg-base-100">
 
             <!-- Sidebar -->
             <aside
@@ -10,7 +10,7 @@
           'fixed inset-y-0 left-0 z-20 transform',
           showSidebar ? 'translate-x-0' : '-translate-x-full',
           'sm:static sm:translate-x-0',
-          'sm:sticky sm:top-16 sm:h-[calc(100vh-4rem)]'
+          'sm:h-full'
         ]"
             >
                 <div class="p-4 border-b border-base-300">
@@ -35,10 +35,10 @@
             />
 
             <!-- Main area -->
-            <div class="flex-1 flex flex-col">
+            <div class="flex min-h-0 flex-1 flex-col">
 
                 <!-- Header (скрыт, если conversation = null) -->
-                <div class="flex items-center border border-base-300 px-2 fixed z-10 bg-base-100 bg-opacity-80 backdrop-blur-md w-full">
+                <div class="flex shrink-0 items-center border border-base-300 bg-base-100/80 px-2 backdrop-blur-md">
                     <button
                         @click="showSidebar = !showSidebar"
                         class="sm:hidden p-2"
@@ -130,9 +130,11 @@
                 <!-- /Header -->
 
                 <!-- Chat body or placeholder -->
-                <div class="flex-1 overflow-hidden mt-20">
+                <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
                     <MessagesList
                         v-if="conversation"
+                        :key="conversation.id"
+                        ref="messagesListRef"
                         :conversation-id="conversation.id"
                         :initial="initMsgs"
                         :last-read-id="conversation.pivot?.last_read_id"
@@ -168,7 +170,7 @@
                         v-if="conversation.type === 'dialog' ? !hasBlockedMe : true"
                         :conversation-id="conversation.id"
                         :reply-to="replyToObject"
-                        @sent="clearReply"
+                        @sent="onMessageSent"
                     />
                     <div
                         v-else-if="conversation.type === 'dialog' && hasBlockedMe"
@@ -218,6 +220,7 @@ const conversation = page.props.conversation
 const initMsgs = page.props.messages || []
 const newChatModal = ref(null)
 const groupSettings = ref(null)
+const messagesListRef = ref(null)
 const showSidebar = ref(false)
 const authId = page.props.auth.user.id
 
@@ -281,6 +284,13 @@ function onReplyFromList(message) {
 }
 function clearReply() {
     replyToObject.value = null
+}
+
+function onMessageSent(msg) {
+    if (msg) {
+        messagesListRef.value?.appendMessage(msg)
+    }
+    clearReply()
 }
 
 const recentUsers = computed(() => {

@@ -15,7 +15,7 @@ use App\Models\Conversation;
 
 
 Broadcast::routes([
-    'middleware' => ['web','auth'],
+    'middleware' => ['web', 'auth:web'],
 ]);
 Broadcast::channel('conversation.{conversationId}', function ($user, $conversationId) {
     return $user->conversations()
