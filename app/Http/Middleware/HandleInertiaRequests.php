@@ -50,12 +50,22 @@ class HandleInertiaRequests extends Middleware
                         // roles table may be unavailable during setup
                     }
 
+                    $canManageTwoFactor = Features::canManageTwoFactorAuthentication();
+                    $requiresConfirmation = Features::optionEnabled(
+                        Features::twoFactorAuthentication(),
+                        'confirm'
+                    );
+
                     return array_merge(
                         $user->only('id', 'name', 'email', 'profile_photo_url'),
                         [
                             'roles' => $roles,
-                            'two_factor_enabled' => Features::canManageTwoFactorAuthentication()
-                                && ! is_null($user->two_factor_secret),
+                            'two_factor_enabled' => $canManageTwoFactor
+                                && $user->hasEnabledTwoFactorAuthentication(),
+                            'two_factor_pending_confirmation' => $canManageTwoFactor
+                                && $requiresConfirmation
+                                && ! is_null($user->two_factor_secret)
+                                && is_null($user->two_factor_confirmed_at),
                         ],
                     );
                 },

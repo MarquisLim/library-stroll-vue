@@ -99,21 +99,27 @@ watch([searchQ, searchTab], async ([q,tab])=>{
     showSugBox.value  = suggestions.value.length>0
 })
 
+function closeProfileDrawer() {
+    const drawer = document.getElementById('profile-drawer')
+    if (drawer) {
+        drawer.checked = false
+    }
+}
+
 function logout() {
     if (isLoggingOut.value) return
     isLoggingOut.value = true
+    closeProfileDrawer()
 
-    axios.post(route('logout'))
-        .then(() => {
-            actions.notify('Вы вышли из профиля', 'success')
-            setTimeout(() => window.location.reload(), 800)
-        })
-        .catch(e => {
-            if (e.response?.status === 419) window.location.reload()
-        })
-        .finally(() => {
+    router.post(route('logout'), {}, {
+        preserveState: false,
+        onFinish: () => {
             isLoggingOut.value = false
-        })
+        },
+        onError: () => {
+            isLoggingOut.value = false
+        },
+    })
 }
 
 
@@ -210,12 +216,15 @@ function logout() {
                                 </li>
                                 <li><hr class="my-1" /></li>
                                 <li>
-                                    <form @submit.prevent="logout">
-                                        <button type="submit" class="flex items-center gap-2 text-error hover:bg-error/10">
-                                            <ArrowRightOnRectangleIcon class="w-5 h-5" />
-                                            Выход
-                                        </button>
-                                    </form>
+                                    <button
+                                        type="button"
+                                        class="flex w-full items-center gap-2 text-error hover:bg-error/10"
+                                        :disabled="isLoggingOut"
+                                        @click="logout"
+                                    >
+                                        <ArrowRightOnRectangleIcon class="w-5 h-5" />
+                                        {{ isLoggingOut ? 'Выход…' : 'Выход' }}
+                                    </button>
                                 </li>
                             </ul>
                         </div>
@@ -273,11 +282,15 @@ function logout() {
                     <button @click="isDark=!isDark" class="flex items-center gap-2 py-1">
                         <component :is="isDark?SunIcon:MoonIcon" class="w-6 h-6"/> Тема
                     </button>
-                    <form @submit.prevent="logout">
-                        <button type="submit" class="flex items-center gap-2 text-error py-1">
-                            <ArrowRightOnRectangleIcon class="w-5 h-5" /> Выход
-                        </button>
-                    </form>
+                    <button
+                        type="button"
+                        class="flex w-full items-center gap-2 py-1 text-error"
+                        :disabled="isLoggingOut"
+                        @click="logout"
+                    >
+                        <ArrowRightOnRectangleIcon class="w-5 h-5" />
+                        {{ isLoggingOut ? 'Выход…' : 'Выход' }}
+                    </button>
                 </div>
             </div>
         </div>

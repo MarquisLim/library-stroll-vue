@@ -29,9 +29,15 @@ const confirmationForm = useForm({
     code: '',
 });
 
+const isPendingConfirmation = computed(
+    () => confirming.value || page.props.auth.user?.two_factor_pending_confirmation,
+);
+
 const twoFactorEnabled = computed(
     () => ! enabling.value && (
-        page.props.auth.user?.two_factor_enabled || setupVisible.value
+        page.props.auth.user?.two_factor_enabled
+        || isPendingConfirmation.value
+        || setupVisible.value
     ),
 );
 
@@ -91,12 +97,14 @@ const confirmTwoFactorAuthentication = () => {
     confirmationForm.post(route('two-factor.confirm'), {
         errorBag: 'confirmTwoFactorAuthentication',
         preserveScroll: true,
-        preserveState: true,
         onSuccess: () => {
             confirming.value = false;
             setupVisible.value = false;
             qrCode.value = null;
             setupKey.value = null;
+            recoveryCodes.value = [];
+            confirmationForm.reset();
+            router.reload({ preserveScroll: true });
         },
     });
 };
@@ -127,11 +135,7 @@ const disableTwoFactorAuthentication = () => {
 };
 
 onMounted(() => {
-    if (
-        props.requiresConfirmation
-        && page.props.auth.user?.two_factor_enabled
-        && ! qrCode.value
-    ) {
+    if (page.props.auth.user?.two_factor_pending_confirmation && ! qrCode.value) {
         setupVisible.value = true;
         confirming.value = true;
         loadSetupData().catch(() => {});
@@ -154,11 +158,11 @@ onMounted(() => {
         </template>
 
         <template #content>
-            <h3 v-if="twoFactorEnabled && ! confirming" class="text-lg font-medium text-base-300">
+            <h3 v-if="twoFactorEnabled && ! isPendingConfirmation" class="text-lg font-medium text-base-300">
                 Вы включили двухфакторную аутентификацию.
             </h3>
 
-            <h3 v-else-if="twoFactorEnabled && confirming" class="text-lg font-medium text-base-300">
+            <h3 v-else-if="twoFactorEnabled && isPendingConfirmation" class="text-lg font-medium text-base-300">
                 Завершите включение двухфакторной аутентификации.
             </h3>
 
@@ -179,7 +183,7 @@ onMounted(() => {
             <div v-if="twoFactorEnabled">
                 <div v-if="qrCode">
                     <div class="mt-4 max-w-xl text-sm text-gray-600">
-                        <p v-if="confirming" class="font-semibold">
+                        <p v-if="isPendingConfirmation" class="font-semibold">
                           Чтобы завершить включение двухфакторной аутентификации, отсканируйте следующий QR-код с помощью приложения аутентификации вашего телефона или введите ключ настройки и предоставьте сгенерированный OTP-код.
                         </p>
 
@@ -196,7 +200,7 @@ onMounted(() => {
                         </p>
                     </div>
 
-                    <div v-if="confirming" class="mt-4">
+                    <div v-if="isPendingConfirmation" class="mt-4">
                         <InputLabel for="code" value="Code" />
 
                         <TextInput
@@ -219,7 +223,7 @@ onMounted(() => {
                     Загрузка QR-кода…
                 </p>
 
-                <div v-if="recoveryCodes.length > 0 && ! confirming">
+                <div v-if="recoveryCodes.length > 0 && ! isPendingConfirmation">
                     <div class="mt-4 max-w-xl text-sm text-gray-600">
                         <p class="font-semibold">
                           Сохраните эти коды восстановления в безопасном менеджере паролей. Их можно использовать для восстановления доступа к вашей учетной записи, если ваше устройство двухфакторной аутентификации потеряно.
@@ -244,21 +248,9 @@ onMounted(() => {
                 </div>
 
                 <div v-else>
-                    <ConfirmsPassword @confirmed="confirmTwoFactorAuthentication">
-                        <PrimaryButton
-                            v-if="confirming"
-                            type="button"
-                            class="me-3"
-                            :class="{ 'opacity-25': enabling }"
-                            :disabled="enabling"
-                        >
-                            Подтвердить
-                        </PrimaryButton>
-                    </ConfirmsPassword>
-
                     <ConfirmsPassword @confirmed="regenerateRecoveryCodes">
                         <SecondaryButton
-                            v-if="recoveryCodes.length > 0 && ! confirming"
+                            v-if="recoveryCodes.length > 0 && ! isPendingConfirmation"
                             class="me-3"
                         >
                             Восстановить коды восстановления
@@ -267,7 +259,7 @@ onMounted(() => {
 
                     <ConfirmsPassword @confirmed="showRecoveryCodes">
                         <SecondaryButton
-                            v-if="recoveryCodes.length === 0 && ! confirming"
+                            v-if="recoveryCodes.length === 0 && ! isPendingConfirmation"
                             class="me-3"
                         >
                           Показать коды восстановления
@@ -276,7 +268,7 @@ onMounted(() => {
 
                     <ConfirmsPassword @confirmed="disableTwoFactorAuthentication">
                         <SecondaryButton
-                            v-if="confirming"
+                            v-if="isPendingConfirmation"
                             :class="{ 'opacity-25': disabling }"
                             :disabled="disabling"
                         >
@@ -286,7 +278,7 @@ onMounted(() => {
 
                     <ConfirmsPassword @confirmed="disableTwoFactorAuthentication">
                         <DangerButton
-                            v-if="! confirming"
+                            v-if="! isPendingConfirmation"
                             :class="{ 'opacity-25': disabling }"
                             :disabled="disabling"
                         >
