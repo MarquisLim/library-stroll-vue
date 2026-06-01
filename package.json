@@ -6,6 +6,7 @@
         "dev": "vite"
     },
     "devDependencies": {
+        "@capacitor/assets": "^3.0.5",
         "@inertiajs/vue3": "^1.0.0",
         "@tailwindcss/forms": "^0.5.10",
         "@tailwindcss/typography": "^0.5.16",
@@ -24,7 +25,6 @@
     "dependencies": {
         "@capacitor/android": "^7.2.0",
         "@capacitor/app": "^7.0.1",
-        "@capacitor/assets": "^3.0.5",
         "@capacitor/cli": "^7.2.0",
         "@capacitor/core": "^7.2.0",
         "@capacitor/splash-screen": "^7.0.1",
@@ -51,7 +51,7 @@
         "masonry-layout": "^4.2.2",
         "pinia": "^3.0.2",
         "plyr": "^3.7.8",
-        "swiper": "^11.2.6",
+        "swiper": "^12.2.0",
         "uuid": "^11.1.0",
         "vue-chartjs": "^5.3.2",
         "vue-fullpage.js": "^0.2.21",

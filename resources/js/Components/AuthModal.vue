@@ -33,8 +33,12 @@ function close() {
 function submitLogin() {
     loading.value = true
     loginErr.value = {}
-    axios.post(route('login'), loginData.value)
-        .then(() => {
+    axios.post(route('login.store'), loginData.value)
+        .then(({ data }) => {
+            if (data?.two_factor) {
+                window.location.href = route('two-factor.login')
+                return
+            }
             actions.notify('Вы успешно вошли', 'success')
             close()
             setTimeout(() => window.location.reload(), 500)
@@ -49,7 +53,7 @@ function submitLogin() {
 function submitRegister() {
     loading.value = true
     regErr.value = {}
-    axios.post(route('register'), regData.value)
+    axios.post(route('register.store'), regData.value)
         .then(() => {
             actions.notify('Вы успешно зарегистрировались', 'success')
             close()

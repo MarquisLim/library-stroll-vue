@@ -1,6 +1,7 @@
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import { router, useForm, usePage } from '@inertiajs/vue3';
+import axios from 'axios';
 import ActionSection from '@/Components/ActionSection.vue';
 import ConfirmsPassword from '@/Components/ConfirmsPassword.vue';
 import DangerButton from '@/Components/DangerButton.vue';
@@ -18,6 +19,8 @@ const page = usePage();
 const enabling = ref(false);
 const confirming = ref(false);
 const disabling = ref(false);
+const setupVisible = ref(false);
+const enableError = ref('');
 const qrCode = ref(null);
 const setupKey = ref(null);
 const recoveryCodes = ref([]);
@@ -27,58 +30,71 @@ const confirmationForm = useForm({
 });
 
 const twoFactorEnabled = computed(
-    () => ! enabling.value && page.props.auth.user?.two_factor_enabled,
+    () => ! enabling.value && (
+        page.props.auth.user?.two_factor_enabled || setupVisible.value
+    ),
 );
 
 watch(twoFactorEnabled, () => {
     if (! twoFactorEnabled.value) {
         confirmationForm.reset();
         confirmationForm.clearErrors();
+        setupVisible.value = false;
+        qrCode.value = null;
+        setupKey.value = null;
+        recoveryCodes.value = [];
     }
 });
 
+const loadSetupData = () => Promise.all([
+    showQrCode(),
+    showSetupKey(),
+    showRecoveryCodes(),
+]);
+
 const enableTwoFactorAuthentication = () => {
     enabling.value = true;
+    enableError.value = '';
 
     router.post(route('two-factor.enable'), {}, {
         preserveScroll: true,
-        onSuccess: () => Promise.all([
-            showQrCode(),
-            showSetupKey(),
-            showRecoveryCodes(),
-        ]),
+        preserveState: true,
+        onSuccess: () => {
+            setupVisible.value = true;
+            confirming.value = props.requiresConfirmation;
+            return loadSetupData();
+        },
+        onError: (errors) => {
+            enableError.value = errors?.password
+                ?? errors?.message
+                ?? 'Не удалось включить двухфакторную аутентификацию.';
+        },
         onFinish: () => {
             enabling.value = false;
-            confirming.value = props.requiresConfirmation;
         },
     });
 };
 
-const showQrCode = () => {
-    return axios.get(route('two-factor.qr-code')).then(response => {
-        qrCode.value = response.data.svg;
-    });
-};
+const showQrCode = () => axios.get(route('two-factor.qr-code')).then(response => {
+    qrCode.value = response.data.svg;
+});
 
-const showSetupKey = () => {
-    return axios.get(route('two-factor.secret-key')).then(response => {
-        setupKey.value = response.data.secretKey;
-    });
-}
+const showSetupKey = () => axios.get(route('two-factor.secret-key')).then(response => {
+    setupKey.value = response.data.secretKey;
+});
 
-const showRecoveryCodes = () => {
-    return axios.get(route('two-factor.recovery-codes')).then(response => {
-        recoveryCodes.value = response.data;
-    });
-};
+const showRecoveryCodes = () => axios.get(route('two-factor.recovery-codes')).then(response => {
+    recoveryCodes.value = response.data;
+});
 
 const confirmTwoFactorAuthentication = () => {
     confirmationForm.post(route('two-factor.confirm'), {
-        errorBag: "confirmTwoFactorAuthentication",
+        errorBag: 'confirmTwoFactorAuthentication',
         preserveScroll: true,
         preserveState: true,
         onSuccess: () => {
             confirming.value = false;
+            setupVisible.value = false;
             qrCode.value = null;
             setupKey.value = null;
         },
@@ -96,12 +112,31 @@ const disableTwoFactorAuthentication = () => {
 
     router.delete(route('two-factor.disable'), {
         preserveScroll: true,
+        preserveState: true,
         onSuccess: () => {
-            disabling.value = false;
             confirming.value = false;
+            setupVisible.value = false;
+            qrCode.value = null;
+            setupKey.value = null;
+            recoveryCodes.value = [];
+        },
+        onFinish: () => {
+            disabling.value = false;
         },
     });
 };
+
+onMounted(() => {
+    if (
+        props.requiresConfirmation
+        && page.props.auth.user?.two_factor_enabled
+        && ! qrCode.value
+    ) {
+        setupVisible.value = true;
+        confirming.value = true;
+        loadSetupData().catch(() => {});
+    }
+});
 </script>
 
 <template>
@@ -136,6 +171,10 @@ const disableTwoFactorAuthentication = () => {
                   Если включена двухфакторная аутентификация, во время аутентификации вам будет предложено ввести безопасный случайный токен. Вы можете получить этот токен из приложения Google Authenticator вашего телефона.
                 </p>
             </div>
+
+            <p v-if="enableError" class="mt-3 text-sm text-error">
+                {{ enableError }}
+            </p>
 
             <div v-if="twoFactorEnabled">
                 <div v-if="qrCode">
@@ -175,6 +214,10 @@ const disableTwoFactorAuthentication = () => {
                         <InputError :message="confirmationForm.errors.code" class="mt-2" />
                     </div>
                 </div>
+
+                <p v-else-if="setupVisible || enabling" class="mt-4 text-sm text-base-content/70">
+                    Загрузка QR-кода…
+                </p>
 
                 <div v-if="recoveryCodes.length > 0 && ! confirming">
                     <div class="mt-4 max-w-xl text-sm text-gray-600">

@@ -313,6 +313,8 @@ async function leaveGroup() {
 }
 
 onMounted(() => {
+    if (!window.Echo) return
+
     const myId = authId
 
     page.props.conversations.data.forEach((item) => {

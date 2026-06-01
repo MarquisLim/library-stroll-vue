@@ -16,7 +16,7 @@ const form = useForm({
 const passwordInput = ref(null);
 
 const submit = () => {
-    form.post(route('password.confirm'), {
+    form.post(route('password.confirm.store'), {
         onFinish: () => {
             form.reset();
 

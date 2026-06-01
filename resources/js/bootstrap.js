@@ -1,6 +1,5 @@
 import axios from 'axios';
-import Echo from 'laravel-echo';
-import Pusher from 'pusher-js';
+import './echo';
 
 window.axios = axios;
 axios.defaults.withCredentials = true;
@@ -18,23 +17,3 @@ axios.interceptors.request.use(config => {
     }
     return config
 })
-
-window.Pusher = Pusher;
-
-Pusher.logToConsole = true;
-
-window.Echo = new Echo({
-    broadcaster: 'pusher',
-    key: import.meta.env.VITE_PUSHER_APP_KEY,
-    cluster: import.meta.env.VITE_PUSHER_APP_CLUSTER,
-    forceTLS: true,
-    encrypted: true,
-    auth: {
-        headers: {
-            'X-CSRF-TOKEN': document
-                .querySelector('meta[name="csrf-token"]')
-                .getAttribute('content'),
-            'X-Requested-With': 'XMLHttpRequest',
-        },
-    },
-});

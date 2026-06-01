@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use Illuminate\Http\Request;
 use Inertia\Middleware;
+use Laravel\Fortify\Features;
 
 class HandleInertiaRequests extends Middleware
 {
@@ -37,12 +38,27 @@ class HandleInertiaRequests extends Middleware
     {
         return array_merge(parent::share($request), [
             'auth' => [
-                'user' => fn () => $request->user() ? array_merge(
-                    $request->user()->only('id', 'name', 'email', 'profile_photo_url'),
-                    [
-                        'roles' => $request->user()->getRoleNames(),
-                    ]
-                ) : null,
+                'user' => function () use ($request) {
+                    if (! $user = $request->user()) {
+                        return null;
+                    }
+
+                    $roles = [];
+                    try {
+                        $roles = $user->getRoleNames();
+                    } catch (\Throwable) {
+                        // roles table may be unavailable during setup
+                    }
+
+                    return array_merge(
+                        $user->only('id', 'name', 'email', 'profile_photo_url'),
+                        [
+                            'roles' => $roles,
+                            'two_factor_enabled' => Features::canManageTwoFactorAuthentication()
+                                && ! is_null($user->two_factor_secret),
+                        ],
+                    );
+                },
             ],
         ]);
     }

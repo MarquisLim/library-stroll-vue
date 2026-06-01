@@ -14,6 +14,9 @@ class RoleSeeder extends Seeder
     public function run(): void
     {
         collect(['User', 'Moderator', 'Admin', 'SuperAdmin'])
-            ->each(fn ($name) => Role::firstOrCreate(['name' => $name]));
+            ->each(fn ($name) => Role::firstOrCreate([
+                'name' => $name,
+                'guard_name' => 'web',
+            ]));
     }
 }

@@ -2,7 +2,6 @@
 import { defineStore } from 'pinia'
 import { ref, nextTick } from 'vue'
 import axios from 'axios'
-import Echo from 'laravel-echo'
 import { usePage } from '@inertiajs/vue3'
 
 export const useNotifications = defineStore('notifications', () => {

@@ -18,6 +18,7 @@ use App\Http\Controllers\Messenger\ReadMarkerController;
 use App\Http\Controllers\Moderation\ComplaintController as ModerationComplaintController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\UserProfileController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\StudioController;
 use App\Http\Controllers\User\BlockController;
@@ -143,3 +144,7 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
                 Route::post('complaints/{complaint}/review', [ModerationComplaintController::class, 'review'])->name('complaints.review');
             });
     });
+
+Route::middleware(['web', 'auth:web', config('jetstream.auth_session')])
+    ->get('/user/profile', [UserProfileController::class, 'show'])
+    ->name('profile.show');

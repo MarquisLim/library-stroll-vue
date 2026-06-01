@@ -21,10 +21,7 @@ const form = useForm({
 });
 
 const submit = () => {
-    form.transform(data => ({
-        ...data,
-        remember: form.remember ? 'on' : '',
-    })).post(route('login'), {
+    form.post(route('login.store'), {
         onFinish: () => form.reset('password'),
     });
 };

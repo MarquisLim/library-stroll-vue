@@ -53,7 +53,7 @@ watch(isDark, v => {
 })
 
 function subscribeToConversation(id) {
-    if (!myId || subscribedConvs.has(id)) return
+    if (!window.Echo || !myId || subscribedConvs.has(id)) return
     window.Echo.private(`conversation.${id}`)
         .listen('.MessageSent', ({ message }) => {
             if (message.user_id !== myId) msgUnread.value++
@@ -70,7 +70,7 @@ onMounted(() => {
 
     page.props.conversationIds?.forEach(subscribeToConversation)
 
-    if (myId) {
+    if (window.Echo && myId) {
         window.Echo.private(`user.${myId}`)
             .listen('.ConversationCreated', ({ conversation }) => {
                 subscribeToConversation(conversation.id)

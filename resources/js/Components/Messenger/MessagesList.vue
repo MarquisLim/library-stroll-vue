@@ -115,6 +115,8 @@ onMounted(async () => {
     })
     scrollToBottom()
     ready.value = true
+    if (!window.Echo) return
+
     window.Echo
         .private(`conversation.${props.conversationId}`)
         .listen('.MessageSent', async ({ message }) => {

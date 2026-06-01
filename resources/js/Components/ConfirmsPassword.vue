@@ -1,5 +1,6 @@
 <script setup>
 import { ref, reactive, nextTick } from 'vue';
+import axios from 'axios';
 import DialogModal from './DialogModal.vue';
 import InputError from './InputError.vue';
 import PrimaryButton from './PrimaryButton.vue';
@@ -40,15 +41,18 @@ const startConfirmingPassword = () => {
         } else {
             confirmingPassword.value = true;
 
-            setTimeout(() => passwordInput.value.focus(), 250);
+            setTimeout(() => passwordInput.value?.focus(), 250);
         }
+    }).catch(() => {
+        form.error = 'Не удалось проверить пароль. Обновите страницу.';
+        confirmingPassword.value = true;
     });
 };
 
 const confirmPassword = () => {
     form.processing = true;
 
-    axios.post(route('password.confirm'), {
+    axios.post(route('password.confirm.store'), {
         password: form.password,
     }).then(() => {
         form.processing = false;
@@ -58,8 +62,10 @@ const confirmPassword = () => {
 
     }).catch(error => {
         form.processing = false;
-        form.error = error.response.data.errors.password[0];
-        passwordInput.value.focus();
+        form.error = error.response?.data?.errors?.password?.[0]
+            ?? error.response?.data?.message
+            ?? 'Неверный пароль.';
+        passwordInput.value?.focus();
     });
 };
 

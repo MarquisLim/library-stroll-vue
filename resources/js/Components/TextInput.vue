@@ -1,5 +1,9 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, useAttrs } from 'vue'
+
+defineOptions({
+    inheritAttrs: false,
+})
 
 defineProps({
     modelValue: String,
@@ -8,10 +12,11 @@ defineProps({
 defineEmits(['update:modelValue'])
 
 const input = ref(null)
+const attrs = useAttrs()
 
 onMounted(() => {
-    if (input.value?.hasAttribute('autofocus')) {
-        input.value.focus()
+    if (attrs.autofocus !== undefined) {
+        input.value?.focus()
     }
 })
 
@@ -23,10 +28,9 @@ defineExpose({
 <template>
     <input
         ref="input"
-        type="text"
+        v-bind="attrs"
         class="input input-bordered w-full"
         :value="modelValue"
         @input="$emit('update:modelValue', $event.target.value)"
-        autofocus
     />
 </template>
