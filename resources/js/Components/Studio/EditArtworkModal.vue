@@ -77,7 +77,7 @@ function onFile(e) {
 
 async function save() {
     if (!canSave.value) return
-    const { data } = await axios.post(`/studio/update-draft/${props.artwork.id}`, {
+    const { data } = await axios.patch(`/studio/artworks/${props.artwork.id}`, {
         title: title.value,
         description: description.value,
         is_private: is_private.value,

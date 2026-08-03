@@ -5,6 +5,7 @@ namespace Tests\Unit;
 use App\Models\Artwork;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 use PHPUnit\Framework\Attributes\Test;
 
@@ -15,8 +16,13 @@ class ArtworkControllerLikeTest extends TestCase
     #[Test]
     public function authenticated_user_can_like_an_artwork()
     {
+        Notification::fake();
+
         $user = User::factory()->create();
-        $artwork = Artwork::factory()->create();
+        $artwork = Artwork::factory()->create([
+            'is_published' => true,
+            'is_private' => false,
+        ]);
 
         // Имитируем авторизованного пользователя
         $response = $this->actingAs($user)->withoutMiddleware()
@@ -34,8 +40,13 @@ class ArtworkControllerLikeTest extends TestCase
     #[Test]
     public function it_removes_like_if_already_liked()
     {
+        Notification::fake();
+
         $user = User::factory()->create();
-        $artwork = Artwork::factory()->create();
+        $artwork = Artwork::factory()->create([
+            'is_published' => true,
+            'is_private' => false,
+        ]);
 
         // Сначала ставим лайк
         $this->actingAs($user)->withoutMiddleware()->post("/artworks/{$artwork->id}/like");

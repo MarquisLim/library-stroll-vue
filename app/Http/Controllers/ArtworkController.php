@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\AddArtworkToCollectionsRequest;
 use App\Models\Artwork;
 use App\Models\Collection;
 use App\Models\Models\Complaint\ComplaintType;
 use App\Notifications\ArtworkLiked;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class ArtworkController extends Controller
@@ -19,9 +21,7 @@ class ArtworkController extends Controller
             ->withCount('comments', 'likes')
             ->findOrFail($id);
 
-        if ($artwork->is_private && (!Auth::check() || Auth::id() !== $artwork->user_id)) {
-            abort(403, 'Вы не можете просматривать этот арт');
-        }
+        $this->authorize('view', $artwork);
 
         if (Auth::check()) {
             $myChats = Auth::user()
@@ -79,11 +79,10 @@ class ArtworkController extends Controller
         $perPage = (int)$request->get('per_page', 12);
 
         $art = Artwork::with('tags')->findOrFail($id);
+        $this->authorize('view', $art);
         $tagIds = $art->tags->pluck('id');
 
-        $query = Artwork::query()
-            ->where('is_published', true)
-            ->where('is_private', false)
+        $query = Artwork::publiclyVisible()
             ->where('id', '!=', $art->id)
             ->when($tagIds->count(), fn($q) => $q->whereHas('tags', fn($t) => $t->whereIn('tags.id', $tagIds)))
             // если тегов нет - fallback по похожему названию
@@ -116,6 +115,7 @@ class ArtworkController extends Controller
     {
         $user = Auth::user();
         $artwork = Artwork::findOrFail($id);
+        $this->authorize('view', $artwork);
 
         $liked = $artwork->likes()->where('user_id', $user->id)->exists();
 
@@ -136,17 +136,29 @@ class ArtworkController extends Controller
         ]);
     }
 
-    public function addToCollection(Request $request, $id)
+    public function addToCollection(AddArtworkToCollectionsRequest $request, $id)
     {
-        if (!Auth::check()) {
-            return response()->json(['error' => 'Not authorized'], 403);
-        }
-
         $artwork = Artwork::findOrFail($id);
-        $collections = $request->collections ?? [];
-        $artwork->collections()->sync($collections);
+        $this->authorize('view', $artwork);
 
-        return response()->json(['message' => 'Added to collection', 'in_collections' => $artwork->collections()->where('user_id', Auth::id())->pluck('id')]);
+        $selectedIds = collect($request->validated('collections', []))
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        DB::transaction(function () use ($artwork, $selectedIds, $request) {
+            $ownedCollectionIds = Collection::where('user_id', $request->user()->id)
+                ->pluck('id');
+
+            $artwork->collections()->detach($ownedCollectionIds);
+            $artwork->collections()->syncWithoutDetaching($selectedIds);
+        });
+
+        return response()->json([
+            'message' => 'Added to collection',
+            'in_collections' => $artwork->collections()
+                ->where('user_id', $request->user()->id)
+                ->pluck('collections.id'),
+        ]);
     }
 
     public function authorWorks(Request $request, $id)
@@ -155,9 +167,7 @@ class ArtworkController extends Controller
         $perPage = $request->per_page ?? 12;
         $excludeArtworkId = $request->exclude_artwork_id;
 
-        $query = Artwork::where('user_id', $id)
-            ->where('is_published', true)
-            ->where('is_private', false);
+        $query = Artwork::publiclyVisible()->where('user_id', $id);
 
         if ($excludeArtworkId) {
             $query->where('id', '!=', $excludeArtworkId);

@@ -16,6 +16,7 @@ class CommentController extends Controller
         $page = (int)$request->get('page', 1);
 
         $artwork = Artwork::findOrFail($artworkId);
+        $this->authorize('view', $artwork);
 
         $query = Comment::where('commentable_id', $artworkId)
             ->where('commentable_type', Artwork::class)
@@ -26,6 +27,7 @@ class CommentController extends Controller
         $total = $query->count();
         $comments = Comment::whereNull('parent_id')
             ->where('commentable_id', $artworkId)
+            ->where('commentable_type', Artwork::class)
             ->with([
                 'user',
                 'replies.user',
@@ -52,6 +54,7 @@ class CommentController extends Controller
         }
 
         $artwork = Artwork::findOrFail($artworkId);
+        $this->authorize('comment', $artwork);
 
         $request->validate([
             'text' => 'required|string|max:1000',
@@ -76,6 +79,10 @@ class CommentController extends Controller
     {
         $user   = Auth::user() ?: abort(403);
         $parent = Comment::findOrFail($id);
+        abort_unless($parent->commentable_type === Artwork::class, 404);
+
+        $artwork = Artwork::findOrFail($parent->commentable_id);
+        $this->authorize('comment', $artwork);
 
         $request->validate(['text' => 'required|string|max:1000']);
 

@@ -61,7 +61,7 @@ const autoSave = debounce(async () => {
     isSaving.value = true
     artworkStore.notify('Сохраняем...', 'info')
     try {
-        const res = await axios.post(`/studio/update-draft/${selectedDraftId.value}`, {
+        const res = await axios.patch(`/studio/artworks/${selectedDraftId.value}`, {
             title: title.value,
             description: description.value,
             is_adult: is_adult.value,
@@ -171,7 +171,7 @@ async function createArtFromFile() {
 async function destroyDraft() {
     confirmingDraftDeletion.value = false
     try {
-        const res = await axios.delete(`/studio/draft/${selectedDraftId.value}`)
+        const res = await axios.delete(`/studio/artworks/${selectedDraftId.value}`)
         artworkStore.notify(res.data.message)
         drafts.value = drafts.value.filter(d => d.id !== selectedDraftId.value)
         selectedDraftId.value = null

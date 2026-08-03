@@ -22,13 +22,11 @@ class DeleteAccountTest extends TestCase
         ]);
 
         $this->actingAs($user)
-            ->withoutMiddleware() // 🔹 Отключаем CSRF
             ->delete('/user', [
                 'password' => 'password',
             ])->assertRedirect('/');
 
-        // Проверяем, что пользователь удалён
-        $this->assertSoftDeleted('users', ['id' => $user->id]); // Если SoftDeletes
+        $this->assertDatabaseMissing('users', ['id' => $user->id]);
     }
 
     public function test_correct_password_must_be_provided_before_account_can_be_deleted(): void
@@ -42,10 +40,9 @@ class DeleteAccountTest extends TestCase
         ]);
 
         $this->actingAs($user)
-            ->withoutMiddleware() // 🔹 Отключаем CSRF
             ->delete('/user', [
                 'password' => 'wrong-password',
-            ])->assertSessionHasErrors();
+            ])->assertSessionHasErrors('password');
 
         // Проверяем, что пользователь остался в БД
         $this->assertNotNull($user->fresh());

@@ -32,6 +32,18 @@ class Artwork extends Model implements HasMedia
         });
     }
 
+    public function scopePubliclyVisible(Builder $query): Builder
+    {
+        return $query
+            ->where('is_published', true)
+            ->where('is_private', false);
+    }
+
+    public function isOwnedBy(?User $user): bool
+    {
+        return $user !== null && $this->user_id === $user->id;
+    }
+
     public function getLikedByUserAttribute(): bool
     {
         return Auth::check()

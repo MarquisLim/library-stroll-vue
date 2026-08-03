@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use Illuminate\Broadcasting\PrivateChannel;
 use App\Models\User;
 use App\Models\Models\Complaint\Complaint;
 use App\Services\ComplaintSubjectInfo;
@@ -51,9 +52,11 @@ class ContentBlocked extends Notification implements ShouldBroadcast, ShouldQueu
         ]);
     }
 
-    public function broadcastOn(): array
+    public function broadcastOn(): PrivateChannel
     {
-        $ownerId = $this->complaint->complaintable->user->id;
-        return ['private-user.'.$ownerId];
+        $subject = $this->complaint->complaintable;
+        $ownerId = $subject instanceof User ? $subject->id : $subject->user_id;
+
+        return new PrivateChannel('user.'.$ownerId);
     }
 }

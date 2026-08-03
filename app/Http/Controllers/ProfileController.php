@@ -37,7 +37,10 @@ class ProfileController extends Controller
                 $query->where('is_private', false);
             })
             ->withCount('artworks')
-            ->with(['artworks.media' => function($q) {
+            ->with(['artworks.media' => function($q) use ($isOwner) {
+                if (! $isOwner) {
+                    $q->publiclyVisible();
+                }
                 $q->limit(3);
             }])
             ->get();
@@ -45,7 +48,7 @@ class ProfileController extends Controller
         // Коллекции текущего авторизованного пользователя
         $userCollections = Collection::where('user_id', Auth::id())
             ->with(['artworks' => function($q) {
-                $q->where('is_published', true)->with('media');
+                $q->publiclyVisible()->with('media');
             }])
             ->get();
 
@@ -67,7 +70,7 @@ class ProfileController extends Controller
     {
         $userId = Auth::id();
 
-        $likedArtworks = Artwork::whereHas('likes', function($q) use ($user) {
+        $likedArtworks = Artwork::publiclyVisible()->whereHas('likes', function($q) use ($user) {
             $q->where('user_id', $user->id);
         })
             ->with(['user','media','likes','collections'])

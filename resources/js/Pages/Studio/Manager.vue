@@ -323,7 +323,7 @@ const saved = () => fetch(props.artworks.current_page)
         :open="Boolean(delId)"
         @close="delId = null"
         @confirm="
-        axios.delete(`/studio/draft/${delId}`).then(() => {
+        axios.delete(`/studio/artworks/${delId}`).then(() => {
           delId = null
           saved()
         })

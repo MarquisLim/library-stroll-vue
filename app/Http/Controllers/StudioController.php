@@ -2,18 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Artwork\DeleteArtwork;
+use App\Actions\Artwork\UpdateArtwork;
 use App\Http\Requests\UploadArtworkRequest;
+use App\Http\Requests\UpdateArtworkRequest;
 use App\Jobs\ProcessVideoPreviewJob;
 use App\Models\Artwork;
 use App\Models\Collection;
 use App\Models\Tag;
-use FFMpeg\Coordinate\TimeCode;
-use FFMpeg\FFMpeg;
-use FFMpeg\FFProbe;
-use FFMpeg\Format\Video\X264;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -61,11 +59,18 @@ class StudioController extends Controller
     /* --- Загрузка файла --- */
     public function uploadFile(UploadArtworkRequest $request)
     {
-        $artwork = Artwork::firstOrNew([
-            'id' => $request->draftId,
-            'user_id' => auth()->id(),
-        ], ['is_published'=>false, 'allow_comments'=>true]);
-        $artwork->save();
+        if ($request->filled('draftId')) {
+            $artwork = Artwork::where('user_id', $request->user()->id)
+                ->findOrFail($request->integer('draftId'));
+            $this->authorize('update', $artwork);
+            abort_if($artwork->is_published, 422, 'Медиа опубликованной работы нельзя заменить этим маршрутом');
+        } else {
+            $artwork = Artwork::create([
+                'user_id' => $request->user()->id,
+                'is_published' => false,
+                'allow_comments' => true,
+            ]);
+        }
 
         $artwork->clearMediaCollection('artworks');
         $artwork->clearMediaCollection('preview');
@@ -90,39 +95,31 @@ class StudioController extends Controller
     }
 
     /* --- Обновления черновика --- */
-    public function updateDraft(Request $request, $id)
+    public function updateDraft(
+        UpdateArtworkRequest $request,
+        $id,
+        UpdateArtwork $updateArtwork
+    )
     {
-        $user = Auth::user();
+        $artwork = $this->findManageableArtwork($id, $request->user());
+        $this->authorize('update', $artwork);
 
-        $draft = Artwork::when(! $user->hasAnyRole(['Admin', 'SuperAdmin']), function ($q) use ($user) {
-            $q->where('user_id', $user->id);
-        })->findOrFail($id);
-        $draft->title=$request->title;
-        $draft->description=$request->description;
-        $draft->is_adult=$request->is_adult ? true:false;
-        $draft->has_ai=$request->has_ai ? true:false;
-        $draft->is_private=$request->is_private ? true:false;
-        $draft->allow_download=$request->allow_download ? true:false;
-        $draft->allow_comments=$request->allow_comments ? true:false;
-        $draft->save();
+        $artwork = $updateArtwork->handle($artwork, $request->user(), $request->validated());
 
-        // Теги
-        $tagsArr=array_map('trim',$request->tags??[]);
-        $tagIds=[];
-        foreach($tagsArr as $tName){
-            if($tName!==''){
-                $tag=Tag::firstOrCreate(['name'=>$tName]);
-                $tagIds[]=$tag->id;
-            }
-        }
-        $draft->tags()->sync($tagIds);
+        return response()->json(['message' => 'Работа обновлена', 'artwork' => $artwork]);
+    }
 
-        // Коллекции
-        $collections=$request->collections ?? [];
-        $draft->collections()->sync($collections);
+    public function updateArtwork(
+        UpdateArtworkRequest $request,
+        $artwork,
+        UpdateArtwork $updateArtwork
+    ) {
+        $artwork = $this->findManageableArtwork($artwork, $request->user());
+        $this->authorize('update', $artwork);
 
-        $draft->load('media','tags','collections');
-        return response()->json(['message'=>'Черновик обновлен','artwork'=>$draft]);
+        $artwork = $updateArtwork->handle($artwork, $request->user(), $request->validated());
+
+        return response()->json(['message' => 'Работа обновлена', 'artwork' => $artwork]);
     }
 
     /* --- Публикация --- */
@@ -133,6 +130,7 @@ class StudioController extends Controller
         $art = Artwork::when(! $user->hasAnyRole(['Admin', 'SuperAdmin']), function ($q) use ($user) {
             $q->where('user_id', $user->id);
         })->findOrFail($id);
+        $this->authorize('update', $art);
 
         if(!$art->getFirstMediaUrl('artworks'))
             return response()->json(['error'=>'Сначала загрузите файл'],422);
@@ -150,15 +148,22 @@ class StudioController extends Controller
     }
 
     /* --- Удаление черновика --- */
-    public function destroyDraft(Request $request, $id)
+    public function destroyDraft($id, DeleteArtwork $deleteArtwork)
     {
-        $user = Auth::user();
+        $artwork = $this->findManageableArtwork($id, Auth::user());
+        $this->authorize('delete', $artwork);
+        $deleteArtwork->handle($artwork);
 
-        $art = Artwork::when(! $user->hasAnyRole(['Admin', 'SuperAdmin']), function ($q) use ($user) {
-            $q->where('user_id', $user->id);
-        })->findOrFail($id);
-        $art->delete();
-        return response()->json(['message'=>'Черновик удален']);
+        return response()->json(['message' => 'Работа удалена']);
+    }
+
+    public function destroyArtwork($artwork, DeleteArtwork $deleteArtwork)
+    {
+        $artwork = $this->findManageableArtwork($artwork, Auth::user());
+        $this->authorize('delete', $artwork);
+        $deleteArtwork->handle($artwork);
+
+        return response()->json(['message' => 'Работа удалена']);
     }
 
     /* --- Обновление списка --- */
@@ -324,5 +329,16 @@ class StudioController extends Controller
                 'dir'        => $dir,
             ],
         ]);
+    }
+
+    private function findManageableArtwork(int|string $id, \App\Models\User $user): Artwork
+    {
+        $query = Artwork::query();
+
+        if ($user->hasAnyRole(['Admin', 'SuperAdmin'])) {
+            $query->withoutGlobalScopes();
+        }
+
+        return $query->findOrFail($id);
     }
 }

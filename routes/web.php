@@ -35,10 +35,11 @@ Route::get('/artworks/{artwork}/similar', [ArtworkController::class, 'similar'])
 Route::get('/author/{user}/works', [ArtworkController::class, 'authorWorks'])->name('author.works');
 Route::get('/search', [SearchController::class, 'index'])->name('search.index');
 Route::get('/search/suggestions', [SearchController::class, 'suggestions'])->name('search.suggestions');
-Route::get('/collections/{collection}', [CollectionController::class, 'show'])->name('collections.show');
+Route::get('/collections/{collection}', [CollectionController::class, 'show'])
+    ->whereNumber('collection')
+    ->name('collections.show');
 Route::get('/profile/{user}', [ProfileController::class, 'show'])->name('user.profile.show');
 Route::get('/profile/{user}/likes', [ProfileController::class, 'likes'])->name('user.profile.likes');
-Route::get('/profile/{user}/collections', [ProfileController::class, 'collections'])->name('user.profile.collections');
 Route::get('/terms', function () {
     return Inertia::render('Legal/TermsOfService');
 })->name('terms');

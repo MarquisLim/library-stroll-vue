@@ -41,6 +41,8 @@ const complaintTypes  = page.props.complaintTypes
 const showComplaint   = ref(false)
 const showShare = ref(false)
 const plyrVideo = ref(null)
+const adultConfirmed = ref(sessionStorage.getItem('adult-content-confirmed') === 'true')
+const adultHidden = computed(() => !!artwork.value.is_adult && !adultConfirmed.value)
 
 const loaded = ref(false)
 const onMediaLoad = () => (loaded.value = true)
@@ -91,42 +93,55 @@ function openColSelector(e) {
     openSelector(artwork.value, rect)
 }
 
+async function loadProtectedImage() {
+    if (adultHidden.value || artwork.value.type !== 'image') return
+
+    const res = await fetch(artwork.value.media[0].original_url, {credentials: 'include'})
+    const blob = await res.blob()
+    const img = new Image()
+    img.onload = () => {
+        const canvas = canvasRef.value
+        if (!canvas) return
+        canvas.width = img.naturalWidth
+        canvas.height = img.naturalHeight
+        const ctx = canvas.getContext('2d')
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+        ctx.font = '20px sans-serif'
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)'
+        ctx.fillText('© LibraryStroll', 10, canvas.height - 10)
+    }
+    img.src = URL.createObjectURL(blob)
+}
+
+function initializeVideo() {
+    if (adultHidden.value || artwork.value.type !== 'video') return
+
+    nextTick(() => {
+        if (plyrVideo.value) {
+            new Plyr(plyrVideo.value, {
+                autoplay: true,
+                muted: true,
+                loop: { active: true },
+                controls: ['play', 'progress', 'current-time', 'mute', 'volume', 'fullscreen'],
+            })
+        }
+    })
+}
+
+function revealAdult() {
+    sessionStorage.setItem('adult-content-confirmed', 'true')
+    adultConfirmed.value = true
+    nextTick(() => {
+        loadProtectedImage()
+        initializeVideo()
+    })
+}
+
 // canvas for image protection
 const canvasRef = ref(null)
-onMounted(async () => {
-    if (artwork.value.type === 'image') {
-        const res = await fetch(artwork.value.media[0].original_url, {credentials: 'include'})
-        const blob = await res.blob()
-        const img = new Image()
-        img.onload = () => {
-            const canvas = canvasRef.value
-            canvas.width = img.naturalWidth
-            canvas.height = img.naturalHeight
-            const ctx = canvas.getContext('2d')
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-            // watermark
-            ctx.font = '20px sans-serif'
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)'
-            ctx.fillText('© LibraryStroll', 10, canvas.height - 10)
-        }
-        img.src = URL.createObjectURL(blob)
-    }
-})
-
-
 onMounted(() => {
-    if (artwork.value.type === 'video') {
-        nextTick(() => {
-            if (plyrVideo.value) {
-                new Plyr(plyrVideo.value, {
-                    autoplay: true,
-                    muted: true,
-                    loop: { active: true },
-                    controls: ['play', 'progress', 'current-time', 'mute', 'volume', 'fullscreen'],
-                })
-            }
-        })
-    }
+    loadProtectedImage()
+    initializeVideo()
 })
 
 </script>
@@ -149,10 +164,18 @@ onMounted(() => {
                     class="md:w-1/2 flex justify-center relative"
                     @contextmenu.prevent
                 >
+                    <div
+                        v-if="adultHidden"
+                        class="min-h-72 w-full rounded-xl bg-base-300 flex flex-col items-center justify-center gap-4 p-6 text-center"
+                    >
+                        <p class="text-lg font-semibold">Материал для взрослых</p>
+                        <button class="btn btn-primary" @click="revealAdult">Показать</button>
+                    </div>
+
                     <!-- video with no-download -->
                     <video
                         ref="plyrVideo"
-                        v-if="artwork.type==='video'"
+                        v-else-if="artwork.type==='video'"
                         class="plyr-video max-h-[80vh] w-full rounded-xl select-none"
                         controls
                         controlsList="nodownload"

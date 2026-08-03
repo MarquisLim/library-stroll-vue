@@ -15,8 +15,7 @@ class GalleryController extends Controller
     {
         $userId = Auth::id();
 
-        $artworks = Artwork::where('is_published', true)
-            ->where('is_private', false)
+        $artworks = Artwork::publiclyVisible()
             ->orderByDesc('likes_count')
             ->with(['media', 'user', 'likes', 'tags', 'collections' => function($q) use ($userId) {
                 if($userId){
@@ -84,14 +83,7 @@ class GalleryController extends Controller
 
         $userId = Auth::id();
 
-        $q = Artwork::query()
-            ->where(fn($query) =>
-            $query->where('is_published', true)
-                ->orWhere(fn($q2) =>
-                $q2->where('user_id', $userId)
-                    ->where('is_private', false)
-                )
-            );
+        $q = Artwork::publiclyVisible();
 
         /* --- 1. Category --- */
         if ($category === 'images') $q->where('type', 'image');

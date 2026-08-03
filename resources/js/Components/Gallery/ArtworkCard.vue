@@ -7,6 +7,7 @@
         @mouseleave="hover = false"
         @touchstart="mobileHover = true"
         @touchend="mobileHover = false"
+        @click="guardAdult"
     >
         <!-- Бейдж «Черновик» -->
         <span
@@ -21,12 +22,12 @@
         >
             <!-- Скелетон -->
             <div
-                v-if="!loaded"
+                v-if="!loaded && !adultHidden"
                 class="absolute inset-0 skeleton animate-pulse"
             ></div>
 
             <!-- Статичное изображение (фрейм) -->
-            <template v-if="!showVideo">
+            <template v-if="!adultHidden && !showVideo">
                 <img
                     :src="thumbOrOriginal"
                     :alt="art.title"
@@ -38,7 +39,7 @@
             </template>
 
             <!-- Короткое превью-видео -->
-            <template v-else>
+            <template v-else-if="!adultHidden">
                 <video
                     :poster="thumbOrOriginal"
                     :src="previewSrc"
@@ -49,6 +50,16 @@
                     @loadeddata="onLoad"
                 />
             </template>
+
+            <div
+                v-if="adultHidden"
+                class="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-base-300 px-4 text-center"
+            >
+                <p class="font-semibold">Материал для взрослых</p>
+                <button class="btn btn-sm btn-primary" @click.stop.prevent="revealAdult">
+                    Показать
+                </button>
+            </div>
 
             <!-- Метка длительности видео --------------------------------------->
             <span
@@ -141,6 +152,17 @@ import { useArtworkActions } from '@/stores/useArtworkActions'
 
 const props = defineProps({ art: Object })
 const { toggleLike, openSelector } = useArtworkActions()
+const adultConfirmed = ref(sessionStorage.getItem('adult-content-confirmed') === 'true')
+const adultHidden = computed(() => !!props.art.is_adult && !adultConfirmed.value)
+
+function revealAdult() {
+    sessionStorage.setItem('adult-content-confirmed', 'true')
+    adultConfirmed.value = true
+}
+
+function guardAdult(event) {
+    if (adultHidden.value) event.preventDefault()
+}
 
 /* ------------------------ Skeleton / Aspect ratio ----------------------- */
 const loaded = ref(false)
@@ -184,7 +206,7 @@ onBeforeUnmount(() => {
 const isVideo = computed(() => props.art.type === 'video')
 const previewExists = computed(() => !!props.art.preview_url)
 const showVideo = computed(() => {
-    if (!isVideo.value || !previewExists.value) return false
+    if (adultHidden.value || !isVideo.value || !previewExists.value) return false
     return isMobile.value ? mobileHover.value || inView.value : hover.value
 })
 

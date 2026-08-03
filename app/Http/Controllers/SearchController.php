@@ -52,7 +52,7 @@ class SearchController extends Controller
 
         /* --- Артворки --- */
         if (in_array($type,['all','artwork'])) {
-            Artwork::where('is_published',true)
+            Artwork::publiclyVisible()
                 ->where('title','like',"%{$q}%")
                 ->with('media')
                 ->take(6)
@@ -75,7 +75,7 @@ class SearchController extends Controller
         $userId = Auth::id();
 
         /*  --- Артворки --- */
-        $artworks = Artwork::query()
+        $artworks = Artwork::publiclyVisible()
             ->when($q, fn($qB)=>$qB->where('title','like',"%$q%"))
             ->with(['user','media','likes','collections'])
             ->withCount('likes')
@@ -93,7 +93,8 @@ class SearchController extends Controller
         $tags = Tag::query()
             ->when($q, fn($qb) => $qb->where('name','like',"%$q%"))
             ->with(['artworks' => function($qArt) use ($userId) {
-                $qArt->with(['user','media','likes','collections'])
+                $qArt->publiclyVisible()
+                    ->with(['user','media','likes','collections'])
                     ->withCount('likes')
                     ->take(6);
             }])
@@ -106,7 +107,7 @@ class SearchController extends Controller
 
         /* --- Рекомендации --- */
         $recommended = !$q
-            ? Artwork::with(['user','media'])->inRandomOrder()->take(30)->get()
+            ? Artwork::publiclyVisible()->with(['user','media'])->inRandomOrder()->take(30)->get()
                 ->map(fn($a)=>$this->markUserData($a,$userId))
             : collect();
 

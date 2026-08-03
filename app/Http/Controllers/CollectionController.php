@@ -21,8 +21,7 @@ class CollectionController extends Controller
             'user',
             'artworks' => function ($query) use ($isOwner) {
                 if (! $isOwner) {
-                    $query->where('is_published', true)
-                        ->where('is_private', false);
+                    $query->publiclyVisible();
                 }
                 $query->with(['user', 'media', 'likes', 'collections'])
                     ->withCount('likes');
@@ -41,9 +40,7 @@ class CollectionController extends Controller
 
         $userCollections = Collection::where('user_id', $userId)
             ->with(['artworks' => function ($q) {
-                $q->where('is_published', true)
-                    ->where('is_private', false)
-                    ->with('media');
+                $q->publiclyVisible()->with('media');
             }])
             ->get();
 
@@ -60,9 +57,11 @@ class CollectionController extends Controller
         ]);
     }
 
-    public function getCollectionsWithMedia()
+    public function getCollectionsWithMedia(Request $request)
     {
-        $collections = Collection::with(['artworks.media'])->get();
+        $collections = Collection::where('user_id', $request->user()->id)
+            ->with(['artworks' => fn ($query) => $query->publiclyVisible()->with('media')])
+            ->get();
 
         $collections = $collections->map(function ($collection) {
             $firstMedia = optional($collection->artworks->first()?->getFirstMedia())->getUrl();
@@ -108,9 +107,7 @@ class CollectionController extends Controller
         $collection->update($data);
 
         $collection->load(['artworks' => function($q) {
-            $q->where('is_published', true)
-                ->where('is_private', false)
-                ->with('media');
+            $q->publiclyVisible()->with('media');
         }]);
 
         return response()->json([

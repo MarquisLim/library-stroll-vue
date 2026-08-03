@@ -32,7 +32,7 @@ class AuthenticationTest extends TestCase
             'password' => 'password',
         ]);
 
-        $response->assertRedirect(route('home', absolute: false));
+        $response->assertRedirect('/dashboard');
 
         // Проверяем, что пользователь вошёл
         $this->assertAuthenticatedAs($user);

@@ -25,7 +25,8 @@ class UpdatePasswordTest extends TestCase
             'password_confirmation' => 'new-password',
         ]);
 
-        $response->assertStatus(200); // Проверяем успешный ответ
+        $response->assertRedirect();
+        $response->assertSessionHasNoErrors();
 
         // Проверяем, что пароль обновлён
         $this->assertTrue(Hash::check('new-password', $user->fresh()->password));
@@ -45,7 +46,7 @@ class UpdatePasswordTest extends TestCase
             'password_confirmation' => 'new-password',
         ]);
 
-        $response->assertSessionHasErrors('current_password'); // Проверяем ошибку
+        $response->assertSessionHasErrorsIn('updatePassword', 'current_password');
 
         // Проверяем, что пароль не изменился
         $this->assertTrue(Hash::check('password', $user->fresh()->password));
@@ -65,7 +66,7 @@ class UpdatePasswordTest extends TestCase
             'password_confirmation' => 'wrong-password',
         ]);
 
-        $response->assertSessionHasErrors('password'); // Проверяем ошибку
+        $response->assertSessionHasErrorsIn('updatePassword', 'password');
 
         // Проверяем, что пароль не изменился
         $this->assertTrue(Hash::check('password', $user->fresh()->password));
