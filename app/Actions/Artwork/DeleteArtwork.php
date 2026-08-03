@@ -2,6 +2,7 @@
 
 namespace App\Actions\Artwork;
 
+use App\Jobs\DeleteArtworkIndexJob;
 use App\Models\Artwork;
 use App\Models\Comment;
 use App\Models\Models\Complaint\Complaint;
@@ -31,5 +32,9 @@ class DeleteArtwork
         });
 
         Log::info('Artwork deleted', $context);
+
+        if (config('ai.enabled')) {
+            DeleteArtworkIndexJob::dispatch($context['artwork_id']);
+        }
     }
 }

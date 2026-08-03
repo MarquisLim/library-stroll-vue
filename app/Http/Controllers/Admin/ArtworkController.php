@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\AnalyzeAndIndexArtworkJob;
 use App\Models\Artwork;
+use App\Models\ArtworkAiMetadata;
 use App\Models\Collection;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -41,7 +43,7 @@ class ArtworkController extends Controller
             default => $q->orderBy('updated_at', $dir),
         };
 
-        $artworks = $q->with(['media','tags:id,name','collections:id,name'])
+        $artworks = $q->with(['media','tags:id,name','collections:id,name','aiMetadata'])
             ->withCount('likes')
             ->withoutGlobalScopes()
             ->paginate(20)
@@ -66,6 +68,10 @@ class ArtworkController extends Controller
                         .($t->count()>2 ? ' +' . ($t->count()-2) : '')),
                 'thumb_url'     => $a->thumb_url,
                 'original_url'  => $a->original_url,
+                'ai_status'     => $a->aiMetadata?->status,
+                'ai_processed_at' => $a->aiMetadata?->processed_at?->toISOString(),
+                'ai_indexed_at' => $a->aiMetadata?->indexed_at?->toISOString(),
+                'ai_last_error' => $a->aiMetadata?->last_error,
             ]);
 
         $filters = [
@@ -86,5 +92,28 @@ class ArtworkController extends Controller
             'collections' => $collections,
             'isAdminView' => true,
         ]);
+    }
+
+    public function reindex(Request $request, int $id)
+    {
+        $artwork = Artwork::withoutGlobalScopes()->findOrFail($id);
+
+        if (! config('ai.enabled')) {
+            return response()->json(['error' => 'AI service is disabled'], 422);
+        }
+
+        $media = $artwork->getFirstMedia('artworks');
+        $contentHash = md5(implode('|', [
+            $artwork->title, $artwork->description, $media?->uuid,
+        ]));
+
+        ArtworkAiMetadata::updateOrCreate(
+            ['artwork_id' => $artwork->id],
+            ['status' => ArtworkAiMetadata::STATUS_PENDING],
+        );
+
+        AnalyzeAndIndexArtworkJob::dispatch($artwork->id, $contentHash, $media?->uuid);
+
+        return response()->json(['message' => 'Reindex dispatched']);
     }
 }

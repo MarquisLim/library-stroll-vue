@@ -2,7 +2,9 @@
 
 namespace App\Actions\Artwork;
 
+use App\Jobs\AnalyzeAndIndexArtworkJob;
 use App\Models\Artwork;
+use App\Models\ArtworkAiMetadata;
 use App\Models\Collection;
 use App\Models\Tag;
 use App\Models\User;
@@ -43,7 +45,50 @@ class UpdateArtwork
                 $artwork->collections()->syncWithoutDetaching($data['collections']);
             }
 
-            return $artwork->load('media', 'tags', 'collections');
+            $artwork->load('media', 'tags', 'collections');
+
+            return $artwork;
         });
+
+        $this->maybeDispatchReindex($artwork, $data);
+
+        return $artwork;
+    }
+
+    private function maybeDispatchReindex(Artwork $artwork, array $data): void
+    {
+        if (! config('ai.enabled') || ! config('ai.auto_reindex_on_update')) {
+            return;
+        }
+
+        if (! $artwork->is_published) {
+            return;
+        }
+
+        $relevantKeys = ['title', 'description', 'tags'];
+        $hasRelevantChange = collect($relevantKeys)->contains(fn ($key) => array_key_exists($key, $data));
+
+        if (! $hasRelevantChange) {
+            return;
+        }
+
+        $media = $artwork->getFirstMedia('artworks');
+        $contentHash = md5(implode('|', [
+            $artwork->title, $artwork->description, $media?->uuid,
+        ]));
+
+        $existing = $artwork->aiMetadata;
+        if ($existing && $existing->content_hash === $contentHash) {
+            return;
+        }
+
+        ArtworkAiMetadata::updateOrCreate(
+            ['artwork_id' => $artwork->id],
+            ['status' => ArtworkAiMetadata::STATUS_PENDING],
+        );
+
+        AnalyzeAndIndexArtworkJob::dispatch(
+            $artwork->id, $contentHash, $media?->uuid,
+        );
     }
 }

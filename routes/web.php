@@ -134,6 +134,7 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
                 Route::post('users/{user}', [AdminUserController::class, 'update'])->name('users.update');
                 Route::delete('users/{user}', [AdminUserController::class, 'destroy'])->name('users.destroy');
                 Route::get('artworks', [AdminArtworkController::class, 'index'])->name('artworks.manager');
+                Route::post('artworks/{id}/reindex', [AdminArtworkController::class, 'reindex'])->name('artworks.reindex');
             });
 
         Route::middleware(['role:Moderator|Admin|SuperAdmin'])

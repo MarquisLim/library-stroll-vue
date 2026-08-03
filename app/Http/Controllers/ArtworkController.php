@@ -2,14 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use App\Contracts\AiServiceClient;
 use App\Http\Requests\AddArtworkToCollectionsRequest;
 use App\Models\Artwork;
+use App\Models\ArtworkAiMetadata;
 use App\Models\Collection;
 use App\Models\Models\Complaint\ComplaintType;
 use App\Notifications\ArtworkLiked;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 class ArtworkController extends Controller
@@ -75,39 +78,98 @@ class ArtworkController extends Controller
 
     public function similar($id, Request $request)
     {
-        $page = (int)$request->get('page', 1);
-        $perPage = (int)$request->get('per_page', 12);
+        $page = (int) $request->get('page', 1);
+        $perPage = (int) $request->get('per_page', 12);
 
         $art = Artwork::with('tags')->findOrFail($id);
         $this->authorize('view', $art);
-        $tagIds = $art->tags->pluck('id');
 
-        $query = Artwork::publiclyVisible()
-            ->where('id', '!=', $art->id)
-            ->when($tagIds->count(), fn($q) => $q->whereHas('tags', fn($t) => $t->whereIn('tags.id', $tagIds)))
-            // если тегов нет - fallback по похожему названию
-            ->when(!$tagIds->count() && $art->title,
-                fn($q) => $q->where('title', 'like', '%' . $art->title . '%'))
-            ->with(['media', 'user'])
-            ->withCount('likes')
-            ->orderBy('likes_count', 'desc');
+        $similar = $this->semanticSimilar($art, $perPage, $page);
 
-        $total = $query->count();
-        $similar = $query->skip(($page - 1) * $perPage)
-            ->take($perPage)->get();
+        if ($similar === null) {
+            $similar = $this->tagBasedSimilar($art, $perPage, $page);
+        }
 
-        // liked / in_collections
         if (Auth::check()) {
-            foreach ($similar as $s) {
+            foreach ($similar['artworks'] as $s) {
                 $s->liked_by_user = $s->likes()->where('user_id', Auth::id())->exists();
                 $s->in_collections = $s->collections()->where('user_id', Auth::id())->pluck('id');
             }
         }
 
         return response()->json([
-            'artworks' => $similar,
-            'hasMore' => $page * $perPage < $total,
+            'artworks' => $similar['artworks'],
+            'hasMore' => $similar['hasMore'],
         ]);
+    }
+
+    private function semanticSimilar(Artwork $art, int $perPage, int $page): ?array
+    {
+        if (! config('ai.enabled')) {
+            return null;
+        }
+
+        $metadata = $art->aiMetadata;
+        if (! $metadata || ! $metadata->isIndexed()) {
+            return null;
+        }
+
+        try {
+            $aiClient = app(AiServiceClient::class);
+            $result = $aiClient->similar($art->id, limit: $perPage * 2);
+            $candidateIds = $result->artworkIds();
+
+            if (empty($candidateIds)) {
+                return null;
+            }
+
+            $artworks = Artwork::publiclyVisible()
+                ->whereIn('id', $candidateIds)
+                ->where('id', '!=', $art->id)
+                ->with(['media', 'user'])
+                ->withCount('likes')
+                ->get()
+                ->sortBy(function ($artwork) use ($candidateIds) {
+                    return array_search($artwork->id, $candidateIds);
+                })
+                ->values()
+                ->take($perPage);
+
+            return [
+                'artworks' => $artworks,
+                'hasMore' => count($candidateIds) > $perPage,
+            ];
+        } catch (\Throwable $e) {
+            Log::warning('Semantic similar failed, falling back to tag-based.', [
+                'artwork_id' => $art->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    private function tagBasedSimilar(Artwork $art, int $perPage, int $page): array
+    {
+        $tagIds = $art->tags->pluck('id');
+
+        $query = Artwork::publiclyVisible()
+            ->where('id', '!=', $art->id)
+            ->when($tagIds->count(), fn ($q) => $q->whereHas('tags', fn ($t) => $t->whereIn('tags.id', $tagIds)))
+            ->when(! $tagIds->count() && $art->title,
+                fn ($q) => $q->where('title', 'like', '%' . $art->title . '%'))
+            ->with(['media', 'user'])
+            ->withCount('likes')
+            ->orderBy('likes_count', 'desc');
+
+        $total = $query->count();
+        $artworks = $query->skip(($page - 1) * $perPage)
+            ->take($perPage)->get();
+
+        return [
+            'artworks' => $artworks,
+            'hasMore' => $page * $perPage < $total,
+        ];
     }
 
 

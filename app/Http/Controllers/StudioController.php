@@ -6,8 +6,10 @@ use App\Actions\Artwork\DeleteArtwork;
 use App\Actions\Artwork\UpdateArtwork;
 use App\Http\Requests\UploadArtworkRequest;
 use App\Http\Requests\UpdateArtworkRequest;
+use App\Jobs\AnalyzeAndIndexArtworkJob;
 use App\Jobs\ProcessVideoPreviewJob;
 use App\Models\Artwork;
+use App\Models\ArtworkAiMetadata;
 use App\Models\Collection;
 use App\Models\Tag;
 use Illuminate\Http\Request;
@@ -141,6 +143,22 @@ class StudioController extends Controller
         $art->is_published = true;
         $art->published_at = now();
         $art->save();
+
+        if (config('ai.enabled') && config('ai.auto_analyze_on_publish')) {
+            $media = $art->getFirstMedia('artworks');
+            $contentHash = md5(implode('|', [
+                $art->title, $art->description, $media?->uuid,
+            ]));
+
+            ArtworkAiMetadata::updateOrCreate(
+                ['artwork_id' => $art->id],
+                ['status' => ArtworkAiMetadata::STATUS_PENDING],
+            );
+
+            AnalyzeAndIndexArtworkJob::dispatch(
+                $art->id, $contentHash, $media?->uuid,
+            );
+        }
 
         return response()->json([
             'message'=>'Арт опубликован'

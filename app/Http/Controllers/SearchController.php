@@ -3,10 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Collection;
-use App\Models\Comment;
 use App\Models\Artwork;
 use App\Models\Tag;
 use App\Models\User;
+use App\Services\Search\HybridSearchService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -69,19 +69,23 @@ class SearchController extends Controller
     }
 
     /* --- Поиск ---  */
-    public function index(Request $request)
+    public function index(Request $request, HybridSearchService $hybridSearch)
     {
         $q = $request->get('q','');
         $userId = Auth::id();
 
-        /*  --- Артворки --- */
-        $artworks = Artwork::publiclyVisible()
-            ->when($q, fn($qB)=>$qB->where('title','like',"%$q%"))
-            ->with(['user','media','likes','collections'])
-            ->withCount('likes')
-            ->take(60)
-            ->get()
-            ->map(fn($a)=>$this->markUserData($a,$userId));
+        /*  --- Артворки (hybrid: lexical + semantic) --- */
+        if ($q) {
+            $filters = array_filter([
+                'type' => $request->get('type'),
+                'tag' => $request->get('tag'),
+            ]);
+            $searchResult = $hybridSearch->search($q, $filters, page: 1, perPage: 60);
+            $artworks = $searchResult['artworks']
+                ->map(fn($a) => $this->markUserData($a, $userId));
+        } else {
+            $artworks = collect();
+        }
 
         /* --- Авторы --- */
         $authors = User::query()
