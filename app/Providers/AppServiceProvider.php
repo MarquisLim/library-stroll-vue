@@ -4,7 +4,6 @@ namespace App\Providers;
 
 use Illuminate\Routing\UrlGenerator;
 use Illuminate\Support\ServiceProvider;
-use Illuminate\Support\Facades\URL;
 use Inertia\Inertia;
 
 class AppServiceProvider extends ServiceProvider
@@ -22,17 +21,15 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(UrlGenerator $url)
     {
-        if (env('APP_ENV') == 'production') {
+        if (app()->environment('production')) {
             $url->forceScheme('https');
         }
-        if (app()->environment('local')) {
-            URL::forceRootUrl(config('app.url'));
-            URL::forceScheme('http');
-        }
+        // HTTP URLs must follow the request host. APP_URL remains the console fallback.
 
         Inertia::share([
             'conversationIds' => function () {
                 $user = auth()->user();
+
                 return $user ? $user->conversations()->pluck('id')->all() : [];
             },
             'unreadCount' => function () {
@@ -40,6 +37,7 @@ class AppServiceProvider extends ServiceProvider
                 if (! $user) {
                     return 0;
                 }
+
                 return $user
                     ->conversations()
                     ->withPivot('last_read_at')
@@ -53,7 +51,7 @@ class AppServiceProvider extends ServiceProvider
                             ->count();
                     });
             },
-            'unreadNotificationsCount' => fn() => auth()->user()?->unreadNotifications()->count() ?? 0,
+            'unreadNotificationsCount' => fn () => auth()->user()?->unreadNotifications()->count() ?? 0,
         ]);
     }
 }

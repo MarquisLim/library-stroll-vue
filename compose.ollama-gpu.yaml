@@ -1,0 +1,10 @@
+# Add after compose.ollama.yaml. Requires NVIDIA GPU support in Docker/WSL2.
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

@@ -2,6 +2,7 @@ import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi.responses import JSONResponse
 
 from app.api.dependencies import verify_api_key
 from app.config import settings
@@ -54,6 +55,22 @@ async def health():
             qdrant="ok" if qdrant_ok else "unavailable",
         ),
     )
+
+
+@router.get("/ready", response_model=HealthResponse)
+async def readiness():
+    """Recover initial collection setup when dependencies start after the API."""
+    result = await health()
+    if result.services.ollama == "ok" and result.services.qdrant != "ok":
+        try:
+            await get_artwork_service().ensure_collection()
+            result = await health()
+        except Exception:
+            logger.warning("Dependencies are not ready for collection initialization", exc_info=True)
+
+    if result.status != "ok":
+        return JSONResponse(status_code=503, content=result.model_dump())
+    return result
 
 
 @router.post(

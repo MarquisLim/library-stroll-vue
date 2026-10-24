@@ -125,7 +125,7 @@ class HttpAiServiceClient implements AiServiceClient
             ->post('/api/v1/search', [
                 'query' => $query,
                 'limit' => $limit,
-                'filters' => $filters,
+                'filters' => (object) $filters,
             ]);
 
         $response->throw();
@@ -141,7 +141,7 @@ class HttpAiServiceClient implements AiServiceClient
             ->post('/api/v1/similar', [
                 'artwork_id' => $artworkId,
                 'limit' => $limit,
-                'filters' => $filters,
+                'filters' => (object) $filters,
             ]);
 
         $response->throw();

@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Contracts\AiServiceClient;
-use App\DTOs\AiAnalysisResult;
 use App\DTOs\AiHealthResult;
 use App\DTOs\AiSearchResult;
 use App\Services\AiService\HttpAiServiceClient;
@@ -211,5 +210,22 @@ class AiServiceClientTest extends TestCase
         $this->assertEmpty($empty->results);
         $this->assertEmpty($empty->artworkIds());
         $this->assertSame(0, $empty->latencyMs);
+    }
+
+    public function test_empty_search_and_similar_filters_are_json_objects(): void
+    {
+        Http::fake(['*' => Http::response([
+            'results' => [], 'model' => 'test', 'latency_ms' => 0,
+        ])]);
+
+        $client = app(AiServiceClient::class);
+        $client->search('cat');
+        $client->similar(1);
+
+        Http::assertSentCount(2);
+        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/search')
+            && json_decode($request->body())->filters instanceof \stdClass);
+        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/similar')
+            && json_decode($request->body())->filters instanceof \stdClass);
     }
 }

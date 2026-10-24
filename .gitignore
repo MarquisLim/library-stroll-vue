@@ -25,3 +25,5 @@ yarn-error.log
 public_html
 /storage/media-library/temp/*
 !/storage/media-library/temp/.gitignore
+/docker/.env
+/docker/backups/

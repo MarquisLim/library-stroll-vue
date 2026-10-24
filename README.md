@@ -1,5 +1,16 @@
 # LibraryStroll
 
+Docker (PowerShell, из корня проекта):
+
+```powershell
+.\scripts\docker.ps1 up
+.\scripts\docker.ps1 check
+```
+
+Сайт: http://localhost:8088. phpMyAdmin: http://localhost:8089 (логин и пароль из `docker/.env`). Требуется запущенный Docker Desktop (Linux containers).
+По умолчанию используется Ollama на Windows; для полного Docker-запуска: `.\scripts\docker.ps1 up -Ollama gpu` (NVIDIA) или `-Ollama docker` (CPU).
+Подробности, команды и сохранность данных: [Docker-инструкция](docs/ru/docker.md).
+
 Русская инструкция: [заполнение базы и импорт артов](docs/ru/data-import.md).
 Архитектура AI: [аудит Ollama и семантического поиска](docs/ru/ollama-semantic-search-audit.md).
 Векторы: [настройка сервисов и импорт с --index](docs/ru/ai-indexing-setup.md).

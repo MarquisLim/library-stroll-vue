@@ -163,8 +163,10 @@ def test_embed_timeout_returns_502(test_app, mock_ollama):
 def test_vision_timeout_uses_explicit_text_fallback(test_app, mock_ollama):
     mock_ollama.analyze_image.side_effect = httpx.ReadTimeout("Vision slow")
     mock_ollama.analyze_text.return_value = ArtworkMetadata(summary="Museum description", tags_en=["cat"])
-    response = test_app.post("/api/v1/artworks/analyze", data={"artwork_id": 1, "title": "Museum cat"},
-                             files={"image": ("test.jpg", b"image", "image/jpeg")})
+    with patch("app.api.dependencies.settings") as ms:
+        ms.auth_enabled = False
+        response = test_app.post("/api/v1/artworks/analyze", data={"artwork_id": 1, "title": "Museum cat"},
+                                 files={"image": ("test.jpg", b"image", "image/jpeg")})
     assert response.status_code == 200
     body = response.json()
     assert body["analysis_source"] == "text_fallback"
