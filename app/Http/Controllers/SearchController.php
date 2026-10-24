@@ -80,7 +80,7 @@ class SearchController extends Controller
                 'type' => $request->get('type'),
                 'tag' => $request->get('tag'),
             ]);
-            $searchResult = $hybridSearch->search($q, $filters, page: 1, perPage: 60);
+            $searchResult = $hybridSearch->search($q, $filters, page: max(1, (int) $request->get('page', 1)), perPage: 60);
             $artworks = $searchResult['artworks']
                 ->map(fn($a) => $this->markUserData($a, $userId));
         } else {

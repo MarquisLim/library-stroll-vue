@@ -32,12 +32,15 @@ class AnalyzeResponse(BaseModel):
     vision_model: str = ""
     embedding_model: str = ""
     latency_ms: int = 0
+    analysis_source: str = "text"
+    warnings: list[str] = Field(default_factory=list)
 
 
 class IndexResponse(BaseModel):
     artwork_id: int
     qdrant_point_id: str
     status: str = "indexed"
+    embedding_dimension: int = 0
 
 
 class DeleteIndexResponse(BaseModel):

@@ -10,11 +10,19 @@ class CollectionFactory extends Factory
 {
     protected $model = Collection::class;
 
-    public function definition()
+    public function definition(): array
     {
         return [
-            'name' => $this->faker->word, // Генерируем случайное название
-            'user_id' => User::factory(), // Создаём пользователя, если не передан
+            'user_id'    => User::factory(),
+            'name'       => $this->faker->words(2, true),
+            'is_private' => false,
         ];
+    }
+
+    public function private(): static
+    {
+        return $this->state([
+            'is_private' => true,
+        ]);
     }
 }

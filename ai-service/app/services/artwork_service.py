@@ -2,6 +2,8 @@ import hashlib
 import logging
 import time
 
+import httpx
+
 from app.clients.ollama import OllamaClient
 from app.clients.qdrant import QdrantService
 from app.config import settings
@@ -24,15 +26,27 @@ class ArtworkService:
         image_bytes: bytes | None = None,
     ) -> dict:
         start = time.monotonic()
+        warnings = []
+        analysis_source = "text"
 
         if image_bytes:
-            metadata = await self.ollama.analyze_image(
-                image_bytes=image_bytes,
-                title=title,
-                description=description,
-                existing_tags=existing_tags,
-            )
-            vision_model = settings.ollama_vision_model
+            try:
+                metadata = await self.ollama.analyze_image(
+                    image_bytes=image_bytes,
+                    title=title,
+                    description=description,
+                    existing_tags=existing_tags,
+                )
+                vision_model = settings.ollama_vision_model
+                analysis_source = "vision"
+            except (httpx.HTTPError, ValueError) as exc:
+                if not (title or description or existing_tags):
+                    raise
+                warnings.append(f"Vision unavailable ({type(exc).__name__}); analyzed text metadata instead")
+                logger.warning(warnings[-1])
+                metadata = await self.ollama.analyze_text(title=title, description=description, existing_tags=existing_tags)
+                vision_model = ""
+                analysis_source = "text_fallback"
         else:
             metadata = await self.ollama.analyze_text(
                 title=title,
@@ -52,6 +66,8 @@ class ArtworkService:
             "vision_model": vision_model,
             "embedding_model": settings.ollama_embedding_model,
             "latency_ms": latency_ms,
+            "analysis_source": analysis_source,
+            "warnings": warnings,
         }
 
     async def index(
@@ -82,6 +98,7 @@ class ArtworkService:
             "artwork_id": artwork_id,
             "qdrant_point_id": qdrant_point_id,
             "status": "indexed",
+            "embedding_dimension": len(vector),
         }
 
     async def delete_index(self, artwork_id: int) -> dict:

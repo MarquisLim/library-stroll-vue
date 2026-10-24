@@ -2,20 +2,21 @@
 
 namespace App\Console\Commands;
 
-use App\Jobs\AnalyzeAndIndexArtworkJob;
 use App\Models\Artwork;
-use App\Models\ArtworkAiMetadata;
+use App\Services\AiService\ArtworkIndexingService;
 use Illuminate\Console\Command;
 
 class AiIndexArtworkCommand extends Command
 {
     protected $signature = 'ai:index-artwork {id}';
+
     protected $description = 'Dispatch AI analysis and indexing for a single artwork';
 
     public function handle(): int
     {
         if (! config('ai.enabled')) {
             $this->warn('AI service is disabled (AI_SERVICE_ENABLED=false).');
+
             return self::FAILURE;
         }
 
@@ -23,24 +24,17 @@ class AiIndexArtworkCommand extends Command
 
         if (! $artwork) {
             $this->error('Artwork not found.');
+
             return self::FAILURE;
         }
 
         if (! $artwork->is_published) {
-            $this->warn('Artwork is not published. Indexing anyway as manual request.');
+            $this->error('Publish the artwork before indexing.');
+
+            return self::FAILURE;
         }
 
-        $media = $artwork->getFirstMedia('artworks');
-        $contentHash = md5(implode('|', [
-            $artwork->title, $artwork->description, $media?->uuid,
-        ]));
-
-        ArtworkAiMetadata::updateOrCreate(
-            ['artwork_id' => $artwork->id],
-            ['status' => ArtworkAiMetadata::STATUS_PENDING],
-        );
-
-        AnalyzeAndIndexArtworkJob::dispatch($artwork->id, $contentHash, $media?->uuid);
+        app(ArtworkIndexingService::class)->dispatch($artwork, force: true);
 
         $this->info("Dispatched AI analysis for artwork #{$artwork->id}.");
 

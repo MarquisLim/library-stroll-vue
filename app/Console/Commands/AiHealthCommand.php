@@ -8,16 +8,18 @@ use Illuminate\Console\Command;
 class AiHealthCommand extends Command
 {
     protected $signature = 'ai:health';
+
     protected $description = 'Check AI service health (Ollama + Qdrant)';
 
     public function handle(AiServiceClient $client): int
     {
         if (! config('ai.enabled')) {
             $this->warn('AI service is disabled (AI_SERVICE_ENABLED=false).');
-            return self::SUCCESS;
+
+            return self::FAILURE;
         }
 
-        $this->info('Checking AI service at ' . config('ai.service_url') . '...');
+        $this->info('Checking AI service at '.config('ai.service_url').'...');
 
         $result = $client->health();
 
@@ -32,10 +34,12 @@ class AiHealthCommand extends Command
 
         if ($result->isOk()) {
             $this->info('All services are healthy.');
+
             return self::SUCCESS;
         }
 
         $this->error('Some services are degraded or unavailable.');
+
         return self::FAILURE;
     }
 }

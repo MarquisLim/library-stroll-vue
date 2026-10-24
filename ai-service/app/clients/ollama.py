@@ -66,8 +66,12 @@ class OllamaClient:
     async def health(self) -> bool:
         try:
             resp = await self._client.get("/api/tags")
-            return resp.status_code == 200
-        except httpx.HTTPError:
+            if resp.status_code != 200:
+                return False
+            installed = {item['name'] for item in resp.json().get('models', [])}
+            return {settings.ollama_chat_model, settings.ollama_vision_model,
+                    settings.ollama_embedding_model}.issubset(installed)
+        except (httpx.HTTPError, ValueError, KeyError):
             return False
 
     async def list_models(self) -> list[str]:
@@ -159,7 +163,7 @@ class OllamaClient:
         system: str,
         user: str,
         images: list[str] | None = None,
-        max_retries: int = 1,
+        max_retries: int = 0,
     ) -> ArtworkMetadata:
         messages = [
             {"role": "system", "content": system},
@@ -172,17 +176,20 @@ class OllamaClient:
             "model": model,
             "messages": messages,
             "stream": False,
+            "think": settings.ollama_think,
             "format": METADATA_JSON_SCHEMA,
             "keep_alive": settings.ollama_keep_alive,
             "options": {
                 "temperature": 0.1,
+                "num_predict": settings.ollama_num_predict,
             },
         }
 
         last_error: Exception | None = None
         for attempt in range(1 + max_retries):
             try:
-                resp = await self._client.post("/api/chat", json=payload)
+                timeout = settings.ollama_vision_timeout if images else settings.ollama_text_timeout
+                resp = await self._client.post("/api/chat", json=payload, timeout=timeout)
                 resp.raise_for_status()
                 data = resp.json()
                 content = data.get("message", {}).get("content", "")

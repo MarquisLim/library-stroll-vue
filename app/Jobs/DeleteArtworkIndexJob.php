@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Contracts\AiServiceClient;
 use App\Models\AiProcessingRun;
+use App\Models\Artwork;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\InteractsWithQueue;
@@ -17,7 +18,9 @@ class DeleteArtworkIndexJob implements ShouldQueue
     use InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 3;
+
     public int $timeout = 60;
+
     public bool $failOnTimeout = true;
 
     public function __construct(protected int $artworkId)
@@ -43,11 +46,12 @@ class DeleteArtworkIndexJob implements ShouldQueue
             $aiClient->deleteArtworkIndex($this->artworkId);
 
             AiProcessingRun::create([
-                'artwork_id' => $this->artworkId,
+                'artwork_id' => Artwork::withoutGlobalScopes()->whereKey($this->artworkId)->exists() ? $this->artworkId : null,
+                'parameters' => ['deleted_artwork_id' => $this->artworkId],
                 'operation' => 'delete_index',
                 'status' => 'success',
                 'request_id' => $requestId,
-                'latency_ms' => (int) now()->diffInMilliseconds($startedAt),
+                'latency_ms' => (int) abs(now()->diffInMilliseconds($startedAt)),
                 'started_at' => $startedAt,
                 'finished_at' => now(),
             ]);
@@ -58,11 +62,12 @@ class DeleteArtworkIndexJob implements ShouldQueue
             ]);
         } catch (Throwable $e) {
             AiProcessingRun::create([
-                'artwork_id' => $this->artworkId,
+                'artwork_id' => Artwork::withoutGlobalScopes()->whereKey($this->artworkId)->exists() ? $this->artworkId : null,
+                'parameters' => ['deleted_artwork_id' => $this->artworkId],
                 'operation' => 'delete_index',
                 'status' => 'failed',
                 'request_id' => $requestId,
-                'latency_ms' => (int) now()->diffInMilliseconds($startedAt),
+                'latency_ms' => (int) abs(now()->diffInMilliseconds($startedAt)),
                 'error' => Str::limit($e->getMessage(), 500),
                 'started_at' => $startedAt,
                 'finished_at' => now(),

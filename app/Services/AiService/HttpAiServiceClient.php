@@ -17,8 +17,9 @@ class HttpAiServiceClient implements AiServiceClient
     {
         try {
             $response = $this->client()
+                ->timeout(10)
                 ->retry(0)
-                ->get('/health');
+                ->get('/health')->throw();
 
             return AiHealthResult::fromResponse($response->json());
         } catch (\Throwable $e) {
@@ -108,6 +109,7 @@ class HttpAiServiceClient implements AiServiceClient
         ]);
 
         $response = $this->idempotentClient()
+            ->timeout(20)
             ->delete("/api/v1/artworks/{$artworkId}/index");
 
         $response->throw();
@@ -118,6 +120,7 @@ class HttpAiServiceClient implements AiServiceClient
     public function search(string $query, int $limit = 20, array $filters = []): AiSearchResult
     {
         $response = $this->client()
+            ->timeout(15)
             ->retry(0)
             ->post('/api/v1/search', [
                 'query' => $query,
@@ -133,6 +136,7 @@ class HttpAiServiceClient implements AiServiceClient
     public function similar(int $artworkId, int $limit = 20, array $filters = []): AiSearchResult
     {
         $response = $this->client()
+            ->timeout(15)
             ->retry(0)
             ->post('/api/v1/similar', [
                 'artwork_id' => $artworkId,

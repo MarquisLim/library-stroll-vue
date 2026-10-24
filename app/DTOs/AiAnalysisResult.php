@@ -19,6 +19,8 @@ readonly class AiAnalysisResult
         public string $visionModel,
         public string $embeddingModel,
         public int $latencyMs,
+        public string $analysisSource = '',
+        public array $warnings = [],
     ) {}
 
     public static function fromResponse(array $data): self
@@ -38,6 +40,8 @@ readonly class AiAnalysisResult
             visionModel: $data['vision_model'] ?? '',
             embeddingModel: $data['embedding_model'] ?? '',
             latencyMs: (int) ($data['latency_ms'] ?? 0),
+            analysisSource: $data['analysis_source'] ?? '',
+            warnings: $data['warnings'] ?? [],
         );
     }
 

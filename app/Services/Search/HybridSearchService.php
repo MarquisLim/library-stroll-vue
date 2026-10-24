@@ -49,7 +49,7 @@ class HybridSearchService
             $rankedLists[] = array_map(fn ($id) => ['id' => $id], $semanticIds);
         }
 
-        $finalLimit = $perPage * 3;
+        $finalLimit = $lexicalLimit + $semanticLimit;
         $fused = $this->rrf->fuse($rankedLists, $rrfK, $finalLimit);
         $fusedIds = array_column($fused, 'id');
 
@@ -112,7 +112,17 @@ class HybridSearchService
     {
         try {
             $aiClient = app(AiServiceClient::class);
-            $result = $aiClient->search($query, $limit);
+            $semanticFilters = [];
+            foreach (['type' => 'media_type', 'tag' => 'tags', 'author_id' => 'user_id', 'has_ai' => 'has_ai'] as $key => $payloadKey) {
+                if (isset($filters[$key])) {
+                    $semanticFilters[$payloadKey] = match ($key) {
+                        'has_ai' => (bool) $filters[$key],
+                        'author_id' => (int) $filters[$key],
+                        default => $filters[$key],
+                    };
+                }
+            }
+            $result = $aiClient->search($query, $limit, $semanticFilters);
 
             return $result->artworkIds();
         } catch (\Throwable $e) {

@@ -2,9 +2,9 @@
 
 namespace App\Console\Commands;
 
-use App\Jobs\AnalyzeAndIndexArtworkJob;
 use App\Models\Artwork;
 use App\Models\ArtworkAiMetadata;
+use App\Services\AiService\ArtworkIndexingService;
 use Illuminate\Console\Command;
 
 class AiReconcileCommand extends Command
@@ -20,15 +20,27 @@ class AiReconcileCommand extends Command
     {
         if (! config('ai.enabled')) {
             $this->warn('AI service is disabled.');
+
             return self::SUCCESS;
         }
 
         $staleHours = (int) $this->option('stale-hours');
         $pendingHours = (int) $this->option('max-pending-hours');
         $limit = (int) $this->option('limit');
+        if ($limit < 1 || $limit > 1000 || $staleHours < 1 || $pendingHours < 1) {
+            $this->error('limit must be 1..1000 and hour intervals must be positive.');
+
+            return self::INVALID;
+        }
         $dispatched = 0;
 
-        $staleItems = ArtworkAiMetadata::where('status', ArtworkAiMetadata::STATUS_STALE)
+        $staleItems = ArtworkAiMetadata::where(function ($query) use ($staleHours, $pendingHours) {
+            $query->where('status', ArtworkAiMetadata::STATUS_STALE)
+                ->orWhere(fn ($q) => $q->where('status', ArtworkAiMetadata::STATUS_PROCESSING)
+                    ->where('updated_at', '<', now()->subHours($pendingHours)))
+                ->orWhere(fn ($q) => $q->where('status', ArtworkAiMetadata::STATUS_INDEXED)
+                    ->where('indexed_at', '<', now()->subHours($staleHours)));
+        })
             ->limit($limit)
             ->get();
 
@@ -71,17 +83,7 @@ class AiReconcileCommand extends Command
                 ->get();
 
             foreach ($missing as $artwork) {
-                $media = $artwork->getFirstMedia('artworks');
-                $contentHash = md5(implode('|', [
-                    $artwork->title, $artwork->description, $media?->uuid,
-                ]));
-
-                ArtworkAiMetadata::create([
-                    'artwork_id' => $artwork->id,
-                    'status' => ArtworkAiMetadata::STATUS_PENDING,
-                ]);
-
-                AnalyzeAndIndexArtworkJob::dispatch($artwork->id, $contentHash, $media?->uuid);
+                app(ArtworkIndexingService::class)->dispatch($artwork, force: true);
                 $dispatched++;
             }
         }
@@ -97,16 +99,10 @@ class AiReconcileCommand extends Command
 
         if (! $artwork || ! $artwork->is_published) {
             $meta->delete();
+
             return;
         }
 
-        $media = $artwork->getFirstMedia('artworks');
-        $contentHash = md5(implode('|', [
-            $artwork->title, $artwork->description, $media?->uuid,
-        ]));
-
-        $meta->update(['status' => ArtworkAiMetadata::STATUS_PENDING]);
-
-        AnalyzeAndIndexArtworkJob::dispatch($artwork->id, $contentHash, $media?->uuid);
+        app(ArtworkIndexingService::class)->dispatch($artwork, force: true);
     }
 }

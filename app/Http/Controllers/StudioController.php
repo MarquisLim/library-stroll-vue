@@ -145,19 +145,7 @@ class StudioController extends Controller
         $art->save();
 
         if (config('ai.enabled') && config('ai.auto_analyze_on_publish')) {
-            $media = $art->getFirstMedia('artworks');
-            $contentHash = md5(implode('|', [
-                $art->title, $art->description, $media?->uuid,
-            ]));
-
-            ArtworkAiMetadata::updateOrCreate(
-                ['artwork_id' => $art->id],
-                ['status' => ArtworkAiMetadata::STATUS_PENDING],
-            );
-
-            AnalyzeAndIndexArtworkJob::dispatch(
-                $art->id, $contentHash, $media?->uuid,
-            );
+            app(\App\Services\AiService\ArtworkIndexingService::class)->dispatch($art);
         }
 
         return response()->json([

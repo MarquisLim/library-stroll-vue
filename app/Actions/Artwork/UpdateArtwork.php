@@ -2,19 +2,18 @@
 
 namespace App\Actions\Artwork;
 
-use App\Jobs\AnalyzeAndIndexArtworkJob;
 use App\Models\Artwork;
-use App\Models\ArtworkAiMetadata;
 use App\Models\Collection;
 use App\Models\Tag;
 use App\Models\User;
+use App\Services\AiService\ArtworkIndexingService;
 use Illuminate\Support\Facades\DB;
 
 class UpdateArtwork
 {
     public function handle(Artwork $artwork, User $actor, array $data): Artwork
     {
-        return DB::transaction(function () use ($artwork, $actor, $data) {
+        $artwork = DB::transaction(function () use ($artwork, $actor, $data) {
             $fields = [
                 'title',
                 'description',
@@ -65,30 +64,13 @@ class UpdateArtwork
             return;
         }
 
-        $relevantKeys = ['title', 'description', 'tags'];
+        $relevantKeys = ['title', 'description', 'tags', 'is_private', 'has_ai'];
         $hasRelevantChange = collect($relevantKeys)->contains(fn ($key) => array_key_exists($key, $data));
 
         if (! $hasRelevantChange) {
             return;
         }
 
-        $media = $artwork->getFirstMedia('artworks');
-        $contentHash = md5(implode('|', [
-            $artwork->title, $artwork->description, $media?->uuid,
-        ]));
-
-        $existing = $artwork->aiMetadata;
-        if ($existing && $existing->content_hash === $contentHash) {
-            return;
-        }
-
-        ArtworkAiMetadata::updateOrCreate(
-            ['artwork_id' => $artwork->id],
-            ['status' => ArtworkAiMetadata::STATUS_PENDING],
-        );
-
-        AnalyzeAndIndexArtworkJob::dispatch(
-            $artwork->id, $contentHash, $media?->uuid,
-        );
+        app(ArtworkIndexingService::class)->dispatch($artwork);
     }
 }

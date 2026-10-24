@@ -78,8 +78,8 @@ class ArtworkController extends Controller
 
     public function similar($id, Request $request)
     {
-        $page = (int) $request->get('page', 1);
-        $perPage = (int) $request->get('per_page', 12);
+        $page = max(1, (int) $request->get('page', 1));
+        $perPage = max(1, min(50, (int) $request->get('per_page', 12)));
 
         $art = Artwork::with('tags')->findOrFail($id);
         $this->authorize('view', $art);
@@ -116,7 +116,7 @@ class ArtworkController extends Controller
 
         try {
             $aiClient = app(AiServiceClient::class);
-            $result = $aiClient->similar($art->id, limit: $perPage * 2);
+            $result = $aiClient->similar($art->id, limit: 100);
             $candidateIds = $result->artworkIds();
 
             if (empty($candidateIds)) {
@@ -132,12 +132,11 @@ class ArtworkController extends Controller
                 ->sortBy(function ($artwork) use ($candidateIds) {
                     return array_search($artwork->id, $candidateIds);
                 })
-                ->values()
-                ->take($perPage);
+                ->values();
 
             return [
-                'artworks' => $artworks,
-                'hasMore' => count($candidateIds) > $perPage,
+                'artworks' => $artworks->forPage($page, $perPage)->values(),
+                'hasMore' => $artworks->count() > $page * $perPage,
             ];
         } catch (\Throwable $e) {
             Log::warning('Semantic similar failed, falling back to tag-based.', [

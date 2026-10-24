@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     ollama_embedding_model: str = "qwen3-embedding:0.6b"
     ollama_timeout: int = 180
     ollama_keep_alive: str = "5m"
+    ollama_think: bool = False
+    ollama_num_predict: int = 768
+    ollama_vision_timeout: int = 45
+    ollama_text_timeout: int = 100
 
     qdrant_url: str = "http://127.0.0.1:6333"
     qdrant_api_key: str = ""

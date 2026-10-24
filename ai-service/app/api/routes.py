@@ -70,7 +70,7 @@ async def create_embedding(
         return EmbeddingResponse(**result)
     except Exception as exc:
         logger.exception("Embedding failed")
-        raise HTTPException(status_code=502, detail=str(exc))
+        raise HTTPException(status_code=502, detail=str(exc) or type(exc).__name__)
 
 
 @router.post(
@@ -100,7 +100,7 @@ async def analyze_artwork(
         return AnalyzeResponse(**result)
     except Exception as exc:
         logger.exception("Analysis failed for artwork %d", artwork_id)
-        raise HTTPException(status_code=502, detail=str(exc))
+        raise HTTPException(status_code=502, detail=str(exc) or type(exc).__name__)
 
 
 @router.post(
@@ -124,7 +124,7 @@ async def index_artwork(
         return IndexResponse(**result)
     except Exception as exc:
         logger.exception("Indexing failed for artwork %d", body.artwork_id)
-        raise HTTPException(status_code=502, detail=str(exc))
+        raise HTTPException(status_code=502, detail=str(exc) or type(exc).__name__)
 
 
 @router.delete(
@@ -141,7 +141,7 @@ async def delete_artwork_index(
         return DeleteIndexResponse(**result)
     except Exception as exc:
         logger.exception("Delete index failed for artwork %d", artwork_id)
-        raise HTTPException(status_code=502, detail=str(exc))
+        raise HTTPException(status_code=502, detail=str(exc) or type(exc).__name__)
 
 
 @router.post(
@@ -164,7 +164,7 @@ async def search(
         )
     except Exception as exc:
         logger.exception("Search failed")
-        raise HTTPException(status_code=502, detail=str(exc))
+        raise HTTPException(status_code=502, detail=str(exc) or type(exc).__name__)
 
 
 @router.post(
@@ -187,7 +187,7 @@ async def similar(
         )
     except Exception as exc:
         logger.exception("Similar search failed for artwork %d", body.artwork_id)
-        raise HTTPException(status_code=502, detail=str(exc))
+        raise HTTPException(status_code=502, detail=str(exc) or type(exc).__name__)
 
 
 @router.post(

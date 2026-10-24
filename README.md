@@ -1,3 +1,18 @@
+# LibraryStroll
+
+Русская инструкция: [заполнение базы и импорт артов](docs/ru/data-import.md).
+Архитектура AI: [аудит Ollama и семантического поиска](docs/ru/ollama-semantic-search-audit.md).
+Векторы: [настройка сервисов и импорт с --index](docs/ru/ai-indexing-setup.md).
+Redis: [кэш, очереди, сессии и диагностика](docs/ru/redis-setup.md).
+
+```powershell
+php artisan data:setup
+php artisan artworks:import --source=met --limit=20 --publish
+php artisan artworks:check-imports
+```
+
+Импорт использует реальные изображения и метаданные музейных API. Для предварительного просмотра добавьте `--dry-run`; без `--publish` создаются черновики. Обычный `db:seed` заполняет только справочники.
+
 <p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
 
 <p align="center">
