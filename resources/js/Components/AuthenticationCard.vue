@@ -1,10 +1,10 @@
 <template>
-    <div class="min-h-screen flex flex-col sm:justify-center items-center pt-6 sm:pt-0">
+    <div class="bg-base-200 flex flex-col justify-center items-center px-5 py-8 sm:py-12">
         <div>
             <slot name="logo" />
         </div>
 
-        <div class="w-full sm:max-w-md mt-6 px-6 py-4 bg-base-100/40 text-base-content shadow-md ring-1 ring-base-300 sm:rounded-lg">
+        <div class="ui-panel w-full sm:max-w-md mt-8 px-6 py-8 sm:px-9 text-base-content">
             <slot />
         </div>
     </div>

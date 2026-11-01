@@ -4,6 +4,8 @@
 
 Нужны Docker Desktop с Linux containers/WSL2, Docker Compose с поддержкой `up --wait` и PowerShell. Локальные PHP, Composer, Node.js, MySQL, Redis и Python для контейнерного приложения не нужны. Docker Desktop должен быть запущен. При ограниченной Execution Policy можно разрешить выполнение только для текущего терминала: `Set-ExecutionPolicy -Scope Process Bypass`.
 
+Образ приложения использует PHP 8.5 / Laravel 13 и расширение phpredis 6.3. OPcache встроен в PHP 8.5 и отдельно не собирается. После обновления исходников выполните `scripts/docker.ps1 up`: команда пересоберёт PHP/Vue и перезапустит контейнеры с новыми зависимостями. Затем выполните `scripts/docker.ps1 test` и `scripts/docker.ps1 check`.
+
 ```powershell
 cd B:\projects\library-stroll-vue
 .\scripts\docker.ps1 up

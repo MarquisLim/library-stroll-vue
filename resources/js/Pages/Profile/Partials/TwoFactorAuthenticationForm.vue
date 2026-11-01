@@ -182,7 +182,7 @@ onMounted(() => {
 
             <div v-if="twoFactorEnabled">
                 <div v-if="qrCode">
-                    <div class="mt-4 max-w-xl text-sm text-gray-600">
+                    <div class="mt-4 max-w-xl text-sm text-base-content/70">
                         <p v-if="isPendingConfirmation" class="font-semibold">
                           Чтобы завершить включение двухфакторной аутентификации, отсканируйте следующий QR-код с помощью приложения аутентификации вашего телефона или введите ключ настройки и предоставьте сгенерированный OTP-код.
                         </p>
@@ -192,9 +192,10 @@ onMounted(() => {
                         </p>
                     </div>
 
-                    <div class="mt-4 p-2 inline-block bg-base-100 shadow-lg ring-1 ring-base-300" v-html="qrCode" />
+                    <!-- A white background keeps the black QR modules readable in both themes. -->
+                    <div class="mt-4 p-3 inline-block rounded-xl bg-white ring-1 ring-base-300" v-html="qrCode" />
 
-                    <div v-if="setupKey" class="mt-4 max-w-xl text-sm text-gray-600">
+                    <div v-if="setupKey" class="mt-4 max-w-xl text-sm text-base-content/70">
                         <p class="font-semibold">
                           Ключ настройки: <span v-html="setupKey"></span>
                         </p>
@@ -224,13 +225,13 @@ onMounted(() => {
                 </p>
 
                 <div v-if="recoveryCodes.length > 0 && ! isPendingConfirmation">
-                    <div class="mt-4 max-w-xl text-sm text-gray-600">
+                    <div class="mt-4 max-w-xl text-sm text-base-content/70">
                         <p class="font-semibold">
                           Сохраните эти коды восстановления в безопасном менеджере паролей. Их можно использовать для восстановления доступа к вашей учетной записи, если ваше устройство двухфакторной аутентификации потеряно.
                         </p>
                     </div>
 
-                    <div class="grid gap-1 max-w-xl mt-4 px-4 py-4 font-mono text-sm bg-gray-100 rounded-lg">
+                    <div class="grid gap-1 max-w-xl mt-4 px-4 py-4 font-mono text-sm bg-base-200 rounded-lg">
                         <div v-for="code in recoveryCodes" :key="code">
                             {{ code }}
                         </div>

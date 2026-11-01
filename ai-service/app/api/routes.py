@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Annotated
 
@@ -36,6 +37,43 @@ def get_artwork_service() -> ArtworkService:
     from app.main import get_service
 
     return get_service()
+
+
+@router.get("/api/v1/diagnostics", dependencies=[Depends(verify_api_key)])
+async def diagnostics(svc: Annotated[ArtworkService, Depends(get_artwork_service)]):
+    """Bounded, read-only diagnostics; installed models are not inference tests."""
+    async def models_check():
+        try:
+            async with asyncio.timeout(5):
+                installed = set(await svc.ollama.list_models())
+            models = [
+                {"role": role, "name": name, "installed": name in installed}
+                for role, name in [
+                    ("chat", settings.ollama_chat_model),
+                    ("vision", settings.ollama_vision_model),
+                    ("embedding", settings.ollama_embedding_model),
+                ]
+            ]
+            return {"status": "ok" if all(item["installed"] for item in models) else "degraded", "models": models}
+        except Exception:
+            logger.warning("Ollama diagnostics unavailable")
+            return {"status": "unavailable", "models": []}
+
+    async def vectors_check():
+        try:
+            async with asyncio.timeout(5):
+                details = await svc.qdrant.diagnostics()
+            return {**details, "status": "degraded" if details.get("collection_status") == "red" else "ok"}
+        except Exception:
+            logger.warning("Qdrant diagnostics unavailable")
+            return {"status": "unavailable", "collection": settings.qdrant_collection}
+
+    ollama, qdrant = await asyncio.gather(models_check(), vectors_check())
+    return {
+        "status": "ok" if ollama["status"] == qdrant["status"] == "ok" else "degraded",
+        "ollama": ollama,
+        "qdrant": qdrant,
+    }
 
 
 @router.get("/health", response_model=HealthResponse)

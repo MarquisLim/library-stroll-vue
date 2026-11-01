@@ -1,4 +1,7 @@
 <script setup>
+import WorkspaceHeader from '@/Components/Workspace/WorkspaceHeader.vue'
+import WorkspaceEmptyState from '@/Components/Workspace/WorkspaceEmptyState.vue'
+import WorkspacePagination from '@/Components/Workspace/WorkspacePagination.vue'
 import { ref, watch, computed } from 'vue'
 import { Head, Link, usePage, router } from '@inertiajs/vue3'
 import { FlagIcon } from '@heroicons/vue/24/solid'
@@ -85,37 +88,35 @@ function complaintSubjectLabel(c) {
 <template>
     <Head title="Модерация → Жалобы" />
 
-    <div class="p-4 bg-base-100 text-base-content min-h-screen space-y-6">
+    <div class="workspace-page">
 
-        <header class="flex items-center gap-2">
-            <FlagIcon class="w-6 h-6 text-primary" />
-            <h1 class="text-2xl font-bold">Жалобы</h1>
-        </header>
+        <WorkspaceHeader eyebrow="Модерация" title="Жалобы" :count="props.complaints.total" description="Помогайте сообществу оставаться безопасным. Рассматривайте обращения и принимайте решения." />
 
         <!-- FILTERS -->
-        <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
-            <select v-model="status" class="select select-bordered w-full">
+        <div class="workspace-toolbar sm:grid-cols-3">
+            <select aria-label="Статус жалобы" v-model="status" class="select select-bordered w-full">
                 <option value="">Все статусы</option>
                 <option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">
                     {{ opt.label }}
                 </option>
             </select>
 
-            <select v-model="type" class="select select-bordered w-full">
+            <select aria-label="Тип жалобы" v-model="type" class="select select-bordered w-full">
                 <option v-for="opt in typeOptions" :key="opt.slug" :value="opt.slug">
                     {{ opt.name }}
                 </option>
             </select>
 
-            <select v-model="subject" class="select select-bordered w-full">
+            <select aria-label="Объект жалобы" v-model="subject" class="select select-bordered w-full">
                 <option v-for="opt in subjectOptions" :key="opt.value" :value="opt.value">
                     {{ opt.name }}
                 </option>
             </select>
         </div>
 
-        <!-- DESKTOP TABLE -->
-        <div class="hidden md:block overflow-x-auto rounded-lg shadow">
+        <WorkspaceEmptyState v-if="!props.complaints.data.length" title="Обращений не найдено" description="Сейчас здесь спокойно. Новые жалобы появятся в этом разделе." icon="mdi-shield-check-outline" />
+<!-- DESKTOP TABLE -->
+        <div v-if="props.complaints.data.length" class="workspace-table hidden md:block">
             <table class="table w-full">
                 <thead>
                 <tr>
@@ -149,9 +150,9 @@ function complaintSubjectLabel(c) {
                     <td>
               <span
                   :class="{
-                  'bg-yellow-100 text-yellow-800 px-2 py-1 rounded': c.status==='pending',
-                  'bg-green-100  text-green-800  px-2 py-1 rounded': c.status==='approved',
-                  'bg-red-100    text-red-800    px-2 py-1 rounded': c.status==='rejected',
+                  'workspace-status bg-warning/10 text-warning': c.status==='pending',
+                  'workspace-status bg-success/10 text-success': c.status==='approved',
+                  'workspace-status bg-error/10 text-error': c.status==='rejected',
                 }"
               >
                 {{ statuses[c.status] }}
@@ -172,11 +173,11 @@ function complaintSubjectLabel(c) {
         </div>
 
         <!-- MOBILE CARDS -->
-        <div class="block md:hidden space-y-4">
+        <div v-if="props.complaints.data.length" class="block md:hidden space-y-4">
             <div
                 v-for="c in props.complaints.data"
                 :key="c.id"
-                class="card bg-base-200 p-4 space-y-2"
+                class="workspace-mobile-card space-y-3"
             >
                 <div class="flex justify-between items-center">
                     <span class="font-bold">#{{ c.id }}</span>
@@ -199,9 +200,9 @@ function complaintSubjectLabel(c) {
                     <strong>Статус:</strong>
                     <span
                         :class="{
-              'text-yellow-600': c.status==='pending',
-              'text-green-600': c.status==='approved',
-              'text-red-600':   c.status==='rejected',
+              'text-warning': c.status==='pending',
+              'text-success': c.status==='approved',
+              'text-error':   c.status==='rejected',
             }"
                     >{{ statuses[c.status] }}</span>
                 </p>
@@ -211,18 +212,7 @@ function complaintSubjectLabel(c) {
             </div>
         </div>
 
-        <!-- PAGINATION -->
-        <nav v-if="props.complaints.last_page>1" class="flex justify-center space-x-1">
-            <Link
-                v-for="l in props.complaints.links.filter(l=>l.label && !isNaN(l.label))"
-                :key="l.label"
-                :href="l.url"
-                class="px-3 py-1 rounded"
-                :class="l.active
-          ? 'bg-primary text-primary-content'
-          : 'bg-base-200 hover:bg-base-300'"
-            >{{ l.label }}</Link>
-        </nav>
+        <WorkspacePagination :pagination="props.complaints" />
 
     </div>
 </template>

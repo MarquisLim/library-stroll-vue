@@ -4,11 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\Artwork;
 use App\Models\Collection;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
-
 
 class HomeController extends Controller
 {
@@ -17,31 +15,31 @@ class HomeController extends Controller
     {
         $userId = Auth::id();
 
-        $recentArtworks = Cache::remember("home:recentArtworks:{$userId}", 300, function() use ($userId) {
-            return   Artwork::where('is_published', true)
-                ->where('is_private', false)
-                ->with(['media', 'user', 'likes', 'collections' => function($q) use ($userId) {
-                    if($userId){
-                        $q->where('user_id', $userId);
-                    }
-                }])
-                ->withCount('likes')
-                ->orderByDesc('published_at')
-                ->take(20)
-                ->get()
-                ->map(function($artwork) use ($userId) {
-                    $artwork->liked_by_user = $userId
-                        ? $artwork->likes->pluck('user_id')->contains($userId)
-                        : false;
-                    if ($first = $artwork->media->first()) {
-                        $first->thumbnail_url = $first->getUrl('thumb');
-                    }
-                    return $artwork;
-                });
-        });
+        // Cache only scalar IDs. Reload visibility and personal state on every visit.
+        $recentIds = Cache::remember('home:recentArtworkIds:v1', 300, fn () => Artwork::publiclyVisible()
+            ->orderByDesc('published_at')
+            ->take(20)
+            ->pluck('id')
+            ->all());
+
+        $recentArtworks = Artwork::publiclyVisible()
+            ->whereIn('id', $recentIds)
+            ->with(['media', 'user', 'likes', 'collections' => function ($query) use ($userId) {
+                $query->where('user_id', $userId);
+            }])
+            ->withCount('likes')
+            ->orderByDesc('published_at')
+            ->get()
+            ->map(function ($artwork) {
+                if ($first = $artwork->media->first()) {
+                    $first->thumbnail_url = $first->getUrl('thumb');
+                }
+
+                return $artwork;
+            });
 
         $collections = Collection::where('user_id', $userId)
-            ->with(['artworks' => function($q) {
+            ->with(['artworks' => function ($q) {
                 $q->where('is_published', true)->with('media');
             }])
             ->get();
@@ -51,5 +49,4 @@ class HomeController extends Controller
             'collections' => $collections,
         ]);
     }
-
 }

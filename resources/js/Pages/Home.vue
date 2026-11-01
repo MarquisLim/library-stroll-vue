@@ -1,130 +1,97 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { Head, Link, usePage } from '@inertiajs/vue3'
-import AppLayout        from '@/Layouts/AppLayout.vue'
-import MasonryGrid      from '@/Components/MasonryGrid.vue'
-import ArtworkCard      from '@/Components/Gallery/ArtworkCard.vue'
-import { ArrowDownTrayIcon } from '@heroicons/vue/24/outline'
+import AppLayout from '@/Layouts/AppLayout.vue'
+import MasonryGrid from '@/Components/MasonryGrid.vue'
+import ArtworkCard from '@/Components/Gallery/ArtworkCard.vue'
+import { ArrowDownTrayIcon, ArrowUpRightIcon, ArrowRightIcon, PhotoIcon } from '@heroicons/vue/24/outline'
 import { useArtworkActions } from '@/stores/useArtworkActions'
 import { Capacitor } from '@capacitor/core'
 
-const { recentArtworks, collections } = usePage().props
-const items = ref([])
-
+const page = usePage()
+const items = computed(() => page.props.recentArtworks || [])
 const { setCollections } = useArtworkActions()
-if (collections) setCollections(collections)
-
-onMounted(() => {
-    items.value = recentArtworks
-})
-
+if (page.props.collections) setCollections(page.props.collections)
 const isInApp = ref(false)
-
-onMounted(() => {
-    if (Capacitor.getPlatform() !== 'web') {
-        isInApp.value = true
-    }
-})
+onMounted(() => { isInApp.value = Capacitor.getPlatform() !== 'web' })
 </script>
 
 <template>
     <AppLayout>
-        <Head title="Главная"/>
-
-        <!-- Hero -->
-        <section class="min-h-screen relative flex items-center justify-center bg-cover bg-center" style="background-image:url('/images/main/main_section.webp')">
-            <div class="absolute inset-0 bg-black/70"></div>
-            <div class="relative z-10 text-center px-4">
-                <img src="/logo.png" class="mx-auto w-40 md:w-60 mb-6"/>
-                <h1 class="text-5xl md:text-6xl font-extrabold text-white">
-                    Открой <span class="text-primary">LibraryStroll</span>
-                </h1>
-                <p class="mt-4 text-lg md:text-xl text-white/80 max-w-2xl mx-auto">
-                    Платформа для создания, коллекционирования и&nbsp;обсуждения цифрового искусства.
-                </p>
-            </div>
-        </section>
-
-        <!-- Recent artworks -->
-        <section class="min-h-auto md:min-h-scree flex flex-col bg-base-200 py-16">
-            <div class="flex-1 flex flex-col items-center px-4 w-full">
-                <h2 class="text-4xl font-bold mb-8">Новые работы</h2>
-                <div class="w-full">
-                    <MasonryGrid :items="items">
-                        <template #default="{ item }">
-                            <ArtworkCard :art="item"/>
-                        </template>
-                    </MasonryGrid>
+        <Head title="Искусство, которое близко" />
+        <section class="ui-home-hero">
+            <div class="max-w-xl">
+                <p class="ui-eyebrow mb-6">Место для искусства и вдохновения</p>
+                <h1 class="text-4xl leading-[1.08] sm:text-6xl xl:text-7xl">Находите то,<br>что <span class="text-primary">откликается.</span></h1>
+                <p class="ui-muted mt-7 max-w-md text-base leading-relaxed sm:text-lg">Цифровое искусство, новые имена и ваши будущие любимые работы. Смотрите, сохраняйте и создавайте свою историю.</p>
+                <div class="mt-9 flex flex-wrap gap-3">
+                    <Link href="/gallery" class="btn btn-primary h-12 px-6">Открыть галерею <ArrowUpRightIcon class="h-4 w-4" /></Link>
+                    <Link href="/studio" class="btn btn-ghost h-12 px-5">Я создаю искусство <ArrowRightIcon class="h-4 w-4" /></Link>
                 </div>
-                <Link href="/gallery" class="btn btn-primary mt-10">Перейти в галерею</Link>
+                <div class="mt-10 flex items-center gap-3 border-t border-base-300 pt-5 text-sm ui-muted">
+                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"><PhotoIcon class="h-4 w-4" /></span>
+                    Пространство для вашего взгляда на мир
+                </div>
+            </div>
+            <div class="ui-hero-art aspect-[5/4]">
+                <img src="/images/main/main_section.webp" alt="Два персонажа плывут по сияющей фиолетовой реке" class="absolute inset-0 h-full w-full object-cover" fetchpriority="high" />
+                <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-7 pb-7 pt-20 text-white">
+                    <p class="text-xs font-semibold uppercase tracking-widest text-white/70">LibraryStroll · Digital art</p>
+                    <p class="mt-2 text-xl font-semibold tracking-tight">У каждого мира есть свой автор.</p>
+                </div>
             </div>
         </section>
-
-        <!-- Create -->
-        <section class="min-h-auto md:min-h-scree flex flex-col md:flex-row items-center bg-base-100 px-6 lg:px-16 py-16 gap-12">
-            <div class="w-full md:w-1/2 space-y-6 text-center md:text-right">
-                <h2 class="text-4xl font-bold">Создавай свои артворки</h2>
-                <p class="text-lg text-base-content/70 md:text-right md:mx-0">
-                    Загружай изображения и&nbsp;видео, добавляй описания и&nbsp;публикуй в&nbsp;пару кликов.
-                </p>
-            </div>
-            <div class="w-full md:w-1/2 flex justify-center">
-                <img src="/images/main/studio.jpg" class="w-3/4 rounded-lg shadow-lg object-cover" loading="lazy"/>
-            </div>
-        </section>
-
-        <!-- Collections -->
-        <section class="min-h-auto md:min-h-scree flex flex-col md:flex-row items-center bg-base-200 px-6 lg:px-16 py-16 gap-12">
-            <div class="w-full md:w-1/2 flex justify-center">
-                <img src="/images/main/collection.jpg" class="w-3/4 rounded-lg shadow-lg object-cover" loading="lazy" />
-            </div>
-            <div class="w-full md:w-1/2 space-y-6 text-center md:text-left">
-                <h2 class="text-4xl font-bold">Организуй коллекции</h2>
-                <p class="text-lg text-base-content/70 max-w-md mx-auto md:mx-0">
-                    Создавай подборки любимых работ и&nbsp;делись ими.
-                </p>
+        <section class="border-y border-base-300 bg-base-100 py-12 sm:py-16">
+            <div class="mx-auto max-w-screen-2xl px-5 sm:px-8">
+                <div class="mb-7 flex flex-wrap items-end justify-between gap-5">
+                    <div><p class="ui-eyebrow">Свежий взгляд</p><h2 class="mt-3 text-3xl sm:text-4xl">Новое в галерее</h2></div>
+                    <Link href="/gallery" class="btn btn-ghost text-primary">Все работы <ArrowUpRightIcon class="h-4 w-4" /></Link>
+                </div>
+                <MasonryGrid v-if="items.length" :items="items">
+                    <template #default="{ item }"><ArtworkCard :art="item" /></template>
+                </MasonryGrid>
+                <div v-else class="rounded-2xl border border-dashed border-base-300 bg-base-200 px-6 py-14 text-center">
+                    <PhotoIcon class="mx-auto mb-4 h-9 w-9 text-primary" />
+                    <h3 class="text-xl">Здесь начинается новая история</h3>
+                    <p class="ui-muted mx-auto mt-3 max-w-md">Опубликуйте первую работу — пусть её увидят и найдут свои люди.</p>
+                    <Link href="/studio" class="btn btn-primary mt-6">Перейти в студию <ArrowRightIcon class="h-4 w-4" /></Link>
+                </div>
             </div>
         </section>
-
-        <!-- Chat -->
-        <section class="min-h-auto md:min-h-scree flex flex-col md:flex-row items-center bg-base-100 px-6 lg:px-16 py-16 gap-12">
-            <div class="w-full md:w-1/2 space-y-6 text-center md:text-right order-2 md:order-1">
-                <h2 class="text-4xl font-bold">Общайся в&nbsp;чате</h2>
-                <p class="text-lg text-base-content/70 md:mx-0">
-                    Обсуждай работы в&nbsp;реальном времени, оставляй отзывы.
-                </p>
-            </div>
-            <div class="w-full md:w-1/2 flex justify-center order-1 md:order-2">
-                <img src="/images/main/messenger.jpg" class="w-3/4 rounded-lg shadow-lg object-cover" loading="lazy" />
+        <section class="ui-feature">
+            <img src="/images/main/studio.jpg" alt="Творческое пространство художника" class="ui-feature-image" loading="lazy" />
+            <div class="max-w-lg">
+                <p class="ui-eyebrow">Для тех, кто создаёт</p>
+                <h2 class="mt-4 text-3xl sm:text-4xl">Ваше искусство.<br>Ваша собственная студия.</h2>
+                <p class="ui-muted mt-5 text-base leading-relaxed">Загружайте иллюстрации и видео, рассказывайте о своём процессе и делитесь работами с теми, кто их оценит.</p>
+                <Link href="/studio" class="btn btn-outline btn-primary mt-7">Открыть студию <ArrowUpRightIcon class="h-4 w-4" /></Link>
             </div>
         </section>
-
-        <!-- App download -->
-        <section
-            v-if="!isInApp"
-            class="min-h-auto md:min-h-screen relative flex items-center md:py-0 py-16 justify-center bg-cover bg-center"
-            style="background-image:url('/images/main/app_section.jpg')"
-        >
-            <div class="absolute inset-0 bg-black/60"></div>
-            <div class="relative z-10 flex flex-col items-center text-center px-4">
-                <img
-                    src="/images/main/app.png"
-                    class="w-52 md:w-72 mb-10 object-contain"
-                    loading="lazy"
-                />
-                <h2 class="text-4xl font-bold text-white mb-6">Скачать приложение</h2>
-                <a
-                    href="/app/library_stroll_v04.apk"
-                    download
-                    class="btn btn-primary inline-flex items-center gap-2"
-                >
-                    <ArrowDownTrayIcon class="w-5 h-5" /> Скачать APK
-                </a>
+        <section class="border-y border-base-300 bg-base-100">
+            <div class="ui-feature">
+                <div class="max-w-lg">
+                    <p class="ui-eyebrow">Больше, чем избранное</p>
+                    <h2 class="mt-4 text-3xl sm:text-4xl">Соберите свою<br>коллекцию впечатлений.</h2>
+                    <p class="ui-muted mt-5 text-base leading-relaxed">Объединяйте любимые работы в подборки: по настроению, цвету или просто потому, что они вам близки.</p>
+                    <Link href="/gallery" class="btn btn-outline btn-primary mt-7">Найти вдохновение <ArrowUpRightIcon class="h-4 w-4" /></Link>
+                </div>
+                <img src="/images/main/collection.jpg" alt="Подборка произведений искусства" class="ui-feature-image" loading="lazy" />
             </div>
+        </section>
+        <section class="ui-feature">
+            <img src="/images/main/messenger.jpg" alt="Общение и обмен идеями" class="ui-feature-image" loading="lazy" />
+            <div class="max-w-lg">
+                <p class="ui-eyebrow">Творчество объединяет</p>
+                <h2 class="mt-4 text-3xl sm:text-4xl">За каждой работой —<br>человек и разговор.</h2>
+                <p class="ui-muted mt-5 text-base leading-relaxed">Обсуждайте искусство, знакомьтесь с авторами и делитесь идеями в личных и групповых чатах.</p>
+                <Link href="/messenger" class="btn btn-outline btn-primary mt-7">К общению <ArrowUpRightIcon class="h-4 w-4" /></Link>
+            </div>
+        </section>
+        <section v-if="!isInApp" class="mx-5 mb-16 max-w-7xl rounded-3xl bg-primary/10 px-6 py-12 text-center sm:mx-8 sm:px-12 lg:mx-auto">
+            <p class="ui-eyebrow">Вдохновение рядом</p>
+            <h2 class="mt-4 text-3xl sm:text-4xl">Возьмите галерею с собой</h2>
+            <p class="ui-muted mx-auto mt-4 max-w-lg">Любимые работы, ваши коллекции и общение — в приложении LibraryStroll для Android.</p>
+            <a href="/app/library_stroll_v04.apk" download class="btn btn-primary mt-7 h-12 px-6"><ArrowDownTrayIcon class="h-5 w-5" /> Скачать для Android</a>
         </section>
     </AppLayout>
 </template>
-
-<style scoped>
-.min-h-screen{min-height:100vh}
-</style>

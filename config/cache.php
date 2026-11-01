@@ -17,6 +17,9 @@ return [
 
     'default' => env('CACHE_STORE', 'redis'),
 
+    // Cache payloads are arrays and scalars; do not restore arbitrary PHP objects.
+    'serializable_classes' => false,
+
     /*
     |--------------------------------------------------------------------------
     | Cache Stores

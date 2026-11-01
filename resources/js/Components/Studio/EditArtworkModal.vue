@@ -119,7 +119,7 @@ function onBgClick(e) {
 <template>
     <dialog
         ref="dialogRef"
-        class="modal"
+        class="modal workspace-dialog"
         @close="emit('close')"
         @click.self="onBgClick"
     >

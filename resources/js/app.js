@@ -1,6 +1,8 @@
 // document.documentElement.setAttribute("data-theme", "dark");
 
 import './bootstrap';
+import '@fontsource-variable/manrope';
+import './composables/useTheme';
 import '../css/app.css';
 
 import { createApp, h } from 'vue';
@@ -14,14 +16,8 @@ import { Capacitor } from '@capacitor/core';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { StatusBar } from '@capacitor/status-bar';
 import { App as CapacitorApp } from '@capacitor/app';
-import { InertiaProgress } from '@inertiajs/progress';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
-
-InertiaProgress.init({
-    color: '#4B5563',
-    showSpinner: true,
-});
 
 createInertiaApp({
     title: (title) => `${title} | ${appName}`,
@@ -74,5 +70,6 @@ createInertiaApp({
     },
     progress: {
         color: '#4B5563',
+        showSpinner: true,
     },
 });

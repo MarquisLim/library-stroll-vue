@@ -95,6 +95,12 @@ class AnalyzeAndIndexArtworkJob implements ShouldBeUnique, ShouldQueue
         $metadata->artwork_id = $artwork->id;
         $metadata->save();
 
+        AiProcessingRun::create([
+            'artwork_id' => $artwork->id, 'operation' => 'analyze_and_index', 'status' => 'processing',
+            'request_id' => $requestId, 'started_at' => $startedAt,
+            'parameters' => ['stage' => 'analysis', 'content_hash' => $contentHash, 'attempt' => $metadata->attempts],
+        ]);
+
         try {
             $imagePath = null;
             if ($currentMedia) {
@@ -142,13 +148,23 @@ class AnalyzeAndIndexArtworkJob implements ShouldBeUnique, ShouldQueue
 
             $freshArtwork = Artwork::withoutGlobalScopes()->find($this->artworkId);
             if (! $freshArtwork || ! $freshArtwork->is_published) {
+                $metadata->update(['status' => ArtworkAiMetadata::STATUS_STALE]);
+                $this->recordRun($requestId, 'analyze_and_index', 'skipped', $startedAt, parameters: ['reason' => 'artwork_unpublished_or_deleted']);
+
                 return;
             }
             if ($indexing->contentHash($freshArtwork) !== $contentHash) {
                 $indexing->dispatch($freshArtwork);
 
+                $this->recordRun($requestId, 'analyze_and_index', 'skipped', $startedAt, parameters: ['reason' => 'revision_changed']);
+
                 return;
             }
+
+            $metadata->fill([...$analysis->toMetadataArray(), 'processed_at' => now()])->save();
+            $run = AiProcessingRun::where('request_id', $requestId)->firstOrFail();
+            $run->update(['model' => $analysis->chatModel, 'parameters' => [...$run->parameters, 'stage' => 'embedding_and_indexing',
+                'analysis_source' => $analysis->analysisSource, 'warnings' => $analysis->warnings]]);
 
             $indexResult = $aiClient->indexArtwork(
                 artworkId: $artwork->id,
@@ -173,12 +189,17 @@ class AnalyzeAndIndexArtworkJob implements ShouldBeUnique, ShouldQueue
             }
             $latest = Artwork::withoutGlobalScopes()->find($this->artworkId);
             if (! $latest || ! $latest->is_published) {
+                $metadata->update(['status' => ArtworkAiMetadata::STATUS_STALE]);
                 $aiClient->deleteArtworkIndex($this->artworkId);
+
+                $this->recordRun($requestId, 'analyze_and_index', 'skipped', $startedAt, parameters: ['reason' => 'artwork_unpublished_or_deleted']);
 
                 return;
             }
             if ($indexing->contentHash($latest) !== $contentHash) {
                 $indexing->dispatch($latest);
+
+                $this->recordRun($requestId, 'analyze_and_index', 'skipped', $startedAt, parameters: ['reason' => 'revision_changed']);
 
                 return;
             }
@@ -236,13 +257,16 @@ class AnalyzeAndIndexArtworkJob implements ShouldBeUnique, ShouldQueue
         string $error = '',
         array $parameters = [],
     ): void {
-        AiProcessingRun::create([
-            'artwork_id' => $this->artworkId,
+        $previous = AiProcessingRun::where('request_id', $requestId)->first();
+        AiProcessingRun::updateOrCreate(['request_id' => $requestId], [
+            'artwork_id' => Artwork::withoutGlobalScopes()->whereKey($this->artworkId)->exists() ? $this->artworkId : null,
             'operation' => $operation,
             'status' => $status,
             'request_id' => $requestId,
-            'model' => $model,
-            'parameters' => $parameters,
+            'model' => $model ?: $previous?->model,
+            'parameters' => [...($previous?->parameters ?? []), ...$parameters, 'stage' => match ($status) {
+                'success' => 'completed', 'skipped' => 'skipped', default => $previous?->parameters['stage'] ?? 'analysis',
+            }],
             'latency_ms' => (int) abs(now()->diffInMilliseconds($startedAt)),
             'error' => $error ?: null,
             'started_at' => $startedAt,

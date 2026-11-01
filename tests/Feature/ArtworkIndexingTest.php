@@ -12,6 +12,7 @@ use App\Models\ArtworkAiMetadata;
 use App\Models\Tag;
 use App\Services\AiService\ArtworkIndexingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
@@ -38,11 +39,19 @@ class ArtworkIndexingTest extends TestCase
         $artwork->tags()->attach(Tag::create(['name' => 'author tag']));
         Http::fake([
             '*/api/v1/artworks/analyze' => function () use ($artwork) {
+                $run = AiProcessingRun::sole();
+                $this->assertSame('processing', $run->status);
+                $this->assertSame('analysis', $run->parameters['stage']);
+                $this->assertNull($run->finished_at);
                 usleep(5000);
 
                 return Http::response(['artwork_id' => $artwork->id, 'summary' => 'Sunset landscape', 'styles' => ['watercolor']]);
             },
-            '*/api/v1/artworks/index' => Http::response(['qdrant_point_id' => 'test-point', 'embedding_dimension' => 1024]),
+            '*/api/v1/artworks/index' => function () {
+                $this->assertSame('embedding_and_indexing', AiProcessingRun::sole()->parameters['stage']);
+
+                return Http::response(['qdrant_point_id' => 'test-point', 'embedding_dimension' => 1024]);
+            },
         ]);
         $hash = app(ArtworkIndexingService::class)->contentHash($artwork);
         (new AnalyzeAndIndexArtworkJob($artwork->id, $hash))->handle(app(AiServiceClient::class));
@@ -51,6 +60,9 @@ class ArtworkIndexingTest extends TestCase
         $this->assertSame(1024, $metadata->embedding_dimension);
         $this->assertSame($hash, $metadata->content_hash);
         $this->assertGreaterThanOrEqual(0, AiProcessingRun::firstOrFail()->latency_ms);
+        $this->assertSame('success', AiProcessingRun::sole()->status);
+        $this->assertSame('completed', AiProcessingRun::sole()->parameters['stage']);
+        $this->assertNotNull(AiProcessingRun::sole()->finished_at);
         Http::assertSent(fn ($r) => str_ends_with($r->url(), '/index')
             && str_contains($r['searchable_text'], 'author tag')
             && str_contains($r['searchable_text'], 'watercolor')
@@ -120,6 +132,9 @@ class ArtworkIndexingTest extends TestCase
         Http::assertSentCount(1);
         Queue::assertPushed(AnalyzeAndIndexArtworkJob::class);
         $this->assertSame('pending', $artwork->aiMetadata()->first()->status);
+        $this->assertSame('skipped', AiProcessingRun::sole()->status);
+        $this->assertSame('revision_changed', AiProcessingRun::sole()->parameters['reason']);
+        $this->assertNotNull(AiProcessingRun::sole()->finished_at);
     }
 
     public function test_delete_job_logs_after_artwork_deletion_without_foreign_key_error(): void
@@ -142,7 +157,7 @@ class ArtworkIndexingTest extends TestCase
         try {
             (new DeleteArtworkIndexJob(12345))->handle(app(AiServiceClient::class));
             $this->fail('Expected HTTP failure.');
-        } catch (\Illuminate\Http\Client\RequestException $exception) {
+        } catch (RequestException $exception) {
             $this->assertSame(503, $exception->response->status());
         }
         $this->assertSame('failed', AiProcessingRun::firstOrFail()->status);

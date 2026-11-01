@@ -1,4 +1,7 @@
 <script setup>
+import WorkspaceHeader from '@/Components/Workspace/WorkspaceHeader.vue'
+import WorkspaceEmptyState from '@/Components/Workspace/WorkspaceEmptyState.vue'
+import WorkspacePagination from '@/Components/Workspace/WorkspacePagination.vue'
 import axios             from 'axios'
 import { Head, Link, router, usePage } from '@inertiajs/vue3'
 import { ref, watch, computed } from 'vue'
@@ -25,6 +28,7 @@ const dir        = ref(props.filters.dir)
 const page       = usePage()
 
 const hasActiveFilters = computed(() =>
+    Boolean(search.value?.trim()) ||
     visibility.value !== 'all' ||
     type.value       !== 'all' ||
     status.value     !== 'all' ||
@@ -91,19 +95,16 @@ const saved = () => fetch(props.artworks.current_page)
 </script>
 
 <template>
-    <Head title="Менеджер работ"/>
+    <Head :title="isAdmin ? 'Все работы' : 'Мои работы'"/>
 
-    <div class="bg-base-100 text-base-content min-h-screen p-4 md:p-6 space-y-6">
+    <div class="workspace-page">
         <!-- Header -->
-        <header class="flex items-center justify-between">
-            <h1 class="text-2xl font-bold flex items-center gap-2">
-                <i class="mdi mdi-folder-edit-outline text-primary text-3xl"></i>
-                Менеджер работ
-            </h1>
-        </header>
+        <WorkspaceHeader :eyebrow="isAdmin ? 'Администрирование' : 'Ваша студия'" :title="isAdmin ? 'Все работы' : 'Мои работы'" :count="props.artworks.total" :description="isAdmin ? 'Контент сообщества: просматривайте, проверяйте и управляйте публикациями.' : 'Все ваши идеи в одном месте. Управляйте публикациями и возвращайтесь к черновикам.'">
+ <template v-if="!isAdmin" #actions><Link :href="route('studio.index')" class="btn btn-primary"><i class="mdi mdi-plus" /> Создать работу</Link></template>
+ </WorkspaceHeader>
 
         <!-- Filters -->
-        <section class="grid gap-4 md:grid-cols-6 lg:grid-cols-7 items-center">
+        <section class="workspace-toolbar sm:grid-cols-2 xl:grid-cols-6">
             <div>
                 <label class="label"><span class="label-text text-sm">Доступ</span></label>
                 <select v-model="visibility" class="select select-bordered w-full">
@@ -124,11 +125,11 @@ const saved = () => fetch(props.artworks.current_page)
                 <label class="label"><span class="label-text text-sm">Статус</span></label>
                 <select v-model="status" class="select select-bordered w-full">
                     <option value="all">Все</option>
-                    <option value="published">Опублик</option>
+                    <option value="published">Опубликованные</option>
                     <option value="draft">Черновик</option>
                 </select>
             </div>
-            <div class="md:col-span-2 lg:col-span-3">
+            <div class="sm:col-span-2 xl:col-span-3">
                 <label class="label"><span class="label-text text-sm">Поиск</span></label>
                 <div class="relative">
                     <input
@@ -138,7 +139,7 @@ const saved = () => fetch(props.artworks.current_page)
                         class="input input-bordered w-full pr-10"
                     />
                     <button
-                        @click="fetch"
+                        @click="fetch()" aria-label="Найти работы"
                         class="btn btn-ghost btn-square absolute right-0 top-0 h-full"
                     >
                         <i class="mdi mdi-magnify text-xl"></i>
@@ -151,21 +152,23 @@ const saved = () => fetch(props.artworks.current_page)
             <button
                 v-if="hasActiveFilters"
                 @click="resetFilters"
-                class="btn btn-xs btn-outline md:inline-flex hidden"
+                class="btn btn-sm btn-ghost text-base-content/70"
             >
                 <i class="mdi mdi-filter-remove-outline mr-1"></i>Сброс
             </button>
         </div>
 
-        <!-- Mobile list view -->
-        <div class="block md:hidden space-y-4">
+        <WorkspaceEmptyState v-if="!props.artworks.data.length" title="Работы не найдены" description="Попробуйте изменить фильтры или начните с новой работы." />
+<!-- Mobile list view -->
+        <div v-if="props.artworks.data.length" class="block md:hidden space-y-4">
             <div
                 v-for="(a,i) in props.artworks.data"
                 :key="a.id"
-                class="card bg-base-200 shadow"
+                class="workspace-mobile-card"
             >
                 <div class="flex items-center p-4">
-                    <img :src="a.thumb_url" class="h-16 w-16 rounded mr-4"/>
+                    <img v-if="a.thumb_url" :src="a.thumb_url" alt="" class="h-16 w-16 shrink-0 rounded-xl object-cover mr-4"/>
+                    <span v-else class="mr-4 flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-2xl text-primary"><i class="mdi mdi-image-outline" /></span>
                     <div class="flex-1">
                         <h2 class="font-semibold">{{ a.title || '—' }}</h2>
                         <div class="text-sm opacity-70">
@@ -182,10 +185,10 @@ const saved = () => fetch(props.artworks.current_page)
                         </div>
                     </div>
                     <div class="flex flex-col space-y-2">
-                        <button @click="editArt = a" class="btn btn-ghost btn-sm btn-square">
+                        <button aria-label="Редактировать работу" @click="editArt = a" class="btn btn-ghost btn-sm btn-square">
                             <i class="mdi mdi-pencil"></i>
                         </button>
-                        <button @click="delId = a.id" class="btn btn-ghost btn-sm btn-square text-error">
+                        <button aria-label="Удалить работу" @click="delId = a.id" class="btn btn-ghost btn-sm btn-square text-error">
                             <i class="mdi mdi-trash-can"></i>
                         </button>
                     </div>
@@ -194,7 +197,7 @@ const saved = () => fetch(props.artworks.current_page)
         </div>
 
         <!-- Desktop table view -->
-        <div class="hidden md:block overflow-x-auto rounded-lg shadow">
+        <div v-if="props.artworks.data.length" class="workspace-table hidden md:block">
             <table class="table w-full">
                 <thead>
                 <tr>
@@ -229,7 +232,7 @@ const saved = () => fetch(props.artworks.current_page)
                     class="hover"
                 >
                     <td>{{ props.artworks.from + i }}</td>
-                    <td><img :src="a.thumb_url" class="h-12 w-12 rounded mx-auto object-cover"/></td>
+                    <td><img v-if="a.thumb_url" :src="a.thumb_url" alt="" class="h-12 w-12 rounded-xl mx-auto object-cover bg-base-200"/><span v-else class="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-xl text-primary"><i class="mdi mdi-image-outline" /></span></td>
                     <td class="text-left">
                         <Link
                             :href="a.is_published ? route('artworks.show', a.id) : route('studio.index')"
@@ -253,17 +256,17 @@ const saved = () => fetch(props.artworks.current_page)
                     <td class="text-center">{{ a.views_count }}</td>
                     <td class="text-center">{{ a.likes_count }}</td>
                     <td class="text-center">
-                        <span v-if="a.is_published" class="badge badge-success">Опубл.</span>
-                        <span v-else class="badge badge-warning">Черн.</span>
+                        <span v-if="a.is_published" class="badge badge-success">Опубликовано</span>
+                        <span v-else class="badge badge-warning">Черновик</span>
                     </td>
                     <td class="text-center">
                         <span>{{ a.updated_date ? new Date(a.updated_date).toLocaleString() : '—' }}</span>
                     </td>
                     <td class="space-x-1 text-center">
-                        <button @click="editArt = a" class="btn btn-ghost btn-sm">
+                        <button aria-label="Редактировать работу" @click="editArt = a" class="btn btn-ghost btn-sm">
                             <i class="mdi mdi-pencil"></i>
                         </button>
-                        <button @click="delId = a.id" class="btn btn-ghost btn-sm text-error">
+                        <button aria-label="Удалить работу" @click="delId = a.id" class="btn btn-ghost btn-sm text-error">
                             <i class="mdi mdi-trash-can"></i>
                         </button>
                     </td>
@@ -272,42 +275,7 @@ const saved = () => fetch(props.artworks.current_page)
             </table>
         </div>
 
-        <!-- Пагинация для мобильных -->
-        <nav v-if="props.artworks.last_page > 1" class="flex justify-between items-center md:hidden mt-4">
-            <button
-                @click="fetch(props.artworks.current_page - 1)"
-                :disabled="!props.artworks.prev_page_url"
-                class="btn btn-sm"
-            >
-                ← Назад
-            </button>
-            <button
-                @click="fetch(props.artworks.current_page + 1)"
-                :disabled="!props.artworks.next_page_url"
-                class="btn btn-sm"
-            >
-                Вперёд →
-            </button>
-        </nav>
-
-        <!-- Пагинация для десктопа -->
-        <nav v-if="props.artworks.last_page > 1" class="hidden md:flex justify-center flex-wrap gap-1 pt-4">
-            <Link
-                v-for="l in props.artworks.links.filter(l => Number(l.label))"
-                :key="l.label"
-                :href="l.url || '#'"
-                preserve-state
-                preserve-scroll
-                :class="[
-          'px-3 py-1 rounded',
-          l.active
-            ? 'bg-primary text-primary-content'
-            : 'bg-base-200 hover:bg-base-300'
-        ]"
-            >
-                {{ l.label }}
-            </Link>
-        </nav>
+        <WorkspacePagination :pagination="props.artworks" />
     </div>
 
     <!-- Модалка редактирования -->

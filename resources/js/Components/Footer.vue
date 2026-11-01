@@ -1,6 +1,6 @@
 <template>
-    <footer class="bg-base-200 text-base-content border-t border-base-300 lg:pb-0 pb-12">
-        <div class="max-w-7xl mx-auto px-6 py-8 grid gap-6 sm:grid-cols-2 md:grid-cols-4">
+    <footer class="ui-site-footer bg-base-100 text-base-content border-t border-base-300">
+        <div class="max-w-7xl mx-auto px-6 py-12 grid gap-9 sm:grid-cols-2 md:grid-cols-4">
             <div>
                 <h3 class="font-bold mb-2">Навигация</h3>
                 <ul class="space-y-1 text-sm">
@@ -45,7 +45,7 @@
         </div>
 
         <p class="text-center text-sm opacity-60 pb-4">
-            © 2025 LibraryStroll. Все права защищены.
+            © {{ new Date().getFullYear() }} LibraryStroll. Пространство для искусства.
         </p>
     </footer>
 </template>

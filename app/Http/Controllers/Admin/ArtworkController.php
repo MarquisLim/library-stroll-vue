@@ -3,9 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Jobs\AnalyzeAndIndexArtworkJob;
 use App\Models\Artwork;
-use App\Models\ArtworkAiMetadata;
 use App\Models\Collection;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -99,21 +97,21 @@ class ArtworkController extends Controller
         $artwork = Artwork::withoutGlobalScopes()->findOrFail($id);
 
         if (! config('ai.enabled')) {
-            return response()->json(['error' => 'AI service is disabled'], 422);
+            return response()->json(['message' => 'AI-сервис выключен.'], 422);
         }
 
-        $media = $artwork->getFirstMedia('artworks');
-        $contentHash = md5(implode('|', [
-            $artwork->title, $artwork->description, $media?->uuid,
-        ]));
+        if (! $artwork->is_published) {
+            return response()->json(['message' => 'Сначала опубликуйте работу.'], 422);
+        }
+        if (in_array(config('queue.connections.'.config('queue.default').'.driver'), ['sync', 'null'], true)) {
+            return response()->json(['message' => 'Для индексации через панель настройте фоновую очередь Redis или database.'], 422);
+        }
+        $metadata = $artwork->aiMetadata;
+        if ($metadata && in_array($metadata->status, ['pending', 'processing'], true) && $metadata->updated_at->gt(now()->subSeconds(900))) {
+            return response()->json(['message' => 'Обработка уже выполняется или ожидает воркер.'], 409);
+        }
+        app(\App\Services\AiService\ArtworkIndexingService::class)->dispatch($artwork, force: true);
 
-        ArtworkAiMetadata::updateOrCreate(
-            ['artwork_id' => $artwork->id],
-            ['status' => ArtworkAiMetadata::STATUS_PENDING],
-        );
-
-        AnalyzeAndIndexArtworkJob::dispatch($artwork->id, $contentHash, $media?->uuid);
-
-        return response()->json(['message' => 'Reindex dispatched']);
+        return response()->json(['message' => 'Запрос на индексацию поставлен в очередь.'], 202);
     }
 }

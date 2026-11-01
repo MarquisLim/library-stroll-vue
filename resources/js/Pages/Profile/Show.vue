@@ -14,12 +14,12 @@ defineProps({
 </script>
 
 <template>
-    <AppLayout title="Profile">
-        <template #header>
-            <h2 class="font-semibold text-xl text-white-800 leading-tight">
-                Настройки
-            </h2>
-        </template>
+    <AppLayout title="Настройки">
+        <header class="ui-page-header">
+            <p class="ui-eyebrow">Ваш аккаунт</p>
+            <h1 class="ui-page-title">Настройки</h1>
+            <p class="ui-muted mt-4">Профиль, безопасность и всё, что делает пространство вашим.</p>
+        </header>
 
         <div>
             <div class="max-w-7xl mx-auto py-10 sm:px-6 lg:px-8">

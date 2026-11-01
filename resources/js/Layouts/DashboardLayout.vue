@@ -1,50 +1,38 @@
-// resources/js/Layouts/DashboardLayout.vue
 <script setup>
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { usePage } from '@inertiajs/vue3'
 import AppLayout from '@/Layouts/AppLayout.vue'
-import Sidebar   from '@/Components/Sidebar.vue'
-import { Bars3Icon, XMarkIcon } from '@heroicons/vue/24/outline'
-
-// State открытия сайдбара
-const sidebarOpen = ref(window.innerWidth >= 768)
-
-// Авто-toggle при ресайзе
-function onResize() {
-    sidebarOpen.value = window.innerWidth >= 768
+import Sidebar from '@/Components/Sidebar.vue'
+const sidebarOpen = ref(false)
+const isMobile = ref(window.innerWidth < 1024)
+const page = usePage()
+const onResize = () => { isMobile.value = window.innerWidth < 1024; if (!isMobile.value) sidebarOpen.value = false }
+let savedOverflow = null
+function restoreScroll() {
+    if (savedOverflow !== null) { document.body.style.overflow = savedOverflow; savedOverflow = null }
 }
-onMounted(() => window.addEventListener('resize', onResize))
-onBeforeUnmount(() => window.removeEventListener('resize', onResize))
-
-// Отключаем скролл при открытом сайдбаре
-watch(sidebarOpen, val => {
-    document.body.style.overflow = val ? 'hidden' : ''
+watch([sidebarOpen, isMobile], ([open, mobile]) => {
+    if (open && mobile) {
+        if (savedOverflow === null) savedOverflow = document.body.style.overflow
+        document.body.style.overflow = 'hidden'
+    } else restoreScroll()
 })
+watch(() => page.url, () => { sidebarOpen.value = false })
+const onKeydown = event => { if (event.key === 'Escape') sidebarOpen.value = false }
+onMounted(() => { window.addEventListener('resize', onResize); document.addEventListener('keydown', onKeydown) })
+onBeforeUnmount(() => { window.removeEventListener('resize', onResize); document.removeEventListener('keydown', onKeydown); restoreScroll() })
 </script>
 
 <template>
-    <AppLayout @toggle-sidebar="sidebarOpen = !sidebarOpen">
-        <div class="flex relative">
-            <!-- Sidebar -->
-            <Sidebar
-                :open="sidebarOpen"
-                @update:open="val => sidebarOpen = val"
-            />
-
-            <!-- Контент -->
-            <main class="flex-1 overflow-auto p-4 bg-base-100 dark:bg-base-900">
-                <!-- Кнопка-тогглер на мобиле: иконка + текст -->
-                <button
-                    @click="sidebarOpen = !sidebarOpen"
-                    class="md:hidden flex items-center px-2 py-1 mb-4 text-sm font-medium bg-primary text-white rounded"
-                    aria-label="Toggle sidebar"
-                >
-                    <component :is="sidebarOpen ? XMarkIcon : Bars3Icon" class="w-5 h-5 mr-2" />
-                    {{ sidebarOpen ? 'Закрыть меню' : 'Открыть меню' }}
+    <AppLayout>
+        <div class="workspace-shell">
+            <Sidebar :open="sidebarOpen" @update:open="sidebarOpen = $event" />
+            <div class="workspace-main">
+                <button class="btn btn-sm mb-6 border-base-300 bg-base-100 lg:hidden" aria-controls="workspace-sidebar" :aria-expanded="sidebarOpen" @click="sidebarOpen = !sidebarOpen">
+                    <i class="mdi mdi-menu text-lg" /> Разделы кабинета
                 </button>
-
-                <!-- Основной слот -->
-                <slot/>
-            </main>
+                <slot />
+            </div>
         </div>
     </AppLayout>
 </template>

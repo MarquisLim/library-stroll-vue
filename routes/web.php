@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\ArtworkController as AdminArtworkController;
+use App\Http\Controllers\Admin\AiMonitorController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\ArtworkController;
 use App\Http\Controllers\CollectionController;
@@ -50,6 +51,9 @@ Route::get('/privacy', function () {
 
 Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified'])
     ->group(function () {
+
+        Route::get('storage/attachments/{path}', [AttachmentController::class, 'legacy'])
+            ->where('path', '.*');
 
         // Dashboard
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
@@ -119,6 +123,7 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
 
             Route::post('messages/{message}/reaction', [ReactionController::class, 'toggle'])->name('messages.reaction');
             Route::post('attachments', [AttachmentController::class, 'store'])->name('attachments.store');
+            Route::get('attachments/{attachment}', [AttachmentController::class, 'show'])->name('attachments.show');
             Route::patch('conversations/{conversation}/update', [ConversationController::class, 'update'])->name('conversations.update');
             Route::patch('conversations/{conversation}/avatar', [GroupAvatarController::class, 'update'])->name('conversations.avatar.update');
             Route::post('conversations/{conversation}/add-user', [ConversationController::class, 'addUser'])->name('conversations.addUser');
@@ -129,6 +134,10 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
         // Admin only
         Route::middleware('role:Admin|SuperAdmin')
             ->prefix('admin')->name('admin.')->group(function () {
+                Route::get('ai', [AiMonitorController::class, 'index'])->name('ai.index');
+                Route::get('ai/data', [AiMonitorController::class, 'data'])->middleware('throttle:60,1')->name('ai.data');
+                Route::post('ai/diagnostics', [AiMonitorController::class, 'diagnostics'])->middleware('throttle:10,1')->name('ai.diagnostics');
+                Route::post('ai/search', [AiMonitorController::class, 'search'])->middleware('throttle:10,1')->name('ai.search');
                 Route::get('users', [AdminUserController::class, 'index'])->name('users');
                 Route::post('users', [AdminUserController::class, 'store'])->name('users.store');
                 Route::post('users/{user}', [AdminUserController::class, 'update'])->name('users.update');

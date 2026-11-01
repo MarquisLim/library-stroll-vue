@@ -11,6 +11,7 @@ class ReactionController extends Controller
 {
     public function toggle(Message $message, Request $request)
     {
+        $this->authorize('view', $message->conversation);
         $emoji = $request->validate(['emoji'=>'required|string|max:16'])['emoji'];
         $user  = $request->user();
 
@@ -33,7 +34,7 @@ class ReactionController extends Controller
 
         // обновлённый список реакций
         $payload = $message->reactions()->get();
-        broadcast(new ReactionUpdated($message->id, $payload));
+        broadcast(new ReactionUpdated($message->id, $payload, $message->conversation_id));
 
         return $payload;
     }

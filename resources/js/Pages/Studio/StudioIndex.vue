@@ -1,10 +1,13 @@
 <script setup>
 import { ref, onMounted, watch } from 'vue'
-import { usePage } from '@inertiajs/vue3'
+import { usePage, Head } from '@inertiajs/vue3'
 import axios from 'axios'
 import debounce from 'lodash.debounce'
 
-import AppLayout from '@/Layouts/AppLayout.vue'
+import DashboardLayout from '@/Layouts/DashboardLayout.vue'
+import WorkspaceHeader from '@/Components/Workspace/WorkspaceHeader.vue'
+
+defineOptions({ layout: DashboardLayout })
 import StudioDraftList from '@/Components/Studio/StudioDraftList.vue'
 import StudioDraftForm from '@/Components/Studio/StudioDraftForm.vue'
 import CollectionSelector from '@/Components/Collections/CollectionSelector.vue'
@@ -291,19 +294,20 @@ onMounted(() => {
 })
 </script>
 <template>
-    <AppLayout title="Студия">
-        <div class="p-4 bg-base-100 text-base-content min-h-screen">
+    <div class="workspace-page"><Head title="Студия — новая работа" />
+<WorkspaceHeader eyebrow="Ваша студия" title="Создавайте в своём ритме" description="Загрузите работу, добавьте её историю и поделитесь своим взглядом на мир." />
+        <div class="min-w-0 text-base-content">
             <!-- mobile toggle -->
             <button class="btn btn-ghost mb-4 md:hidden flex items-center gap-2" @click="showList = !showList">
                 <component :is="showList ? ChevronLeftIcon : ChevronRightIcon" class="w-5 h-5" />
                 <span>{{ showList ? 'Скрыть список' : 'Показать список' }}</span>
             </button>
 
-            <div class="flex flex-col md:flex-row gap-4">
+            <div class="flex min-w-0 flex-col gap-5 xl:flex-row">
                 <!-- draft list -->
-                <aside v-show="showList" class="w-full md:w-1/4 flex flex-col">
+                <aside v-show="showList" class="w-full shrink-0 flex flex-col xl:w-60">
                     <button @click="showCreateModal = true" class="btn btn-primary w-full mb-4">
-                        Создать искусство
+                        Новая работа
                     </button>
                     <StudioDraftList
                         :drafts="drafts"
@@ -315,7 +319,7 @@ onMounted(() => {
                 </aside>
 
                 <!-- edit form -->
-                <main class="w-full md:w-3/4 bg-base-200 p-4 rounded-lg shadow flex-1 relative">
+                <section aria-label="Редактор работы" class="ui-panel min-w-0 w-full p-5 sm:p-7 flex-1 relative">
                     <StudioDraftForm
                         :selectedDraftId="selectedDraftId"
                         :validateFile="validateFile"
@@ -353,15 +357,15 @@ onMounted(() => {
                         @update:showCollectionModal="showCollectionModal = $event"
                     />
 
-                </main>
+                </section>
             </div>
 
             <!-- create modal -->
-            <div v-if="showCreateModal" class="modal modal-open">
-                <div class="modal-box bg-base-200 text-base-content">
+            <div v-if="showCreateModal" class="modal modal-open workspace-dialog">
+                <div class="modal-box bg-base-100 text-base-content">
                     <h3 class="font-bold text-lg">Создать искусство</h3>
                     <p class="my-2 text-base-content/70">Загрузите файл для нового черновика:</p>
-                    <div class="border-2 border-dashed border-base-content/50 p-4 rounded text-center cursor-pointer relative"
+                    <div class="studio-dropzone relative !min-h-48"
                          @drop.prevent="onDropFileCreate" @dragover.prevent @click="browseFileCreate">
                         <input type="file" ref="createFileInput" class="hidden" @change="onFileChangeCreate" />
                         <p v-if="!tempFile">Перетащите файл или нажмите</p>
@@ -380,8 +384,8 @@ onMounted(() => {
             </div>
 
             <!-- delete confirm -->
-            <div v-if="confirmingDraftDeletion" class="modal modal-open">
-                <div class="modal-box bg-base-200 text-base-content">
+            <div v-if="confirmingDraftDeletion" class="modal modal-open workspace-dialog">
+                <div class="modal-box bg-base-100 text-base-content">
                     <h3 class="font-bold text-lg">Удалить черновик?</h3>
                     <p class="text-base-content/70">Вы уверены?</p>
                     <div class="modal-action">
@@ -409,5 +413,5 @@ onMounted(() => {
                 />
             </Teleport>
         </div>
-    </AppLayout>
+    </div>
 </template>

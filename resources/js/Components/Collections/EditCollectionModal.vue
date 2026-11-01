@@ -1,21 +1,23 @@
 <template>
-    <dialog ref="dialogRef" class="modal" @click.self="emitClose" @close="emitClose">
-        <div class="modal-box bg-base-100 dark:bg-base-900 text-base-content dark:text-base-content">
+    <dialog ref="dialogRef" class="modal workspace-dialog" @click.self="emitClose" @close="emitClose">
+        <div class="modal-box bg-base-100 text-base-content">
             <h3 class="font-bold text-lg">Редактировать коллекцию</h3>
+            <p class="ui-muted text-sm">Название и доступ к вашей подборке.</p>
+            <label for="edit-collection-name" class="block text-sm font-semibold">Название</label>
             <input
+                id="edit-collection-name"
                 v-model="local.name"
                 type="text"
                 placeholder="Название"
-                class="w-full mt-2 px-2 py-1 rounded border border-base-300 dark:border-base-700
-               bg-base-200 dark:bg-base-800 placeholder-base-content/50 focus:outline-none"
+                class="input mt-2 w-full"
             />
-            <label class="flex items-center space-x-2 mt-2">
+            <label class="studio-setting mt-5 cursor-pointer">
+                <span>Приватная коллекция</span>
                 <input
                     type="checkbox"
                     v-model="local.is_private"
-                    class="checkbox checkbox-primary"
+                    class="toggle toggle-primary toggle-sm"
                 />
-                <span>Приватная</span>
             </label>
             <div class="modal-action">
                 <button class="btn" @click="emitClose">Отмена</button>

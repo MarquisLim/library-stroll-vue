@@ -1,15 +1,13 @@
 <script setup>
+import UserAvatar from '@/Components/Workspace/UserAvatar.vue'
 import { Link, usePage } from '@inertiajs/vue3'
 
 const user = usePage().props.auth.user
 </script>
 
 <template>
-    <div class="bg-base-200 dark:bg-base-800 rounded-xl p-6 text-center shadow space-y-4">
-        <img
-            :src="user.profile_photo_url"
-            class="w-24 h-24 rounded-full object-cover mx-auto"
-        />
+    <div class="ui-panel p-6 text-center space-y-5">
+        <UserAvatar :src="user.profile_photo_url" :name="user.name" :size="80" class="mx-auto ring-4 ring-primary/10" />
         <h3 class="text-xl font-semibold text-base-content">{{ user.name }}</h3>
         <div class="flex flex-col space-y-2">
             <Link
@@ -20,7 +18,7 @@ const user = usePage().props.auth.user
             </Link>
             <Link
                 :href="route('profile.show')"
-                class="btn btn-secondary btn-block"
+                class="btn btn-ghost btn-block border-base-300"
             >
                 Настройки
             </Link>

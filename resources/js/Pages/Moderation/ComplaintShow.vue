@@ -1,4 +1,5 @@
 <script setup>
+import WorkspaceHeader from '@/Components/Workspace/WorkspaceHeader.vue'
 import { ref, computed } from 'vue'
 import { Head, usePage, Link, router } from '@inertiajs/vue3'
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
@@ -16,13 +17,19 @@ const complaintable = computed(() => props.complaint.complaintable)
 // локальные поля для формы
 const status        = ref(complaint.status)
 const moderatorNote = ref(complaint.moderator_note || '')
+const saving = ref(false)
+const saveError = ref('')
+const saved = ref(false)
 
 // отправка решения
 function submit() {
+    if (saving.value) return
+    saveError.value = ''
+    saved.value = false
     router.post(
         route('moderation.complaints.review', complaint.id),
         { status: status.value, moderator_note: moderatorNote.value },
-        { preserveScroll: true }
+        { preserveScroll: true, onStart: () => { saving.value = true }, onFinish: () => { saving.value = false }, onSuccess: () => { saved.value = true }, onError: errors => { saveError.value = Object.values(errors).flat().join(' ') } }
     )
 }
 
@@ -37,7 +44,7 @@ const resourceLink = computed(() => {
     const id = complaint.complaintable_id
 
     if (type === 'artworks') return route('artworks.show', id)
-    if (type === 'profiles') return route('profiles.show', id)
+    if (type === 'users') return route('user.profile.show', id)
     if (type === 'comments') return null
 
     return null
@@ -45,107 +52,35 @@ const resourceLink = computed(() => {
 </script>
 
 <template>
-    <Head :title="`Жалоба #${complaint.id} — ${status}`" />
-
-    <div class="space-y-6 bg-base-100 text-base-content min-h-screen p-6">
-
-        <header class="flex items-center gap-4">
-            <!-- ссылка назад -->
-            <Link
-                :href="route('moderation.complaints.index')"
-                class="btn btn-ghost btn-sm"
-            >
-                ←
-            </Link>
-
-            <!-- Заголовок с текущим статусом -->
-            <h1 class="text-2xl font-bold">
-                Жалоба #{{ complaint.id }} — <span class="capitalize">{{ status }}</span>
-            </h1>
-        </header>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-            <!-- левая колонка -->
-            <div class="space-y-2">
-                <p><strong>Жалобщик</strong>: {{ complaint.user.name }}</p>
-
-                <p>
-                    <strong>Объект</strong>:
-                    <Link
-                        :href="resourceLink"
-                        class="link link-primary"
-                    >
-                        <span class="capitalize">
-                          {{ complaint.complaintable_type.split('\\').pop() }}
-                        </span>
-                        #{{ complaint.complaintable_id }}
-                    </Link>
-                </p>
-                <div v-if="complaintable" class="bg-base-200 p-4 rounded">
-                    <h4 class="text-md font-semibold mb-2">Содержимое:</h4>
-
-                    <!-- Artwork -->
-                    <div v-if="resourceName === 'artworks'">
-                        <p><strong>Название:</strong> {{ complaintable.title }}</p>
-                        <p v-if="complaintable.description">
-                            <strong>Описание:</strong> {{ complaintable.description.slice(0, 150) }}…
-                        </p>
-                    </div>
-
-                    <!-- Comment -->
-                    <div v-else-if="resourceName === 'comments'">
-                        <p><strong>Комментарий:</strong> {{ complaintable.text }}</p>
-                    </div>
-
-                    <!-- Profile -->
-                    <div v-else-if="resourceName === 'profiles'">
-                        <p><strong>Пользователь:</strong> {{ complaintable.name }}</p>
-                        <p v-if="complaintable.bio"><strong>О себе:</strong> {{ complaintable.bio }}</p>
-                    </div>
+    <Head :title="'Жалоба #' + complaint.id" />
+    <div class="workspace-page">
+        <Link :href="route('moderation.complaints.index')" class="inline-flex items-center gap-2 text-sm font-semibold text-base-content/60 hover:text-primary"><i class="mdi mdi-arrow-left" /> К списку обращений</Link>
+        <WorkspaceHeader eyebrow="Модерация · рассмотрение обращения" :title="'Жалоба #' + complaint.id" description="Изучите материалы обращения и зафиксируйте решение.">
+            <template #actions><span :class="['workspace-status', complaint.status === 'pending' ? 'bg-warning/10 text-warning' : complaint.status === 'approved' ? 'bg-success/10 text-success' : 'bg-error/10 text-error']">{{ props.statuses[complaint.status] }}</span></template>
+        </WorkspaceHeader>
+        <div class="grid items-start gap-5 xl:grid-cols-2">
+            <section class="ui-panel min-w-0 p-5 sm:p-7">
+                <h2 class="text-lg">Детали обращения</h2>
+                <dl class="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2">
+                    <div><dt class="ui-muted text-xs">Отправитель</dt><dd class="mt-1 font-semibold">{{ complaint.user?.name || 'Пользователь удалён' }}</dd></div>
+                    <div><dt class="ui-muted text-xs">Дата обращения</dt><dd class="mt-1 text-sm">{{ new Date(complaint.created_at).toLocaleString('ru-RU') }}</dd></div>
+                    <div><dt class="ui-muted text-xs">Причина</dt><dd class="mt-1 font-semibold">{{ complaint.type?.name || '—' }}</dd></div>
+                    <div><dt class="ui-muted text-xs">Объект</dt><dd class="mt-1 text-sm"><Link v-if="resourceLink" :href="resourceLink" class="font-semibold text-primary">Открыть объект <i class="mdi mdi-arrow-top-right" /></Link><span v-else>#{{ complaint.complaintable_id }}</span></dd></div>
+                </dl>
+                <div class="mt-6 border-t border-base-300 pt-5"><h3 class="text-sm">Описание жалобы</h3><p class="ui-muted mt-3 whitespace-pre-wrap break-words text-sm">{{ complaint.details || 'Описание не указано.' }}</p></div>
+                <div class="mt-6 rounded-xl border border-base-300 bg-base-200/50 p-4"><p class="ui-eyebrow !text-[10px]">Содержимое объекта</p>
+                    <template v-if="complaintable"><p class="mt-3 font-semibold">{{ complaintable.title || complaintable.name || 'Комментарий' }}</p><p class="ui-muted mt-2 whitespace-pre-wrap break-words text-sm">{{ complaintable.text || complaintable.description || complaintable.bio || 'Дополнительного описания нет.' }}</p></template>
+                    <p v-else class="ui-muted mt-3 text-sm">Объект удалён или недоступен.</p>
                 </div>
-
-
-                <p><strong>Тип</strong>: {{ complaint.type.name }}</p>
-                <p>
-                    <strong>Описание</strong>:<br/>
-                    {{ complaint.details || '—' }}
-                </p>
-                <p>
-                    <strong>Создано</strong>:
-                    {{ new Date(complaint.created_at).toLocaleString() }}
-                </p>
-            </div>
-
-            <!-- правая колонка -->
-            <div class="space-y-4">
-                <label class="block">
-                    <span>Статус жалобы</span>
-                    <select v-model="status" class="select select-bordered w-full">
-                        <option
-                            v-for="opt in statuses"
-                            :key="opt.value"
-                            :value="opt.value"
-                        >
-                            {{ opt.label }}
-                        </option>
-                    </select>
-                </label>
-
-                <label class="block">
-                    <span>Примечание модератора</span>
-                    <textarea
-                        v-model="moderatorNote"
-                        rows="4"
-                        class="textarea textarea-bordered w-full"
-                        placeholder="Можно оставить комментарий"
-                    />
-                </label>
-
-                <button class="btn btn-primary" @click="submit">
-                    Сохранить
-                </button>
-            </div>
+            </section>
+            <form class="ui-panel min-w-0 p-5 sm:p-7" @submit.prevent="submit">
+                <h2 class="text-lg">Решение модератора</h2><p class="ui-muted mt-2 text-sm">Выберите статус и добавьте пояснение к решению.</p>
+                <div v-if="saveError" role="alert" class="mt-5 rounded-xl bg-error/10 p-4 text-sm text-error">{{ saveError }}</div>
+                <div v-if="saved" role="status" class="mt-5 rounded-xl bg-success/10 p-4 text-sm text-success"><i class="mdi mdi-check-circle-outline" /> Решение сохранено</div>
+                <label class="mt-6 block text-sm font-semibold">Статус обращения<select v-model="status" class="select mt-2 w-full" :disabled="saving"><option v-for="opt in statuses" :key="opt.value" :value="opt.value">{{ opt.label }}</option></select></label>
+                <label class="mt-5 block text-sm font-semibold">Примечание модератора<textarea v-model="moderatorNote" rows="6" maxlength="2000" class="textarea mt-2 w-full" placeholder="На что вы обратили внимание и почему приняли это решение…" :disabled="saving" /></label>
+                <div class="mt-6 flex justify-end border-t border-base-300 pt-5"><button class="btn btn-primary" :disabled="saving"><span v-if="saving" class="loading loading-spinner loading-xs" /><i v-else class="mdi mdi-check" /> Сохранить решение</button></div>
+            </form>
         </div>
     </div>
 </template>

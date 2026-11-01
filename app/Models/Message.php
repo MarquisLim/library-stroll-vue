@@ -48,6 +48,6 @@ class Message extends Model
 
     public function artwork()
     {
-        return $this->belongsTo(Artwork::class);
+        return $this->belongsTo(Artwork::class)->publiclyVisible();
     }
 }

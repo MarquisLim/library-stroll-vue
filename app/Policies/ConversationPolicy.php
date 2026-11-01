@@ -19,7 +19,16 @@ class ConversationPolicy
 
     public function sendMessage(User $user, Conversation $conversation): bool
     {
-        return $this->view($user, $conversation);
+        if (! $this->view($user, $conversation)) {
+            return false;
+        }
+
+        if (! $conversation->isDialog()) {
+            return true;
+        }
+
+        return ! $conversation->users()->where('users.id', '!=', $user->id)->get()
+            ->contains(fn (User $other) => $user->hasBlocked($other) || $other->hasBlocked($user));
     }
 
     public function update(User $user, Conversation $conversation)
@@ -36,11 +45,12 @@ class ConversationPolicy
 
     public function delete(User $user, Conversation $conversation): bool
     {
-//        return $conversation->users()
-//            ->wherePivot('user_id', $user->id)
-//            ->wherePivot('role', 'admin')
-//            ->exists();
+        $participants = $conversation->users()->where('user_id', $user->id);
 
-         return $conversation->users()->where('user_id', $user->id)->exists();
+        if (! $conversation->isDialog()) {
+            $participants->wherePivot('role', 'admin');
+        }
+
+        return $participants->exists();
     }
 }

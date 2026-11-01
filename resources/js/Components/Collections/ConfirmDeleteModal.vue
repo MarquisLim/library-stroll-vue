@@ -1,6 +1,6 @@
 <template>
-    <dialog ref="dialogRef" class="modal" @click.self="emitClose" @close="emitClose">
-        <div class="modal-box bg-base-100 dark:bg-base-900 text-base-content dark:text-base-content">
+    <dialog ref="dialogRef" class="modal workspace-dialog" @click.self="emitClose" @close="emitClose">
+        <div class="modal-box bg-base-100 text-base-content">
             <h3 class="font-bold text-lg">Удалить коллекцию?</h3>
             <p class="my-2 text-base-content/60">
                 Вы уверены, что хотите удалить коллекцию «{{ collection.name }}»?

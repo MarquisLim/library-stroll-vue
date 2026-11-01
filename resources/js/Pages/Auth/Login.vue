@@ -43,6 +43,8 @@ const submit = () => {
                     </div>
 
                     <form @submit.prevent="submit">
+                        <h1 class="mb-2 text-2xl">С возвращением</h1>
+                        <p class="ui-muted mb-7 text-sm">Войдите, чтобы продолжить свою историю.</p>
                         <div>
                             <InputLabel for="email" value="Почта" />
                             <TextInput
@@ -77,7 +79,7 @@ const submit = () => {
                             </label>
                         </div>
 
-                        <div class="flex items-center justify-end mt-4">
+                        <div class="flex flex-wrap items-center justify-between gap-3 mt-6">
                             <Link
                                 v-if="canResetPassword"
                                 :href="route('password.request')"
@@ -88,12 +90,12 @@ const submit = () => {
 
                             <Link
                                 :href="route('register')"
-                                class="underline text-sm text-base-content hover:text-primary rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary ml-3"
+                                class="underline text-sm text-base-content hover:text-primary rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
                             >
                                 Регистрация
                             </Link>
 
-                            <PrimaryButton class="ms-4" :class="{ 'opacity-25': form.processing }" :disabled="form.processing">
+                            <PrimaryButton class="w-full sm:w-auto" :class="{ 'opacity-25': form.processing }" :disabled="form.processing">
                                 Войти
                             </PrimaryButton>
                         </div>

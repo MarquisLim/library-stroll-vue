@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted } from 'vue'
+import { onMounted, onUnmounted } from 'vue'
 import { BellIcon }  from '@heroicons/vue/24/outline'
 import { useNotifications } from '@/stores/useNotifications'
 import NotifListDesktop  from './NotifListDesktop.vue'
@@ -7,15 +7,18 @@ import NotifDialogMobile from './NotifDialogMobile.vue'
 
 const n = useNotifications()
 
+const updateIsMobile = () => (n.isMobile = window.innerWidth < 640)
 onMounted(() => {
     n.initEcho()
-    window.addEventListener('resize', () => (n.isMobile = window.innerWidth < 640))
+    updateIsMobile()
+    window.addEventListener('resize', updateIsMobile)
 })
+onUnmounted(() => window.removeEventListener('resize', updateIsMobile))
 </script>
 
 <template>
     <div class="relative">
-        <button class="p-2 rounded hover:bg-base-200 relative" @click.stop="n.show = !n.show">
+        <button type="button" aria-label="Уведомления" :aria-expanded="n.show" class="ui-icon-button relative" @click.stop="n.show = !n.show">
             <BellIcon class="w-6 h-6" />
             <span v-if="n.unread" class="badge badge-xs badge-primary absolute -top-0.5 -right-0.5">
         {{ n.unread }}

@@ -10,8 +10,8 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class ConversationController extends Controller
@@ -61,10 +61,11 @@ class ConversationController extends Controller
                     'user',
                     'attachments',
                     'reactions',
+                    'replyTo' => fn ($query) => $query->where('conversation_id', $conversation->id),
                     'replyTo.user:id,name,profile_photo_path',
                     'replyTo.attachments',
                     'replyTo.artwork:id,title',
-                    'replies',
+                    'replies' => fn ($query) => $query->where('conversation_id', $conversation->id),
                     'artwork' => function($q) {
                         $q->with(['media','user'])->withCount('likes');
                     },
@@ -90,7 +91,8 @@ class ConversationController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'user_ids' => 'array|min:1',
+            'user_ids' => ['required', 'array', 'min:1', 'max:100', ...($request->input('type') === 'dialog' ? ['size:1'] : [])],
+            'user_ids.*' => ['required', 'integer', 'distinct', Rule::notIn([$request->user()->id]), Rule::exists('users', 'id')->where('is_blocked', false)],
             'title'    => 'nullable|string|max:100',
             'type'     => 'required|in:dialog,group',
             'avatar'   => 'nullable|file|image|max:5120',
@@ -104,15 +106,14 @@ class ConversationController extends Controller
                 ->where('type', 'dialog')
                 ->whereHas('users', fn($q) => $q->where('user_id', $meId))
                 ->whereHas('users', fn($q) => $q->where('user_id', $otherId))
-                ->withCount('users')
-                ->having('users_count', 2)
+                ->has('users', '=', 2)
                 ->first();
 
             if ($existing) {
                 if ($request->wantsJson()) {
                     return response()->json(['id' => $existing->id]);
                 }
-                return redirect()->route('messenger', $existing->id);
+                return redirect()->route('messenger.index', $existing->id);
             }
         }
 
@@ -142,7 +143,14 @@ class ConversationController extends Controller
         if ($request->wantsJson()) {
             return response()->json(['id' => $conv->id, 'avatar_url' => $conv->avatar_url]);
         }
-        return redirect()->route('messenger', $conv->id);
+        return redirect()->route('messenger.index', $conv->id);
+    }
+
+    public function show(Request $request, Conversation $conversation)
+    {
+        $this->authorize('view', $conversation);
+
+        return $conversation->load('users:id,name,profile_photo_path');
     }
 
     public function update(Request $request, Conversation $conversation)
@@ -197,7 +205,7 @@ class ConversationController extends Controller
         ]);
 
         // Нельзя удалить самого себя этим методом
-        if ($data['user_id'] === $user->id) {
+        if ((int) $data['user_id'] === $user->id) {
             return response()->json(['message' => 'Нельзя удалить самого себя'], 422);
         }
 

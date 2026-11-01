@@ -1,7 +1,6 @@
 <script setup>
 import { Head, Link, usePage, router } from '@inertiajs/vue3'
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import axios from 'axios'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import GlobalModals from '@/Components/Common/GlobalModals.vue'
 import Footer from '@/Components/Footer.vue'
 import AuthModal from '@/Components/AuthModal.vue'
@@ -18,6 +17,7 @@ import {
     PhotoIcon
 } from '@heroicons/vue/24/outline'
 import { useArtworkActions } from '@/stores/useArtworkActions'
+import { useTheme } from '@/composables/useTheme'
 
 const props         = defineProps({ title: String })
 const page          = usePage()
@@ -26,56 +26,54 @@ const actions       = useArtworkActions()
 const isAuth        = computed(() => !!page.props.auth.user)
 const user          = computed(() => page.props.auth.user || {})
 const myId          = page.props.auth.user?.id
-const isDark        = ref(false)
+const { isDark, toggleTheme } = useTheme()
 const isLoggingOut = ref(false)
 
 const isMobile      = ref(window.innerWidth < 640)
 const isLoading = ref(false)
 
-router.on('start', () => (isLoading.value = true))
-router.on('finish', () => (isLoading.value = false))
+const stopStartListener = router.on('start', () => (isLoading.value = true))
+const stopFinishListener = router.on('finish', () => (isLoading.value = false))
+onUnmounted(() => { stopStartListener(); stopFinishListener() })
 
 function resize() { isMobile.value = window.innerWidth < 640 }
 
 
 // Messages
-const subscribedConvs = new Set()
+const subscribedConvs = new Map()
 const msgUnread     = ref(page.props.unreadCount || 0)
 
-// Theme
-function setTheme() {
-    document.documentElement.setAttribute('data-theme', isDark.value ? 'dark':'light')
-}
-
-watch(isDark, v => {
-    localStorage.setItem('theme', v?'dark':'light')
-    setTheme()
-})
 
 function subscribeToConversation(id) {
     if (!window.Echo || !myId || subscribedConvs.has(id)) return
-    window.Echo.private(`conversation.${id}`)
-        .listen('.MessageSent', ({ message }) => {
-            if (message.user_id !== myId) msgUnread.value++
-        })
-    subscribedConvs.add(id)
+    const listener = ({ message }) => {
+        if (message.user_id !== myId) msgUnread.value++
+    }
+    const channel = window.Echo.private(`conversation.${id}`)
+    channel.listen('.MessageSent', listener)
+    subscribedConvs.set(id, { channel, listener })
 }
+
+let userChannel
+const onConversationCreated = ({ conversation }) => {
+    subscribeToConversation(conversation.id)
+    msgUnread.value++
+}
+onUnmounted(() => {
+    subscribedConvs.forEach(({ channel, listener }) => channel.stopListening('.MessageSent', listener))
+    subscribedConvs.clear()
+    userChannel?.stopListening('.ConversationCreated', onConversationCreated)
+})
 
 onMounted(() => window.addEventListener('resize', resize))
 onUnmounted(() => window.removeEventListener('resize', resize))
 
 onMounted(() => {
-    isDark.value = localStorage.getItem('theme') === 'dark'
-    setTheme()
-
     page.props.conversationIds?.forEach(subscribeToConversation)
 
     if (window.Echo && myId) {
-        window.Echo.private(`user.${myId}`)
-            .listen('.ConversationCreated', ({ conversation }) => {
-                subscribeToConversation(conversation.id)
-                msgUnread.value++
-            })
+        userChannel = window.Echo.private(`user.${myId}`)
+        userChannel.listen('.ConversationCreated', onConversationCreated)
     }
 })
 
@@ -83,21 +81,6 @@ watch(
     () => page.props.conversationIds,
     ids => ids?.forEach(subscribeToConversation)
 )
-
-// Search
-const searchQ       = ref('')
-const searchTab     = ref('all')
-const suggestions   = ref([])
-const showSugBox    = ref(false)
-
-watch([searchQ, searchTab], async ([q,tab])=>{
-    if(!q.trim()) return suggestions.value=[]
-    const { data } = await axios.get(route('search.suggestions'), {
-        params: { q, type: tab }
-    })
-    suggestions.value = data.suggestions
-    showSugBox.value  = suggestions.value.length>0
-})
 
 function closeProfileDrawer() {
     const drawer = document.getElementById('profile-drawer')
@@ -126,24 +109,25 @@ function logout() {
 </script>
 
 <template>
-    <div class="min-h-screen flex flex-col">
+    <div class="ui-app-shell min-h-screen flex flex-col">
         <Head :title="title"/>
-        <nav class="sticky top-0 bg-base-100 backdrop-blur z-40 pt-safe-t">
+        <nav aria-label="Основная навигация" class="ui-site-header sticky top-0 z-40 pt-safe-t">
             <div class="relative flex items-center h-16 px-4 sm:px-8">
                 <!-- Left -->
                 <div class="flex items-center gap-4">
 
                     <!-- Logo -->
-                    <Link :href="route('home')" class="hidden lg:block">
-                        <img src="/logo.png?v=2" alt="logo" class="h-9 sm:h-10" />
+                    <Link :href="route('home')" class="ui-brand hidden lg:inline-flex" aria-label="LibraryStroll — главная">
+                        <span class="ui-brand-mark"><PhotoIcon class="h-5 w-5" /></span>
+                        <span class="text-lg">Library<span class="text-primary">Stroll</span></span>
                     </Link>
 
                     <!-- Навигация -->
-                    <div class="hidden lg:flex ml-4 space-x-6">
-                        <Link :href="route('gallery.index')" class="flex items-center gap-1 hover:underline">
+                    <div class="hidden lg:flex gap-1">
+                        <Link :href="route('gallery.index')" class="ui-nav-link" :aria-current="route().current('gallery.*') ? 'page' : undefined">
                             <PhotoIcon class="w-5 h-5" /> Галерея
                         </Link>
-                        <Link v-if="isAuth" :href="route('studio.index')" class="flex items-center gap-1 hover:underline">
+                        <Link v-if="isAuth" :href="route('studio.index')" class="ui-nav-link" :aria-current="route().current('studio.*') ? 'page' : undefined">
                             <PlusCircleIcon class="w-5 h-5" /> Студия
                         </Link>
                     </div>
@@ -151,33 +135,33 @@ function logout() {
 
                 <!-- Center -->
                 <div class="hidden lg:flex flex-1 justify-center px-2">
-                    <div
-                        class="w-full max-w-3xl bg-base-300 hover:bg-base-200 transition rounded-xl px-5 py-3 flex items-center gap-3 cursor-pointer shadow-sm"
+                    <button type="button"
+                        class="ui-search-trigger w-full max-w-lg"
                         @click="searchModal?.open()"
                     >
-                        <MagnifyingGlassIcon class="w-6 h-6 text-base-content/80" />
-                        <span class="text-base-content text-lg font-medium">Поиск...</span>
-                    </div>
+                        <MagnifyingGlassIcon class="h-5 w-5 shrink-0" />
+                        <span>Работы, авторы, вдохновение…</span>
+                    </button>
                 </div>
 
                 <SearchOverlay ref="searchModal" />
                 <div class="block lg:hidden w-full pe-4 py-2">
-                    <div
-                        class="bg-base-300 hover:bg-base-200 transition rounded-xl px-5 py-3 flex items-center gap-3 cursor-pointer shadow-sm"
+                    <button type="button"
+                        class="ui-search-trigger w-full"
                         @click="searchModal?.open()"
                     >
-                        <MagnifyingGlassIcon class="w-6 h-6 text-base-content/80" />
-                        <span class="text-base-content text-base font-medium">Поиск...</span>
-                    </div>
+                        <MagnifyingGlassIcon class="h-5 w-5 shrink-0" />
+                        <span>Поиск работ…</span>
+                    </button>
                 </div>
                 <!-- Right -->
                 <div class="flex items-center ml-auto space-x-2">
-                    <button @click="isDark=!isDark" class="p-2 rounded hover:bg-base-200">
+                    <button type="button" @click="toggleTheme" class="ui-icon-button" :aria-label="isDark ? 'Включить светлую тему' : 'Включить тёмную тему'" :aria-pressed="isDark">
                         <component :is="isDark?SunIcon:MoonIcon" class="w-6 h-6"/>
                     </button>
 
                     <NotificationBell />
-                    <Link :href="route('messenger.index')" class="relative p-2 rounded hover:bg-base-200">
+                    <Link :href="route('messenger.index')" class="ui-icon-button relative" aria-label="Сообщения">
                         <ChatBubbleLeftIcon class="w-6 h-6"/>
                         <span v-if="msgUnread" class="badge badge-xs badge-primary absolute -top-0.5 -right-0.5">
                     {{ msgUnread }}
@@ -209,7 +193,7 @@ function logout() {
                                     </a>
                                 </li>
                                 <li>
-                                    <button @click="isDark = !isDark" class="flex items-center gap-2">
+                                    <button @click="toggleTheme" class="flex items-center gap-2">
                                         <component :is="isDark ? SunIcon : MoonIcon" class="w-5 h-5" />
                                         Тема
                                     </button>
@@ -279,7 +263,7 @@ function logout() {
                     <Link :href="route('profile.show')" class="flex items-center gap-2 py-1">
                         <Cog6ToothIcon class="w-5 h-5" /> Настройки
                     </Link>
-                    <button @click="isDark=!isDark" class="flex items-center gap-2 py-1">
+                    <button @click="toggleTheme" class="flex items-center gap-2 py-1">
                         <component :is="isDark?SunIcon:MoonIcon" class="w-6 h-6"/> Тема
                     </button>
                     <button

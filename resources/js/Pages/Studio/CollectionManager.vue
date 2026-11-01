@@ -1,8 +1,12 @@
 <script setup>
+import WorkspaceHeader from '@/Components/Workspace/WorkspaceHeader.vue'
+import WorkspaceEmptyState from '@/Components/Workspace/WorkspaceEmptyState.vue'
+import WorkspacePagination from '@/Components/Workspace/WorkspacePagination.vue'
 import { Head, Link, router } from '@inertiajs/vue3'
 import {ref, watch, computed, defineComponent, h} from 'vue'
 import DashboardLayout from '@/Layouts/DashboardLayout.vue'
 
+import CreateCollectionModal from '@/Components/Collections/CreateCollectionModal.vue'
 import EditModal   from '@/Components/Collections/EditCollectionModal.vue'
 import DeleteModal from '@/Components/Collections/ConfirmDeleteModal.vue'
 import axios from "axios";
@@ -66,6 +70,7 @@ const SortIcon = defineComponent({
 })
 
 // модалки
+const createOpen = ref(false)
 const editCol = ref(null)      // объект коллекции
 const delCol  = ref(null)      // объект
 const saved   = () => fetch(props.collections.current_page)
@@ -74,18 +79,13 @@ const saved   = () => fetch(props.collections.current_page)
 <template>
     <Head title="Коллекции"/>
 
-    <div class="bg-base-100 text-base-content min-h-screen p-4 md:p-6 space-y-6">
+    <div class="workspace-page">
 
         <!-- Заголовок -->
-        <header class="flex items-center justify-between">
-            <h1 class="text-2xl font-bold flex items-center gap-2">
-                <i class="mdi mdi-folder-multiple-outline text-primary text-3xl"></i>
-                Коллекции
-            </h1>
-        </header>
+        <WorkspaceHeader eyebrow="Ваша студия" title="Коллекции" :count="props.collections.total" description="Личные подборки, любимые работы и идеи, к которым хочется вернуться."><template #actions><button class="btn btn-primary" @click="createOpen = true"><i class="mdi mdi-folder-plus-outline" /> Создать коллекцию</button></template></WorkspaceHeader>
 
         <!-- Фильтры -->
-        <section class="grid gap-4 md:grid-cols-4 lg:grid-cols-5 items-center">
+        <section class="workspace-toolbar sm:grid-cols-3">
             <div>
                 <label class="label"><span class="label-text text-sm">Доступ</span></label>
                 <select v-model="visibility" class="select select-bordered w-full">
@@ -95,14 +95,14 @@ const saved   = () => fetch(props.collections.current_page)
                 </select>
             </div>
 
-            <div class="md:col-span-2 lg:col-span-3">
+            <div class="sm:col-span-2">
                 <label class="label"><span class="label-text text-sm">Поиск</span></label>
                 <div class="relative">
                     <input v-model="search"
                            @keyup.enter="fetch()"
                            placeholder="Название…"
                            class="input input-bordered w-full pr-10" />
-                    <button @click="fetch"
+                    <button @click="fetch()" aria-label="Найти коллекции"
                             class="btn btn-ghost btn-square absolute right-0 top-0 h-full">
                         <i class="mdi mdi-magnify text-xl"></i>
                     </button>
@@ -111,12 +111,19 @@ const saved   = () => fetch(props.collections.current_page)
         </section>
         <button v-if="hasActiveFilters"
                 @click="resetFilters"
-                class="btn btn-xs btn-outline hidden md:inline-flex self-end">
+                class="btn btn-sm btn-ghost self-end">
             <i class="mdi mdi-filter-remove-outline mr-1"></i>Сброс
         </button>
 
-        <!-- Таблица -->
-        <div class="overflow-x-auto rounded-lg shadow">
+        <WorkspaceEmptyState v-if="!props.collections.data.length" title="Коллекции не найдены" description="Сохраните понравившуюся работу в коллекцию или измените условия поиска." icon="mdi-folder-multiple-outline" />
+<!-- Таблица -->
+        <div v-if="props.collections.data.length" class="space-y-3 md:hidden">
+            <article v-for="collection in props.collections.data" :key="collection.id" class="workspace-mobile-card">
+                <div class="flex items-center gap-3"><img v-if="collection.thumb" :src="collection.thumb" alt="" class="h-14 w-14 rounded-xl object-cover" /><span v-else class="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-2xl text-primary"><i class="mdi mdi-folder-multiple-outline" /></span><div class="min-w-0"><Link :href="route('collections.show', collection.id)" class="block font-semibold">{{ collection.name }}</Link><p class="ui-muted mt-1 text-xs">Работ: {{ collection.artworks_count }} · {{ collection.is_private ? 'Приватная' : 'Публичная' }}</p></div></div>
+                <div class="mt-4 flex justify-end gap-2 border-t border-base-300 pt-3"><button class="btn btn-sm btn-ghost" @click="editCol = collection"><i class="mdi mdi-pencil-outline" /> Изменить</button><button class="btn btn-sm btn-ghost text-error" aria-label="Удалить коллекцию" @click="delCol = collection"><i class="mdi mdi-trash-can-outline" /></button></div>
+            </article>
+        </div>
+        <div v-if="props.collections.data.length" class="workspace-table hidden md:block">
             <table class="table w-full">
                 <thead>
                 <tr>
@@ -159,10 +166,10 @@ const saved   = () => fetch(props.collections.current_page)
                         <span>{{ c.updated_date ? new Date(c.updated_date).toLocaleString() : '—' }}</span>
                     </td>
                     <td class="space-x-1 text-center">
-                        <button class="btn btn-ghost btn-sm" @click="editCol = c">
+                        <button class="btn btn-ghost btn-sm" aria-label="Редактировать коллекцию" @click="editCol = c">
                             <i class="mdi mdi-pencil"></i>
                         </button>
-                        <button class="btn btn-ghost btn-sm text-error" @click="delCol = c">
+                        <button class="btn btn-ghost btn-sm text-error" aria-label="Удалить коллекцию" @click="delCol = c">
                             <i class="mdi mdi-trash-can"></i>
                         </button>
                     </td>
@@ -171,22 +178,11 @@ const saved   = () => fetch(props.collections.current_page)
             </table>
         </div>
 
-        <!-- Пагинация -->
-        <nav v-if="props.collections.last_page>1" class="flex justify-center flex-wrap gap-1 pt-4">
-            <Link v-for="l in props.collections.links.filter(l=>Number(l.label))"
-                  :key="l.label"
-                  :href="l.url || '#'"
-                  preserve-state preserve-scroll
-                  :class="[
-              'px-3 py-1 rounded',
-              l.active ? 'bg-primary text-primary-content' : 'bg-base-200 hover:bg-base-300'
-            ]">
-                {{ l.label }}
-            </Link>
-        </nav>
+        <WorkspacePagination :pagination="props.collections" />
     </div>
 
     <!-- Modals -->
+    <CreateCollectionModal v-if="createOpen" @close="createOpen = false" @created="() => fetch()" />
     <EditModal  v-if="editCol"
                 :initial-collection="editCol"
                 @close="editCol = null"

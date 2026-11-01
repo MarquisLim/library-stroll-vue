@@ -1,12 +1,12 @@
 # syntax=docker/dockerfile:1
-FROM php:8.2-fpm-bookworm AS php-base
+FROM php:8.5-fpm-bookworm AS php-base
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl ffmpeg git unzip libfreetype6-dev libjpeg62-turbo-dev \
     libpng-dev libwebp-dev libzip-dev libicu-dev libonig-dev libsqlite3-dev \
     && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
-    && docker-php-ext-install -j"$(nproc)" bcmath exif gd intl mbstring opcache pcntl pdo_mysql pdo_sqlite zip \
-    && pecl install redis-6.2.0 && docker-php-ext-enable redis \
+    && docker-php-ext-install -j"$(nproc)" bcmath exif gd intl mbstring pcntl pdo_mysql pdo_sqlite zip \
+    && pecl install redis-6.3.0 && docker-php-ext-enable redis \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer

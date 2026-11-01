@@ -1,7 +1,9 @@
 <script setup>
 import { Head, Link, router } from '@inertiajs/vue3'
-import { ref, computed, watch, onMounted, nextTick } from 'vue'
-import { _adapters } from 'chart.js'
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import WorkspaceHeader from '@/Components/Workspace/WorkspaceHeader.vue'
+import WorkspaceEmptyState from '@/Components/Workspace/WorkspaceEmptyState.vue'
+import { useTheme } from '@/composables/useTheme'
 import StatTile                  from '@/Components/Dashboard/StatTile.vue'
 import ProfileCard               from '@/Components/Dashboard/ProfileCard.vue'
 import ArtworkCard               from '@/Components/Gallery/ArtworkCard.vue'
@@ -37,7 +39,14 @@ const push = () =>
 watch(likesSel,    push)
 watch(commentsSel, push)
 
-const parseDate = d => new Date(d)
+const { isDark } = useTheme()
+function chartColors() {
+    const style = getComputedStyle(document.documentElement)
+    const hex = name => '#' + style.getPropertyValue(name).trim().split(/\s+/).map(value => Number(value).toString(16).padStart(2, '0')).join('')
+    return { primary: hex('--rgb-primary'), secondary: hex('--rgb-secondary'), muted: style.getPropertyValue('--ui-muted').trim(), grid: hex('--rgb-base-content') + '12' }
+}
+watch(isDark, async () => { await nextTick(); initLikesChart(); initCommentsChart() })
+onBeforeUnmount(() => { likesChartInstance?.destroy(); commentsChartInstance?.destroy() })
 
 const likesDataset = computed(() =>
     Object.entries(props.likesChart).map(([date, val]) => ({ x: date, y: val }))
@@ -64,13 +73,14 @@ const buildConfig = (dataset, days, color) => {
                 borderColor: color,
                 backgroundColor: ctx => {
                     const g = ctx.chart.ctx.createLinearGradient(0, 0, 0, 200)
-                    g.addColorStop(0, color + '80')
-                    g.addColorStop(1, color + '10')
+                    g.addColorStop(0, color + '28')
+                    g.addColorStop(1, color + '02')
                     return g
                 },
                 tension: 0.4,
                 borderWidth: 2,
-                pointRadius: 3,
+                pointRadius: 2,
+                pointHoverRadius: 5,
                 pointBackgroundColor: color,
             }]
         },
@@ -89,25 +99,25 @@ const buildConfig = (dataset, days, color) => {
                         }
                     },
                     ticks: {
-                        color: '#7480ff',
-                        font: { size: 11 }
+                        color: chartColors().muted,
+                        font: { size: 11, family: 'Manrope Variable' }
                     },
                     grid: {
-                        color: '#7480ff33',
+                        color: chartColors().grid,
                         borderDash: [3]
                     },
-                    border: { color: 'var(--tw-prose-body)' }
+                    border: { display: false }
                 },
                 y: {
                     ticks: {
-                        color: '#7480ff',
-                        font: { size: 11 }
+                        color: chartColors().muted,
+                        font: { size: 11, family: 'Manrope Variable' }
                     },
                     grid: {
-                        color: '#7480ff33',
+                        color: chartColors().grid,
                         borderDash: [3]
                     },
-                    border: { color: 'var(--tw-prose-body)' }
+                    border: { display: false }
                 }
             },
             plugins: {
@@ -133,20 +143,22 @@ const buildConfig = (dataset, days, color) => {
 }
 
 const initLikesChart = () => {
+    if (!likesCanvas.value) return
     if (likesChartInstance) likesChartInstance.destroy()
     likesChartInstance = new Chart(likesCanvas.value, buildConfig(
         likesDataset.value,
         likesSel.value,
-        '#3B82F6'
+        chartColors().primary
     ))
 }
 
 const initCommentsChart = () => {
+    if (!commentsCanvas.value) return
     if (commentsChartInstance) commentsChartInstance.destroy()
     commentsChartInstance = new Chart(commentsCanvas.value, buildConfig(
         commentsDataset.value,
         commentsSel.value,
-        '#F97316'
+        chartColors().secondary
     ))
 }
 
@@ -178,32 +190,32 @@ useArtworkActions().setCollections(props.collections)
 </script>
 
 <template>
-    <Head title="Dashboard"/>
+    <Head title="Обзор кабинета"/>
 
-    <div class="flex bg-base-100 dark:bg-base-900 min-h-screen">
-        <main class="flex-1 p-4 md:p-6 space-y-12">
-            <h1 class="text-3xl font-bold">Панель управления</h1>
+    <div class="workspace-page">
+        <section class="space-y-7">
+            <WorkspaceHeader eyebrow="Ваше пространство" title="Обзор" description="Творчество в цифрах. Следите за откликом и планируйте следующую работу."><template #actions><Link :href="route('studio.index')" class="btn btn-primary"><i class="mdi mdi-plus" /> Новая работа</Link></template></WorkspaceHeader>
 
-            <section class="grid lg:grid-cols-3 gap-6">
-                <div class="lg:col-span-2 grid grid-cols-2 gap-4">
+            <section class="grid gap-5 xl:grid-cols-3">
+                <div class="grid grid-cols-2 gap-4 xl:col-span-2">
                     <StatTile label="Работы"      :value="stats.artworks" icon="mdi mdi-brush"/>
                     <StatTile label="Просмотры"   :value="stats.views"    icon="mdi mdi-eye"  />
                     <StatTile label="Понравилось" :value="stats.likes"    icon="mdi mdi-heart"/>
-                    <StatTile label="Комментар."  :value="stats.comments" icon="mdi mdi-comment"/>
+                    <StatTile label="Комментарии"  :value="stats.comments" icon="mdi mdi-comment"/>
                 </div>
 
-                <div class="bg-base-200 dark:bg-base-800 rounded-xl shadow p-4 space-y-3">
+                <div class="ui-panel p-5 space-y-4">
                     <h2 class="font-semibold">Популярная работа</h2>
-                    <ArtworkCard v-if="topArtwork" :art="topArtwork"/>
+                    <div v-if="topArtwork" class="max-w-sm"><ArtworkCard :art="topArtwork"/></div>
                     <p v-else class="py-6 text-center text-base-content/60">Нет опубликованных работ.</p>
                 </div>
             </section>
 
-            <section class="grid md:grid-cols-2 gap-6">
-                <div class="bg-base-200 dark:bg-base-800 rounded-xl p-6 shadow space-y-4">
+            <section class="grid xl:grid-cols-2 gap-5">
+                <div class="ui-panel p-5 sm:p-6 space-y-4">
                     <div class="flex justify-between items-center">
                         <h2 class="font-semibold">Лайки</h2>
-                        <select v-model.number="likesSel" class="select ms-4">
+                        <select v-model.number="likesSel" class="select select-sm ms-3">
                             <option :value="7">7 дн.</option>
                             <option :value="30">30 дн.</option>
                             <option :value="365">Год</option>
@@ -214,7 +226,7 @@ useArtworkActions().setCollections(props.collections)
                     </div>
                 </div>
 
-                <div class="bg-base-200 dark:bg-base-800 rounded-xl p-6 shadow space-y-4">
+                <div class="ui-panel p-5 sm:p-6 space-y-4">
                     <div class="flex justify-between items-center">
                         <h2 class="font-semibold">Комментарии</h2>
                         <select v-model.number="commentsSel" class="select ms-4">
@@ -229,9 +241,9 @@ useArtworkActions().setCollections(props.collections)
                 </div>
             </section>
 
-            <section v-if="recentWorks.length" class="space-y-4">
+            <section class="space-y-4">
                 <h2 class="font-semibold">Последние работы</h2>
-                <MasonryGrid :items="recentWorks">
+                <WorkspaceEmptyState v-if="!recentWorks.length" title="У каждой истории есть начало" description="Опубликуйте работу — здесь появятся ваши последние публикации." /><MasonryGrid v-else :items="recentWorks">
                     <template #default="{ item }"><ArtworkCard :art="item"/></template>
                 </MasonryGrid>
             </section>
@@ -247,9 +259,9 @@ useArtworkActions().setCollections(props.collections)
                     </template>
                 </MasonryGrid>
             </section>
-        </main>
+        </section>
 
-        <aside class="hidden xl:block w-80 p-6">
+        <aside class="max-w-sm">
             <ProfileCard/>
         </aside>
     </div>

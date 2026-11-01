@@ -41,12 +41,20 @@ return Application::configure(basePath: dirname(__DIR__))
     ])
     ->withExceptions(function (Exceptions $exceptions) {
         $exceptions->render(function (ModelNotFoundException $e, Request $request) {
+            if ($request->expectsJson()) {
+                return null;
+            }
+
             return Inertia::render('Errors/NotFound', ['status' => 404])
                 ->toResponse($request)
                 ->setStatusCode(404);
         });
 
         $exceptions->render(function (NotFoundHttpException $e, Request $request) {
+            if ($request->expectsJson()) {
+                return null;
+            }
+
             return Inertia::render('Errors/NotFound', ['status' => 404])
                 ->toResponse($request)
                 ->setStatusCode(404);
@@ -54,6 +62,10 @@ return Application::configure(basePath: dirname(__DIR__))
 
 
         $exceptions->render(function (HttpException $e, Request $request) {
+            if ($request->expectsJson()) {
+                return null;
+            }
+
             if ($e->getStatusCode() === 403) {
                 return Inertia::render('Errors/Forbidden', ['status' => 403])
                     ->toResponse($request)

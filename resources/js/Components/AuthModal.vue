@@ -2,6 +2,7 @@
 import { ref, watch, nextTick } from 'vue'
 import axios from 'axios'
 import { useArtworkActions } from '@/stores/useArtworkActions'
+import AuthenticationCardLogo from '@/Components/AuthenticationCardLogo.vue'
 
 const emit = defineEmits(['close'])
 const props = defineProps({ show: Boolean })
@@ -18,12 +19,6 @@ const loading    = ref(false)
 watch(() => props.show, (v) => {
     if (v) nextTick(() => dialogRef.value?.showModal())
     else dialogRef.value?.close()
-})
-
-axios.interceptors.request.use(cfg => {
-    const t = document.head.querySelector('meta[name="csrf-token"]')?.content
-    if (t) cfg.headers['X-CSRF-TOKEN'] = t
-    return cfg
 })
 
 function close() {
@@ -68,12 +63,12 @@ function submitRegister() {
 </script>
 
 <template>
-    <dialog ref="dialogRef" class="modal" @close="close">
+    <dialog ref="dialogRef" class="modal" aria-label="Вход и регистрация" @close="close">
         <div class="modal-box relative bg-base-100 p-6 w-full max-w-md">
-            <button @click="dialogRef.close()" class="btn btn-sm btn-circle absolute right-2 top-2">✕</button>
+            <button type="button" aria-label="Закрыть окно входа" @click="dialogRef.close()" class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
 
-            <div class="flex justify-center mb-4">
-                <img src="/logo.png" alt="Logo" class="h-10 w-auto" />
+            <div class="flex justify-center mb-7 mt-3">
+                <AuthenticationCardLogo />
             </div>
 
             <div class="tabs tabs-boxed w-full mb-4">

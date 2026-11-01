@@ -41,6 +41,21 @@ class QdrantService:
         except Exception:
             return False
 
+    async def diagnostics(self) -> dict:
+        """Read collection metadata without creating or modifying vectors."""
+        info = await self._client.get_collection(self.collection)
+        vectors = info.config.params.vectors
+        dimension = getattr(vectors, "size", None)
+        distance = getattr(vectors, "distance", None)
+        return {
+            "collection": self.collection,
+            "points_count": info.points_count,
+            "indexed_vectors_count": info.indexed_vectors_count,
+            "dimension": dimension,
+            "distance": getattr(distance, "value", str(distance)) if distance else None,
+            "collection_status": getattr(info.status, "value", str(info.status)),
+        }
+
     async def ensure_collection(self, dimension: int) -> None:
         collections = await self._client.get_collections()
         existing_names = [c.name for c in collections.collections]

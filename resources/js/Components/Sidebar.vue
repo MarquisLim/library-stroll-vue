@@ -1,162 +1,52 @@
 <script setup>
-import { ref, onMounted, onBeforeUnmount, watch, computed } from 'vue'
+import { computed } from 'vue'
 import { Link, usePage } from '@inertiajs/vue3'
-import {
-    HomeIcon, PaintBrushIcon, ShieldCheckIcon,
-    ChevronDownIcon, FlagIcon
-} from '@heroicons/vue/24/solid'
-
 const props = defineProps({ open: Boolean })
-const emit  = defineEmits(['update:open'])
-const open  = ref(props.open)
-watch(() => props.open, v => (open.value = v))
-
-const isDesktop = ref(window.innerWidth >= 768)
-const onResize  = () => (isDesktop.value = window.innerWidth >= 768)
-onMounted(() => window.addEventListener('resize', onResize))
-onBeforeUnmount(() => window.removeEventListener('resize', onResize))
-
-const currentUrl = computed(() => usePage().url)
-
-watch(currentUrl, () => { if (!isDesktop.value) emit('update:open', false) })
-
-/* ——— helpers ——— */
-const isActive    = path      => currentUrl.value.startsWith(path)
-const isSubActive = pathsArr  => pathsArr.some(p => currentUrl.value.startsWith(p))
-
-/* ——— роли ——— */
-const roles   = computed(() => (usePage().props.auth.user?.roles ?? []).map(r => r.toLowerCase()))
-const isAdmin = computed(() => roles.value.some(r => ['admin','superadmin'].includes(r)))
-const isMod   = computed(() => roles.value.some(r => ['moderator','admin','superadmin'].includes(r)))
+const emit = defineEmits(['update:open'])
+const page = usePage()
+const roles = computed(() => (page.props.auth?.user?.roles || []).map(role => (typeof role === 'string' ? role : role.name).toLowerCase()))
+const isAdmin = computed(() => roles.value.some(role => ['admin', 'superadmin'].includes(role)))
+const isModerator = computed(() => roles.value.some(role => ['moderator', 'admin', 'superadmin'].includes(role)))
+const groups = computed(() => [
+    { title: 'Ваше пространство', links: [
+        { title: 'Обзор', name: 'dashboard', icon: 'mdi-view-dashboard-outline', path: '/dashboard' },
+        { title: 'Создать работу', name: 'studio.index', icon: 'mdi-plus-box-outline', path: '/studio', exact: true },
+        { title: 'Мои работы', name: 'studio.manager', icon: 'mdi-image-multiple-outline', path: '/studio/manager' },
+        { title: 'Коллекции', name: 'studio.collections', icon: 'mdi-folder-multiple-outline', path: '/studio/collections' },
+    ]},
+    ...(isModerator.value ? [{ title: 'Модерация', links: [
+        { title: 'Жалобы', name: 'moderation.complaints.index', icon: 'mdi-shield-check-outline', path: '/moderation/complaints' },
+    ]}] : []),
+    ...(isAdmin.value ? [{ title: 'Администрирование', links: [
+        { title: 'Пользователи', name: 'admin.users', icon: 'mdi-account-group-outline', path: '/admin/users' },
+        { title: 'Все работы', name: 'admin.artworks.manager', icon: 'mdi-image-search-outline', path: '/admin/artworks' },
+        { title: 'AI и векторы', name: 'admin.ai.index', icon: 'mdi-brain', path: '/admin/ai' },
+    ]}] : []),
+])
+const active = link => link.exact ? page.url.split('?')[0] === link.path : page.url.startsWith(link.path)
 </script>
 
 <template>
-    <!-- мобильный оверлей -->
-    <div
-        v-show="open && !isDesktop"
-        class="fixed inset-0 bg-black/50 z-30"
-        @click="$emit('update:open', false)"
-    />
-
-    <transition name="slide">
-        <nav
-            v-show="open || isDesktop"
-            class="fixed md:sticky inset-y-0 left-0 w-64
-             bg-base-100 dark:bg-base-900 text-base-content
-             transform duration-300 ease-in-out z-40
-             top-0 md:top-16 h-full overflow-y-auto pt-safe-t">
-
-            <div class="px-4 py-6 space-y-4">
-
-                <!-- Дашборд -->
-                <Link
-                    :href="route('dashboard')"
-                    class="flex items-center px-3 py-2 rounded-lg"
-                    :class="isActive('/dashboard')
-            ? 'border-l-4 border-primary bg-base-200 dark:bg-base-800'
-            : 'hover:bg-base-200 dark:hover:bg-base-800'"
-                >
-                    <HomeIcon class="w-5 h-5 mr-3" />
-                    Панель&nbsp;управления
-                </Link>
-
-                <!-- Студия -->
-                <details class="group" :open="isSubActive(['/studio'])">
-                    <summary
-                        class="flex items-center px-3 py-2 rounded-lg cursor-pointer"
-                        :class="isSubActive(['/studio'])
-              ? 'border-l-4 border-primary bg-base-200 dark:bg-base-800'
-              : 'hover:bg-base-200 dark:hover:bg-base-800'"
-                    >
-                        <PaintBrushIcon class="w-5 h-5 mr-3"/>
-                        <span class="flex-1">Студия</span>
-                        <ChevronDownIcon class="w-4 h-4 transition-transform group-open:rotate-180"/>
-                    </summary>
-
-                    <div class="pl-12 space-y-2 py-2 text-sm">
-                        <Link
-                            :href="route('studio.manager')"
-                            class="block px-3 py-2 rounded-lg"
-                            :class="isActive('/studio/manager')
-                ? 'bg-base-200 dark:bg-base-800'
-                : 'hover:bg-base-200 dark:hover:bg-base-800'"
-                        >Работы</Link>
-
-                        <Link
-                            :href="route('studio.collections')"
-                            class="block px-3 py-2 rounded-lg"
-                            :class="isActive('/studio/collections')
-                ? 'bg-base-200 dark:bg-base-800'
-                : 'hover:bg-base-200 dark:hover:bg-base-800'"
-                        >Коллекции</Link>
-                    </div>
-                </details>
-
-                <!-- Модерация -->
-                <details v-if="isMod" class="group" :open="isSubActive(['/moderation'])">
-                    <summary
-                        class="flex items-center px-3 py-2 rounded-lg cursor-pointer"
-                        :class="isSubActive(['/moderation'])
-              ? 'border-l-4 border-primary bg-base-200 dark:bg-base-800'
-              : 'hover:bg-base-200 dark:hover:bg-base-800'"
-                    >
-                        <FlagIcon class="w-5 h-5 mr-3"/>
-                        <span class="flex-1">Модерация</span>
-                        <ChevronDownIcon class="w-4 h-4 transition-transform group-open:rotate-180"/>
-                    </summary>
-
-                    <div class="pl-12 space-y-2 py-2 text-sm">
-                        <Link
-                            :href="route('moderation.complaints.index')"
-                            class="block px-3 py-2 rounded-lg"
-                            :class="isActive('/moderation/complaints')
-                ? 'bg-base-200 dark:bg-base-800'
-                : 'hover:bg-base-200 dark:hover:bg-base-800'"
-                        >Жалобы</Link>
-                    </div>
-                </details>
-
-                <!-- Администрирование -->
-                <details v-if="isAdmin" class="group" :open="isSubActive(['/admin'])">
-                    <summary
-                        class="flex items-center px-3 py-2 rounded-lg cursor-pointer"
-                        :class="isSubActive(['/admin'])
-              ? 'border-l-4 border-primary bg-base-200 dark:bg-base-800'
-              : 'hover:bg-base-200 dark:hover:bg-base-800'"
-                    >
-                        <ShieldCheckIcon class="w-5 h-5 mr-3"/>
-                        <span class="flex-1">Администрирование</span>
-                        <ChevronDownIcon class="w-4 h-4 transition-transform group-open:rotate-180"/>
-                    </summary>
-
-                    <div class="pl-12 space-y-2 py-2 text-sm">
-                        <Link
-                            :href="route('admin.users')"
-                            class="block px-3 py-2 rounded-lg"
-                            :class="isActive('/admin/users')
-                ? 'bg-base-200 dark:bg-base-800'
-                : 'hover:bg-base-200 dark:hover:bg-base-800'"
-                        >Пользователи</Link>
-
-                        <Link
-                            :href="route('admin.artworks.manager')"
-                            class="block px-3 py-2 rounded-lg"
-                            :class="isActive('/admin/artworks')
-                ? 'bg-base-200 dark:bg-base-800'
-                : 'hover:bg-base-200 dark:hover:bg-base-800'"
-                        >Работы</Link>
-                    </div>
-                </details>
-            </div>
+    <button v-if="open" class="fixed inset-0 z-40 bg-neutral/50 backdrop-blur-sm lg:hidden" aria-label="Закрыть меню кабинета" @click="emit('update:open', false)" />
+    <aside id="workspace-sidebar" :class="['workspace-sidebar', open ? 'flex' : 'hidden lg:flex']" aria-label="Рабочий кабинет">
+        <div class="mb-8 flex items-center justify-between px-3">
+            <div><p class="text-sm font-extrabold tracking-tight">Рабочий кабинет</p><p class="ui-muted mt-1 text-xs">Идеи. Работы. Возможности.</p></div>
+            <button class="btn btn-ghost btn-sm btn-square lg:hidden" aria-label="Закрыть меню кабинета" @click="emit('update:open', false)"><i class="mdi mdi-close text-lg" /></button>
+        </div>
+        <nav class="min-h-0 flex-1 space-y-7 overflow-y-auto">
+            <section v-for="group in groups" :key="group.title">
+                <h2 class="workspace-nav-label">{{ group.title }}</h2>
+                <div class="space-y-1">
+                    <Link v-for="link in group.links" :key="link.name" :href="route(link.name)" class="workspace-nav-link" :aria-current="active(link) ? 'page' : undefined" @click="emit('update:open', false)">
+                        <i :class="['mdi', link.icon]" aria-hidden="true" />{{ link.title }}
+                    </Link>
+                </div>
+            </section>
         </nav>
-    </transition>
+        <Link :href="route('profile.show')" class="mt-6 flex items-center gap-3 rounded-xl border border-base-300 bg-base-200/50 p-3">
+            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 font-bold text-primary">{{ page.props.auth?.user?.name?.charAt(0) }}</span>
+            <span class="min-w-0"><span class="block truncate text-sm font-semibold">{{ page.props.auth?.user?.name }}</span><span class="ui-muted text-xs">Настройки аккаунта</span></span>
+            <i class="mdi mdi-cog-outline ml-auto text-base-content/50" />
+        </Link>
+    </aside>
 </template>
-
-<style scoped>
-.slide-enter-from{transform:translateX(-100%)}
-.slide-enter-to  {transform:translateX(0)}
-.slide-leave-from{transform:translateX(0)}
-.slide-leave-to  {transform:translateX(-100%)}
-.slide-enter-active,
-.slide-leave-active{transition:transform .3s ease-in-out}
-</style>

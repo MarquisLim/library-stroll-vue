@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Messenger;
 
 use App\Events\MessageSent;
 use App\Http\Controllers\Controller;
+use App\Models\Artwork;
 use App\Models\Conversation;
 use App\Models\MessageAttachment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class MessageController extends Controller
 {
@@ -16,15 +18,18 @@ class MessageController extends Controller
     {
         $this->authorize('view', $conversation);
 
+        $request->validate(['before_id' => 'nullable|integer|min:1']);
+
         $messages = $conversation->messages()
             ->with([
                 'user',
                 'attachments',
                 'reactions',
+                'replyTo' => fn ($query) => $query->where('conversation_id', $conversation->id),
                 'replyTo.user:id,name,profile_photo_path',
                 'replyTo.attachments',
                 'replyTo.artwork:id,title',
-                'replies',
+                'replies' => fn ($query) => $query->where('conversation_id', $conversation->id),
                 'artwork' => function($q) {
                     $q->with(['media','user','likes','collections'])
                         ->withCount('likes');
@@ -34,22 +39,25 @@ class MessageController extends Controller
             ->take(50)
             ->latest('id')->get()->reverse()->values();
 
-        foreach ($messages as $m) {
-            Log::info('Message ID='.$m->id.' replyTo_id=' . ($m->replyTo ? $m->replyTo->id : 'null'));
-        }
         return $messages;
     }
 
     public function store(Request $request, Conversation $conversation)
     {
-        $this->authorize('view', $conversation);
+        $this->authorize('sendMessage', $conversation);
 
         $data = $request->validate([
-            'body'        => 'nullable|string|max:10000',
-            'reply_to_id' => 'nullable|exists:messages,id',
-            'attachments' => 'array',
-            'artwork_id'  => 'nullable|exists:artworks,id',
+            'body' => 'nullable|required_without_all:attachments,artwork_id|string|max:10000',
+            'reply_to_id' => ['nullable', 'integer', Rule::exists('messages', 'id')->where('conversation_id', $conversation->id)],
+            'attachments' => 'sometimes|array|max:20',
+            'attachments.*' => ['required', 'integer', 'distinct', Rule::exists('message_attachments', 'id')
+                ->where('user_id', $request->user()->id)->whereNull('message_id')],
+            'artwork_id' => ['nullable', 'integer', Rule::exists('artworks', 'id')],
         ]);
+
+        if (! empty($data['artwork_id']) && ! Artwork::publiclyVisible()->whereKey($data['artwork_id'])->exists()) {
+            throw ValidationException::withMessages(['artwork_id' => 'Эта работа недоступна для отправки.']);
+        }
 
         $msg = DB::transaction(function () use ($data, $conversation, $request) {
             $msg = $conversation->messages()->create([
@@ -67,9 +75,14 @@ class MessageController extends Controller
                 ]);
 
             if (!empty($data['attachments'])) {
-                MessageAttachment::whereIn('id', $data['attachments'])
+                $attached = MessageAttachment::whereIn('id', $data['attachments'])
+                    ->where('user_id', $request->user()->id)
                     ->whereNull('message_id')
                     ->update(['message_id' => $msg->id]);
+
+                if ($attached !== count($data['attachments'])) {
+                    throw ValidationException::withMessages(['attachments' => 'Одно из вложений уже использовано или недоступно.']);
+                }
             }
 
             $conversation->forceFill(['last_message_id' => $msg->id])->save();

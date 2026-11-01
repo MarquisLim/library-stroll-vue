@@ -2,7 +2,7 @@
     <a
         ref="rootEl"
         :href="draft ? '/studio' : `/artworks/${art.id}`"
-        class="relative group break-inside-avoid block transition-transform duration-300 ease-in-out md:hover:scale-105"
+        class="ui-artwork-card relative group break-inside-avoid block transition-transform duration-300 ease-in-out md:hover:-translate-y-1"
         @mouseenter="hover = true"
         @mouseleave="hover = false"
         @touchstart="mobileHover = true"

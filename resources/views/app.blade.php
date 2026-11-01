@@ -6,9 +6,16 @@
         <meta name="csrf-token" content="{{ csrf_token() }}">
         <title inertia>{{ config('app.name', 'Laravel') }}</title>
 
-        <!-- Fonts -->
-        <link rel="preconnect" href="https://fonts.bunny.net">
-        <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
+        <meta name="theme-color" content="#f7f6f2">
+        <script>
+            (() => {
+                let theme;
+                try { theme = localStorage.getItem('theme'); } catch (_) {}
+                const dark = theme === 'dark' || (theme !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+                document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+            })();
+        </script>
         <link rel="icon" href="{{ asset('favicon.ico') }}?v=2">
         <link rel="apple-touch-icon" href="{{ asset('images/favicons/apple.png') }}">
 

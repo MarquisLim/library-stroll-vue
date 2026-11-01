@@ -1,4 +1,8 @@
 <script setup>
+import UserAvatar from '@/Components/Workspace/UserAvatar.vue'
+import WorkspaceHeader from '@/Components/Workspace/WorkspaceHeader.vue'
+import WorkspaceEmptyState from '@/Components/Workspace/WorkspaceEmptyState.vue'
+import WorkspacePagination from '@/Components/Workspace/WorkspacePagination.vue'
 import { Head, Link, router } from '@inertiajs/vue3'
 import { ref, watch, computed } from 'vue'
 import axios from 'axios'
@@ -10,6 +14,7 @@ import DeleteUserModal  from '@/Components/Admin/DeleteUserModal.vue'
 
 defineOptions({ layout: DashboardLayout })
 
+const roleLabels = { User: 'Участник', Moderator: 'Модератор', Admin: 'Администратор', SuperAdmin: 'Суперадминистратор' }
 const props = defineProps({
     users   : Object,
     roles   : Array,
@@ -68,48 +73,54 @@ function resetFilters() {
 const createOpen = ref(false)
 const editUser   = ref(null)
 const delUser    = ref(null)
+const deleting = ref(false)
+const deleteError = ref('')
+watch(delUser, () => { deleteError.value = '' })
+async function confirmDeleteUser() {
+    if (!delUser.value || deleting.value) return
+    deleting.value = true
+    try { await axios.delete('/admin/users/' + delUser.value.id); delUser.value = null; refresh() }
+    catch { deleteError.value = 'Не удалось удалить пользователя. Попробуйте ещё раз.' }
+    finally { deleting.value = false }
+}
 const refresh    = () => fetch(props.users.current_page)
 </script>
 
 <template>
     <Head title="Пользователи" />
 
-    <div class="p-6 space-y-6 bg-base-100 text-base-content min-h-screen">
+    <div class="workspace-page">
         <!-- HEADER -->
-        <header class="flex justify-between items-center">
-            <h1 class="text-2xl font-bold flex items-center gap-2">
-                <i class="mdi mdi-account-multiple text-primary text-3xl" /> Пользователи
-            </h1>
-            <button class="btn btn-primary btn-sm" @click="createOpen = true">
-                <i class="mdi mdi-plus mr-1" /> Создать
-            </button>
-        </header>
+        <WorkspaceHeader eyebrow="Администрирование" title="Пользователи" :count="props.users.total" description="Участники сообщества, их роли и доступ к возможностям платформы.">
+ <template #actions><button class="btn btn-primary" @click="createOpen = true"><i class="mdi mdi-account-plus-outline" /> Добавить пользователя</button></template>
+ </WorkspaceHeader>
 
         <!-- FILTERS -->
-        <section class="grid md:grid-cols-4 gap-4 items-end">
+        <section class="workspace-toolbar sm:grid-cols-2 xl:grid-cols-4">
             <div>
                 <label class="label"><span class="label-text">Роль</span></label>
-                <select v-model="role" class="select select-bordered w-full">
+                <select aria-label="Фильтр по роли" v-model="role" class="select select-bordered w-full">
                     <option value="">Все</option>
-                    <option v-for="r in props.roles" :key="r" :value="r">{{ r }}</option>
+                    <option v-for="r in props.roles" :key="r" :value="r">{{ roleLabels[r] || r }}</option>
                 </select>
             </div>
 
-            <div class="md:col-span-2 relative">
+            <div class="relative xl:col-span-2">
                 <label class="label"><span class="label-text">Поиск</span></label>
                 <input
                     v-model="search"
                     @keyup.enter="fetch()"
                     placeholder="Имя или email"
+                    aria-label="Поиск пользователей по имени или почте"
                     class="input input-bordered w-full pl-10"
                 />
                 <i class="mdi mdi-magnify absolute left-3 bottom-3 text-base-content/50" />
             </div>
 
-            <div class="flex gap-2">
+            <div class="flex flex-wrap gap-2"><button class="btn btn-primary" @click="fetch()"><i class="mdi mdi-magnify" /> Найти</button>
                 <button
                     v-if="hasActiveFilters"
-                    class="btn btn-sm btn-error mt-auto"
+                    class="btn btn-sm btn-ghost mt-auto"
                     @click="resetFilters()"
                 >
                     <i class="mdi mdi-filter-remove mr-1" /> Сбросить
@@ -117,18 +128,16 @@ const refresh    = () => fetch(props.users.current_page)
             </div>
         </section>
 
-        <!-- MOBILE LIST -->
-        <div class="block md:hidden space-y-4">
+        <WorkspaceEmptyState v-if="!props.users.data.length" title="Пользователи не найдены" description="Проверьте имя, почту или выбранную роль." icon="mdi-account-search-outline" />
+<!-- MOBILE LIST -->
+        <div v-if="props.users.data.length" class="block md:hidden space-y-4">
             <div
                 v-for="(u,i) in props.users.data"
                 :key="u.id"
-                class="card bg-base-200 p-4 space-y-2"
+                class="workspace-mobile-card space-y-3"
             >
                 <div class="flex items-center">
-                    <img
-                        :src="u.profile_photo_url"
-                        class="w-10 h-10 rounded-full mr-3"
-                    />
+                    <UserAvatar :src="u.profile_photo_url" :name="u.name" class="mr-3" />
                     <div class="flex-1">
                         <Link
                             :href="route('user.profile.show', u.id)"
@@ -136,10 +145,10 @@ const refresh    = () => fetch(props.users.current_page)
                         >{{ u.name }}</Link>
                         <div class="text-xs opacity-70">{{ u.email }}</div>
                     </div>
-                    <button class="btn btn-ghost btn-sm btn-square" @click="editUser = u">
+                    <button class="btn btn-ghost btn-sm btn-square" aria-label="Редактировать пользователя" @click="editUser = u">
                         <i class="mdi mdi-pencil" />
                     </button>
-                    <button class="btn btn-ghost btn-sm btn-square text-error" @click="delUser = u">
+                    <button class="btn btn-ghost btn-sm btn-square text-error" aria-label="Удалить пользователя" @click="delUser = u">
                         <i class="mdi mdi-trash-can" />
                     </button>
                 </div>
@@ -152,13 +161,13 @@ const refresh    = () => fetch(props.users.current_page)
               v-for="r in u.roles"
               :key="r.id"
               class="badge badge-sm badge-outline"
-          >{{ r.name }}</span>
+          >{{ roleLabels[r.name] || r.name }}</span>
                 </div>
             </div>
         </div>
 
         <!-- DESKTOP TABLE -->
-        <div class="hidden md:block overflow-x-auto rounded-lg shadow">
+        <div v-if="props.users.data.length" class="workspace-table hidden md:block">
             <table class="table w-full">
                 <thead>
                 <tr>
@@ -187,10 +196,7 @@ const refresh    = () => fetch(props.users.current_page)
                 <tr v-for="(u,i) in props.users.data" :key="u.id" class="hover">
                     <td>{{ props.users.from + i }}</td>
                     <td>
-                        <img
-                            :src="u.profile_photo_url"
-                            class="h-10 w-10 rounded-full object-cover"
-                        />
+                        <UserAvatar :src="u.profile_photo_url" :name="u.name" class="mr-3" />
                     </td>
                     <td class="text-left">
                         <Link
@@ -206,13 +212,13 @@ const refresh    = () => fetch(props.users.current_page)
                   v-for="r in u.roles"
                   :key="r.id"
                   class="badge badge-sm badge-outline mr-1"
-              >{{ r.name }}</span>
+              >{{ roleLabels[r.name] || r.name }}</span>
                     </td>
                     <td class="text-center space-x-1">
-                        <button class="btn btn-ghost btn-sm" @click="editUser = u">
+                        <button class="btn btn-ghost btn-sm" aria-label="Редактировать пользователя" @click="editUser = u">
                             <i class="mdi mdi-pencil" />
                         </button>
-                        <button class="btn btn-ghost btn-sm text-error" @click="delUser = u">
+                        <button class="btn btn-ghost btn-sm text-error" aria-label="Удалить пользователя" @click="delUser = u">
                             <i class="mdi mdi-trash-can" />
                         </button>
                     </td>
@@ -221,22 +227,7 @@ const refresh    = () => fetch(props.users.current_page)
             </table>
         </div>
 
-        <!-- PAGINATION -->
-        <nav v-if="props.users.last_page>1" class="flex justify-center flex-wrap gap-1 pt-4">
-            <Link
-                v-for="l in props.users.links.filter(l => Number(l.label))"
-                :key="l.label"
-                :href="l.url||'#'"
-                preserve-state
-                preserve-scroll
-                :class="[
-          'px-3 py-1 rounded',
-          l.active
-            ? 'bg-primary text-primary-content'
-            : 'bg-base-200 hover:bg-base-300'
-        ]"
-            >{{ l.label }}</Link>
-        </nav>
+        <WorkspacePagination :pagination="props.users" />
     </div>
 
     <!-- MODALS -->
@@ -255,17 +246,7 @@ const refresh    = () => fetch(props.users.current_page)
         @saved="refresh"
     />
 
-    <DeleteUserModal
-        v-if="delUser"
-        :collection="{ name: delUser.name }"
-        @close="delUser = null"
-        @confirmed="() => {
-      axios
-        .delete(`/admin/users/${delUser.id}`)
-        .then(refresh)
-        .finally(() => delUser = null)
-    }"
-    />
+    <DeleteUserModal v-if="delUser" :user="delUser" :processing="deleting" :error="deleteError" @close="!deleting && (delUser = null)" @confirmed="confirmDeleteUser" />
 </template>
 
 <style scoped>

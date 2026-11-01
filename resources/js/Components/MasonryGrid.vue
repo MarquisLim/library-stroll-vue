@@ -13,9 +13,9 @@
         <div class="text-center py-4">
             <div v-if="loading">
                 <div class="loader"></div>
-                <p class="text-gray-500 mt-2">Загружаем…</p>
+                <p class="ui-muted mt-2">Загружаем работы…</p>
             </div>
-            <p v-else-if="noMoreItems" class="text-gray-400">🎉 Вы долистали до конца!</p>
+            <p v-else-if="noMoreItems" class="ui-muted text-sm">Вы посмотрели все работы. Вдохновение обязательно продолжится.</p>
         </div>
 
         <div ref="sentinel"></div>

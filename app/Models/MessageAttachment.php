@@ -3,11 +3,10 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Storage;
 
 class MessageAttachment extends Model
 {
-    protected $fillable = ['disk','path','mime','size','message_id'];
+    protected $fillable = ['disk','path','mime','size','message_id','user_id'];
 
     protected $appends = ['url'];
 
@@ -15,11 +14,11 @@ class MessageAttachment extends Model
 
     public function url(): string
     {
-        return Storage::disk($this->disk)->url($this->path);
+        return route('messenger.attachments.show', $this);
     }
 
     public function getUrlAttribute(): string
     {
-        return Storage::disk($this->disk)->url($this->path);
+        return $this->url();
     }
 }

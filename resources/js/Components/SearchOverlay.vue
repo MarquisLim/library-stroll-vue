@@ -1,12 +1,16 @@
 <script setup>
-import { ref, watch, nextTick } from 'vue'
+import { ref, nextTick } from 'vue'
 import { Link, router } from '@inertiajs/vue3'
 import axios from 'axios'
 import { MagnifyingGlassIcon } from '@heroicons/vue/24/outline'
+import { useSearchSuggestions } from '@/composables/useSearchSuggestions'
 
 const q        = ref('')
 const type     = ref('all')
-const rows     = ref({ artworks: [], authors: [], tags: [] })
+const { rows, error: searchError } = useSearchSuggestions(q, type, async (query, kind, signal) => {
+    const { data } = await axios.get(route('search.suggestions'), { params: { q: query, type: kind }, signal })
+    return data.suggestions
+})
 
 const modalRef = ref(null)
 const inputRef = ref(null)
@@ -27,18 +31,6 @@ function reset() {
     type.value = 'all'
     rows.value = { artworks: [], authors: [], tags: [] }
 }
-
-async function fetch() {
-    if (!q.value.trim()) { reset(); return }
-    const { data } = await axios.get(route('search.suggestions'), {
-        params: { q: q.value, type: type.value }
-    })
-    rows.value.artworks = data.suggestions.filter(i => i.type === 'artwork')
-    rows.value.authors  = data.suggestions.filter(i => i.type === 'author')
-    rows.value.tags     = data.suggestions.filter(i => i.type === 'tag')
-}
-
-watch(q, fetch)
 
 function open() {
     reset()
@@ -67,7 +59,7 @@ defineExpose({ open })
 
 <template>
     <Teleport to="body">
-        <dialog ref="modalRef" class="modal items-start pt-safe-t">
+        <dialog ref="modalRef" class="modal items-start pt-safe-t" aria-label="Поиск по LibraryStroll" @close="reset">
             <!-- Добавляем боковые отступы на мобильных (mx-4) и небольшой верхний (mt-4) -->
             <div class="modal-box w-full max-w-3xl max-h-[90vh] sm:max-h-[80vh] p-0 flex flex-col overflow-hidden mx-4 mt-4">
                 <!-- HEADER -->
@@ -76,15 +68,20 @@ defineExpose({ open })
                     <input
                         v-model="q"
                         ref="inputRef"
-                        class="flex-1 input input-lg input-primary text-lg sm:text-2xl"
-                        placeholder="Поиск..."
+                        class="min-w-0 flex-1 input input-lg input-primary text-base sm:text-xl"
+                        aria-label="Найти работы, авторов или теги"
+                        placeholder="Что вас вдохновляет?"
                         @keydown.enter.prevent="goSearch"
                     />
                     <form method="dialog">
-                        <button class="btn btn-sm btn-circle btn-ghost">✕</button>
+                        <button class="btn btn-sm btn-circle btn-ghost" aria-label="Закрыть поиск">✕</button>
                     </form>
                 </div>
 
+                <div v-if="!q.trim()" class="px-6 py-10 text-center">
+                    <p class="text-lg font-semibold">Начните с того, что вам близко</p>
+                    <p class="ui-muted mx-auto mt-3 max-w-md text-sm">Название работы, имя автора или любимая тема — вдохновение найдётся.</p>
+                </div>
                 <transition name="fade">
                     <div v-if="q.trim()" class="flex-1 flex flex-col overflow-hidden">
                         <!-- TABS -->
@@ -96,7 +93,7 @@ defineExpose({ open })
                                 :class="type === t.value
                   ? 'border-b-2 border-primary text-primary'
                   : 'hover:bg-base-200'"
-                                @click="type = t.value; fetch()"
+                                @click="type = t.value"
                             >
                                 {{ t.label }}
                             </button>
@@ -104,6 +101,7 @@ defineExpose({ open })
 
                         <!-- RESULTS -->
                         <div class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-8">
+                            <p v-if="searchError" role="alert" class="text-error text-sm">{{ searchError }}</p>
                             <!-- Артворки -->
                             <template v-if="showBlock('artwork')">
                                 <h3 class="block-title">Артворки</h3>

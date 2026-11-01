@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers\Messenger;
 
-use App\Events\MessagesSeen;
 use App\Http\Controllers\Controller;
 use App\Models\Conversation;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class ReadMarkerController extends Controller
 {
@@ -13,7 +13,10 @@ class ReadMarkerController extends Controller
     {
         $this->authorize('view', $conversation);
 
-        $msgId = (int) $request->input('message_id');
+        $data = $request->validate([
+            'message_id' => ['nullable', 'integer', Rule::exists('messages', 'id')->where('conversation_id', $conversation->id)],
+        ]);
+        $msgId = $data['message_id'] ?? $conversation->last_message_id;
 
         $conversation->users()->updateExistingPivot(
             $request->user()->id,

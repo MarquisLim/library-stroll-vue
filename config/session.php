@@ -20,6 +20,9 @@ return [
 
     'driver' => env('SESSION_DRIVER', 'redis'),
 
+    // Preserve sessions created before the Laravel 13 upgrade.
+    'serialization' => 'php',
+
     /*
     |--------------------------------------------------------------------------
     | Session Lifetime
