@@ -1,209 +1,257 @@
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
-import axios from 'axios'
-import { Link, usePage } from '@inertiajs/vue3'
-import { ChatBubbleOvalLeftEllipsisIcon, EllipsisHorizontalIcon } from '@heroicons/vue/24/outline'
-import ComplaintModal from '@/Components/ComplaintModal.vue'
+import { computed, ref, onMounted, nextTick } from "vue";
+import axios from "axios";
+import { Link, usePage } from "@inertiajs/vue3";
+import {
+    ChatBubbleOvalLeftEllipsisIcon,
+    EllipsisHorizontalIcon,
+} from "@heroicons/vue/24/outline";
+import ComplaintModal from "@/Components/ComplaintModal.vue";
 
 const props = defineProps({
     artworkId: Number,
     artworkOwner: Number,
-    complaintTypes: Array
-})
-const emit = defineEmits(['updateCommentsCount'])
+    complaintTypes: Array,
+});
+const emit = defineEmits(["updateCommentsCount"]);
 
-let page = 1
-const comments = ref([])
-const busy = ref(false)
-const hasMore = ref(true)
+let page = 1;
+const comments = ref([]);
+const busy = ref(false);
+const hasMore = ref(true);
+const loadError = ref("");
+const total = ref(0);
+const sending = ref(false);
 
-const newComment = ref('')
-const newError = ref('')
+const newComment = ref("");
+const newError = ref("");
 
-const replyText = ref({})
-const replyError = ref({})
-const isReplying = ref({})
-const replyTarget = ref({})
+const replyText = ref({});
+const replyError = ref({});
+const isReplying = ref({});
+const replyTarget = ref({});
 
-const expanded = ref({})
+const expanded = ref({});
 
-const isAuth = usePage().props.auth.user
+const pageData = usePage();
+const isAuth = computed(() => !!pageData.props.auth.user);
 
-const showComplaint = ref(false)
-const complaintTarget = ref(null)
+const showComplaint = ref(false);
+const complaintTarget = ref(null);
 
 function openComplaint(id) {
-    complaintTarget.value = id
-    showComplaint.value = true
+    complaintTarget.value = id;
+    showComplaint.value = true;
 }
 
 function renderText(t) {
-    const esc = t
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
+    const esc = t.replace(/&/g, "&amp;").replace(/</g, "&lt;");
     return esc
-        .replace(/(https?:\/\/[^\s]+)/g,
-            `<a href="$1" target="_blank" class="text-primary hover:underline">$1</a>`)
-        .replace(/@([\p{L}\w]+)/gu,
-            `<a href="/profile/$1" class="text-primary hover:underline">@$1</a>`)
-        .replace(/\n/g, '<br>')
+        .replace(
+            /(https?:\/\/[^\s]+)/g,
+            `<a href="$1" target="_blank" class="text-primary hover:underline">$1</a>`
+        )
+        .replace(
+            /@([\p{L}\w]+)/gu,
+            `<a href="/profile/$1" class="text-primary hover:underline">@$1</a>`
+        )
+        .replace(/\n/g, "<br>");
 }
 function toggleExpand(id) {
-    expanded.value[id] = !expanded.value[id]
+    expanded.value[id] = !expanded.value[id];
 }
 
 function toggleReply(id, userName) {
-    Object.keys(isReplying.value).forEach(k => (isReplying.value[k] = false))
-    isReplying.value[id]    = true
-    replyTarget.value[id]   = userName
-    replyText.value[id]     = `@${userName} `      // ← вставляем упоминание
-    nextTick(() => document.getElementById(`reply-${id}`)?.focus())
+    Object.keys(isReplying.value).forEach((k) => (isReplying.value[k] = false));
+    isReplying.value[id] = true;
+    replyTarget.value[id] = userName;
+    replyText.value[id] = `@${userName} `; // ← вставляем упоминание
+    nextTick(() => document.getElementById(`reply-${id}`)?.focus());
 }
 
 function formatDate(ts) {
-    return new Date(ts).toLocaleString('ru-RU', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-    })
+    return new Date(ts).toLocaleString("ru-RU", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+    });
 }
 
 function hydrateReplies(list) {
-    list.forEach(root => {
-        root.replies?.forEach(r => {
-            r.parentName = r.parent?.user?.name
-        })
-    })
+    list.forEach((root) => {
+        root.replies?.forEach((r) => {
+            r.parentName = r.parent?.user?.name;
+        });
+    });
 }
 
 function loadComments(append = true) {
-    if (busy.value || !hasMore.value) return Promise.resolve()
+    if (busy.value || !hasMore.value) return Promise.resolve();
 
-    busy.value = true
+    busy.value = true;
+    loadError.value = "";
 
     return axios
         .get(`/artworks/${props.artworkId}/comments`, { params: { page } })
         .then(({ data }) => {
-            hydrateReplies(data.comments)
+            hydrateReplies(data.comments);
 
             if (append) {
-                comments.value.push(...data.comments)
+                comments.value.push(...data.comments);
             } else {
-                comments.value = [...data.comments]
+                comments.value = [...data.comments];
             }
 
-            hasMore.value = data.hasMore
-            page++
-            emit('updateCommentsCount', data.total)
+            hasMore.value = data.hasMore;
+            total.value = data.total;
+            page++;
+            emit("updateCommentsCount", data.total);
         })
-        .finally(() => (busy.value = false))
+        .catch(() => {
+            loadError.value =
+                "Не удалось загрузить комментарии. Попробуйте ещё раз.";
+        })
+        .finally(() => (busy.value = false));
 }
 
 async function loadUntilCommentFound(targetId) {
-    const maxTries = 10 // safeguard
-    let tries = 0
+    const maxTries = 10; // safeguard
+    let tries = 0;
 
     while (tries++ < maxTries && hasMore.value) {
-        await loadComments()
-        await nextTick()
+        await loadComments();
+        if (loadError.value) return false;
+        await nextTick();
 
-        const el = document.getElementById(`comment-${targetId}`)
+        const el = document.getElementById(`comment-${targetId}`);
         if (el) {
-            el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-            el.classList.add('ring', 'ring-primary', 'rounded')
-            setTimeout(() => el.classList.remove('ring', 'ring-primary'), 1500)
-            return true
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+            el.classList.add("ring", "ring-primary", "rounded");
+            setTimeout(() => el.classList.remove("ring", "ring-primary"), 1500);
+            return true;
         }
     }
 
-    console.warn('Комментарий не найден или достигнут лимит загрузок')
-    return false
+    console.warn("Комментарий не найден или достигнут лимит загрузок");
+    return false;
 }
 
 function scrollToHashIfNeeded() {
-    const hash = window.location.hash
-    if (hash.startsWith('#comment-')) {
+    const hash = window.location.hash;
+    if (hash.startsWith("#comment-")) {
         nextTick(() => {
-            const el = document.querySelector(hash)
+            const el = document.querySelector(hash);
             if (el) {
-                el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                el.classList.add('ring', 'ring-primary', 'rounded')
-                setTimeout(() => el.classList.remove('ring', 'ring-primary'), 1500)
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+                el.classList.add("ring", "ring-primary", "rounded");
+                setTimeout(
+                    () => el.classList.remove("ring", "ring-primary"),
+                    1500
+                );
             }
-        })
+        });
     }
 }
 
 onMounted(() => {
-    const hash = window.location.hash
-    if (hash.startsWith('#comment-')) {
-        const commentId = parseInt(hash.replace('#comment-', ''), 10)
-        loadUntilCommentFound(commentId)
+    const hash = window.location.hash;
+    if (hash.startsWith("#comment-")) {
+        const commentId = parseInt(hash.replace("#comment-", ""), 10);
+        loadUntilCommentFound(commentId).catch(() => {
+            loadError.value = "Не удалось найти комментарий.";
+        });
     } else {
-        loadComments()
+        loadComments();
     }
-})
+});
 
 function pushReplyIntoTree(reply) {
     const root =
-        comments.value.find(c => c.id === reply.parent_id) ||
-        comments.value.find(c => c.replies?.some(r => r.id === reply.parent_id))
+        comments.value.find((c) => c.id === reply.parent_id) ||
+        comments.value.find((c) =>
+            c.replies?.some((r) => r.id === reply.parent_id)
+        );
     if (root) {
-        root.replies = root.replies || []
-        root.replies.unshift(reply)
+        root.replies = root.replies || [];
+        root.replies.unshift(reply);
     }
 }
 
 function send(parentId = null) {
-    const txt = (parentId ? replyText.value[parentId] : newComment.value).trim()
-    if (!txt) return
+    if (sending.value) return;
+    const txt = (
+        parentId ? replyText.value[parentId] : newComment.value
+    ).trim();
+    if (!txt) return;
     if (txt.length > 1000) {
-        ;(parentId ? replyError.value[parentId] : newError).value = 'Не более 1000 символов'
-        return
+        if (parentId) replyError.value[parentId] = "Не более 1000 символов";
+        else newError.value = "Не более 1000 символов";
+        return;
     }
     const url = parentId
         ? `/artworks/comments/${parentId}/reply`
-        : `/artworks/${props.artworkId}/comments`
-    axios.post(url, { text: txt }).then(({ data }) => {
-        if (parentId) {
-            data.reply.parentName = data.reply.parent.user.name
-            pushReplyIntoTree(data.reply)
-            isReplying.value[parentId] = false
-            replyText.value[parentId] = ''
-            replyError.value[parentId] = ''
-        } else {
-            comments.value.unshift(data.comment)
-            newComment.value = ''
-            newError.value = ''
-        }
-        emit('updateCommentsCount', comments.value.length)
-    })
+        : `/artworks/${props.artworkId}/comments`;
+    sending.value = true;
+    axios
+        .post(url, { text: txt })
+        .then(({ data }) => {
+            if (parentId) {
+                data.reply.parentName = data.reply.parent.user.name;
+                pushReplyIntoTree(data.reply);
+                isReplying.value[parentId] = false;
+                replyText.value[parentId] = "";
+                replyError.value[parentId] = "";
+            } else {
+                comments.value.unshift(data.comment);
+                newComment.value = "";
+                newError.value = "";
+                total.value++;
+            }
+            emit("updateCommentsCount", total.value);
+        })
+        .catch((error) => {
+            const message =
+                error.response?.data?.errors?.text?.[0] ||
+                "Не удалось отправить комментарий. Попробуйте ещё раз.";
+            if (parentId) replyError.value[parentId] = message;
+            else newError.value = message;
+        })
+        .finally(() => {
+            sending.value = false;
+        });
 }
 </script>
 
 <template>
-    <div class="bg-base-200 dark:bg-base-800 rounded-xl space-y-6">
+    <div class="min-w-0 space-y-6">
         <div class="flex items-center gap-2">
             <ChatBubbleOvalLeftEllipsisIcon class="w-6 h-6 text-primary" />
-            <h3 class="text-xl font-semibold">Комментарии ({{ comments.length }})</h3>
+            <h3 class="text-lg font-bold">Комментарии ({{ total }})</h3>
         </div>
 
         <div v-if="isAuth" class="space-y-1">
-      <textarea
-          v-model="newComment"
-          rows="3"
-          maxlength="1000"
-          class="textarea textarea-bordered w-full resize-y"
-          placeholder="Добавить комментарий…"
-          @keydown.enter.prevent="send()"
-      />
+            <textarea
+                v-model="newComment"
+                rows="3"
+                maxlength="1000"
+                class="textarea textarea-bordered w-full resize-y"
+                placeholder="Добавить комментарий…"
+                aria-label="Добавить комментарий"
+                @keydown.enter.prevent="send()"
+            />
             <div class="flex justify-between text-sm">
                 <span class="text-error">{{ newError }}</span>
                 <span>{{ newComment.length }}/1000</span>
             </div>
-            <button class="btn btn-primary" @click="send()">Отправить</button>
+            <button
+                class="btn btn-primary"
+                :disabled="sending || !newComment.trim()"
+                @click="send()"
+            >
+                {{ sending ? "Отправляем…" : "Отправить" }}
+            </button>
         </div>
 
         <div v-if="busy && page === 1" class="flex justify-center py-10">
@@ -211,45 +259,87 @@ function send(parentId = null) {
         </div>
 
         <div v-if="comments.length" class="space-y-6">
-            <div v-for="c in comments" :key="c.id" :id="`comment-${c.id}`" class="space-y-4">
+            <div
+                v-for="c in comments"
+                :key="c.id"
+                :id="`comment-${c.id}`"
+                class="space-y-4"
+            >
                 <div class="flex gap-3">
-                    <img :src="c.user.profile_photo_url" class="w-9 h-9 rounded-full object-cover" />
+                    <img
+                        :src="c.user.profile_photo_url"
+                        class="w-9 h-9 rounded-full object-cover"
+                    />
                     <div class="flex-1">
                         <div class="flex items-center gap-2">
-                            <Link :href="`/profile/${c.user.id}`" class="font-semibold hover:underline">
+                            <Link
+                                :href="`/profile/${c.user.id}`"
+                                class="font-semibold hover:underline"
+                            >
                                 {{ c.user.name }}
                             </Link>
-                            <span v-if="c.user.id === props.artworkOwner" class="badge badge-sm badge-outline">Автор</span>
-                            <span class="text-xs opacity-60">{{ formatDate(c.created_at) }}</span>
+                            <span
+                                v-if="c.user.id === props.artworkOwner"
+                                class="badge badge-sm badge-outline"
+                                >Автор</span
+                            >
+                            <span class="text-xs opacity-60">{{
+                                formatDate(c.created_at)
+                            }}</span>
                             <div class="dropdown dropdown-end ml-auto">
-                                <button tabindex="0" class="btn btn-xs btn-ghost">
+                                <button
+                                    tabindex="0"
+                                    class="btn btn-xs btn-ghost"
+                                >
                                     <EllipsisHorizontalIcon class="w-4 h-4" />
                                 </button>
-                                <ul tabindex="0" class="dropdown-content menu p-1 shadow bg-base-100 rounded-box w-28">
+                                <ul
+                                    tabindex="0"
+                                    class="dropdown-content menu p-1 shadow bg-base-100 rounded-box w-28"
+                                >
                                     <li>
-                                        <button @click="openComplaint(c.id)">Пожаловаться</button>
+                                        <button @click="openComplaint(c.id)">
+                                            Пожаловаться
+                                        </button>
                                     </li>
                                 </ul>
                             </div>
                         </div>
-                        <p v-html="renderText(c.text)" :class="expanded[c.id] ? '' : 'line-clamp-3'" class="mt-1" />
+                        <p
+                            v-html="renderText(c.text)"
+                            :class="expanded[c.id] ? '' : 'line-clamp-3'"
+                            class="mt-1"
+                        />
                         <div class="flex items-center gap-2 mt-1">
                             <button
                                 v-if="c.text.length > 200"
                                 class="link link-primary text-xs"
                                 @click="toggleExpand(c.id)"
-                            >{{ expanded[c.id] ? 'Свернуть' : 'Читать полностью' }}</button>
+                            >
+                                {{
+                                    expanded[c.id]
+                                        ? "Свернуть"
+                                        : "Читать полностью"
+                                }}
+                            </button>
                             <button
                                 v-if="isAuth"
                                 class="text-primary text-xs"
                                 @click="toggleReply(c.id, c.user.name)"
-                            >Ответить</button>
+                            >
+                                Ответить
+                            </button>
                         </div>
                     </div>
                 </div>
 
-                <div v-if="isReplying[c.id]" class="md:pl-12 pl-0 space-y-1 w-full">
-                    <div class="text-sm opacity-60">↳ Ответ {{ replyTarget[c.id] }}</div>
+                <div
+                    v-if="isReplying[c.id]"
+                    class="md:pl-12 pl-0 space-y-1 w-full"
+                >
+                    <div class="text-sm opacity-60">
+                        ↳ Ответ {{ replyTarget[c.id] }}
+                    </div>
                     <textarea
                         :id="`reply-${c.id}`"
                         v-model="replyText[c.id]"
@@ -263,59 +353,128 @@ function send(parentId = null) {
                         <span class="text-error">{{ replyError[c.id] }}</span>
                         <span>{{ replyText[c.id]?.length || 0 }}/1000</span>
                     </div>
-                    <button class="btn btn-sm btn-primary" @click="send(c.id)">Отправить</button>
+                    <button class="btn btn-sm btn-primary" @click="send(c.id)">
+                        Отправить
+                    </button>
                 </div>
 
                 <div v-if="c.replies?.length" class="md:pl-12 pl-0">
                     <details class="group space-y-4">
                         <summary class="cursor-pointer text-sm opacity-60">
-                            {{ c.replies.length }} {{ c.replies.length > 1 ? 'ответа' : 'ответ' }}
+                            {{ c.replies.length }}
+                            {{ c.replies.length > 1 ? "ответа" : "ответ" }}
                         </summary>
                         <div class="mt-2 space-y-4">
-                            <div v-for="r in c.replies" :key="r.id" class="space-y-2" :id="'comment-' + r.id">
+                            <div
+                                v-for="r in c.replies"
+                                :key="r.id"
+                                class="space-y-2"
+                                :id="'comment-' + r.id"
+                            >
                                 <div class="flex gap-3">
-                                    <img :src="r.user.profile_photo_url" class="w-8 h-8 rounded-full object-cover" />
+                                    <img
+                                        :src="r.user.profile_photo_url"
+                                        class="w-8 h-8 rounded-full object-cover"
+                                    />
                                     <div class="flex-1">
-                                        <div class="flex items-center gap-2 text-sm">
-                                            <Link :href="`/profile/${r.user.id}`" class="font-semibold hover:underline">
+                                        <div
+                                            class="flex items-center gap-2 text-sm"
+                                        >
+                                            <Link
+                                                :href="`/profile/${r.user.id}`"
+                                                class="font-semibold hover:underline"
+                                            >
                                                 {{ r.user.name }}
                                             </Link>
-                                            <span v-if="r.user.id === props.artworkOwner" class="badge badge-xs badge-outline">Автор</span>
-                                            <span class="text-xs opacity-60">{{ formatDate(r.created_at) }}</span>
-                                            <div class="dropdown dropdown-end ml-auto">
-                                                <button tabindex="0" class="btn btn-xs btn-ghost">
-                                                    <EllipsisHorizontalIcon class="w-4 h-4" />
+                                            <span
+                                                v-if="
+                                                    r.user.id ===
+                                                    props.artworkOwner
+                                                "
+                                                class="badge badge-xs badge-outline"
+                                                >Автор</span
+                                            >
+                                            <span class="text-xs opacity-60">{{
+                                                formatDate(r.created_at)
+                                            }}</span>
+                                            <div
+                                                class="dropdown dropdown-end ml-auto"
+                                            >
+                                                <button
+                                                    tabindex="0"
+                                                    class="btn btn-xs btn-ghost"
+                                                >
+                                                    <EllipsisHorizontalIcon
+                                                        class="w-4 h-4"
+                                                    />
                                                 </button>
-                                                <ul tabindex="0" class="dropdown-content menu p-1 shadow bg-base-100 rounded-box w-28">
+                                                <ul
+                                                    tabindex="0"
+                                                    class="dropdown-content menu p-1 shadow bg-base-100 rounded-box w-28"
+                                                >
                                                     <li>
-                                                        <button @click="openComplaint(r.id)">Пожаловаться</button>
+                                                        <button
+                                                            @click="
+                                                                openComplaint(
+                                                                    r.id
+                                                                )
+                                                            "
+                                                        >
+                                                            Пожаловаться
+                                                        </button>
                                                     </li>
                                                 </ul>
                                             </div>
                                         </div>
-                                        <div class="text-xs opacity-60">↳ к {{ r.parentName }}</div>
+                                        <div class="text-xs opacity-60">
+                                            ↳ к {{ r.parentName }}
+                                        </div>
                                         <p
                                             v-html="renderText(r.text)"
-                                            :class="expanded[r.id] ? '' : 'line-clamp-3'"
+                                            :class="
+                                                expanded[r.id]
+                                                    ? ''
+                                                    : 'line-clamp-3'
+                                            "
                                             class="mt-1 text-sm"
                                         />
-                                        <div class="flex items-center gap-2 mt-1">
+                                        <div
+                                            class="flex items-center gap-2 mt-1"
+                                        >
                                             <button
                                                 v-if="r.text.length > 200"
                                                 class="link link-primary text-xxs"
                                                 @click="toggleExpand(r.id)"
-                                            >{{ expanded[r.id] ? 'Свернуть' : 'Читать полностью' }}</button>
+                                            >
+                                                {{
+                                                    expanded[r.id]
+                                                        ? "Свернуть"
+                                                        : "Читать полностью"
+                                                }}
+                                            </button>
                                             <button
                                                 v-if="isAuth"
                                                 class="text-primary text-xs"
-                                                @click="toggleReply(r.id, r.user.name)"
-                                            >Ответить</button>
+                                                @click="
+                                                    toggleReply(
+                                                        r.id,
+                                                        r.user.name
+                                                    )
+                                                "
+                                            >
+                                                Ответить
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div v-if="isReplying[r.id]" class="md:pl-16 pl-0 space-y-1 w-full">
-                                    <div class="text-sm opacity-60">↳ Ответ {{ replyTarget[r.id] }}</div>
+                                <div
+                                    v-if="isReplying[r.id]"
+                                    class="md:pl-16 pl-0 space-y-1 w-full"
+                                >
+                                    <div class="text-sm opacity-60">
+                                        ↳ Ответ {{ replyTarget[r.id] }}
+                                    </div>
                                     <textarea
                                         :id="`reply-${r.id}`"
                                         v-model="replyText[r.id]"
@@ -326,10 +485,21 @@ function send(parentId = null) {
                                         @keydown.enter.prevent="send(r.id)"
                                     />
                                     <div class="flex justify-between text-sm">
-                                        <span class="text-error">{{ replyError[r.id] }}</span>
-                                        <span>{{ replyText[r.id]?.length || 0 }}/1000</span>
+                                        <span class="text-error">{{
+                                            replyError[r.id]
+                                        }}</span>
+                                        <span
+                                            >{{
+                                                replyText[r.id]?.length || 0
+                                            }}/1000</span
+                                        >
                                     </div>
-                                    <button class="btn btn-sm btn-primary" @click="send(r.id)">Отправить</button>
+                                    <button
+                                        class="btn btn-sm btn-primary"
+                                        @click="send(r.id)"
+                                    >
+                                        Отправить
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -338,13 +508,40 @@ function send(parentId = null) {
             </div>
         </div>
 
-        <p v-else-if="!busy" class="opacity-60">Нет комментариев.</p>
+        <p
+            v-else-if="!busy && !loadError"
+            class="rounded-2xl bg-base-200/60 px-5 py-8 text-center text-sm text-base-content/55"
+        >
+            Здесь пока тихо.
+            {{
+                isAuth
+                    ? "Поделитесь первым впечатлением о работе."
+                    : "Войдите, чтобы оставить первый комментарий."
+            }}
+        </p>
+
+        <div
+            v-if="loadError"
+            class="rounded-xl border border-error/20 p-4 text-sm"
+            role="alert"
+        >
+            <p>{{ loadError }}</p>
+            <button
+                class="mt-2 font-semibold text-primary"
+                :disabled="busy"
+                @click="loadComments()"
+            >
+                Повторить загрузку
+            </button>
+        </div>
 
         <button
             v-if="hasMore && !busy"
             class="btn btn-outline w-full"
             @click="loadComments"
-        >Показать ещё</button>
+        >
+            Показать ещё
+        </button>
 
         <ComplaintModal
             :show="showComplaint"
@@ -367,7 +564,7 @@ function send(parentId = null) {
     display: none;
 }
 .group > summary:before {
-    content: '▾';
+    content: "▾";
     margin-right: 0.25rem;
     transition: transform 0.2s;
 }

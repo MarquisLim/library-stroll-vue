@@ -6,6 +6,7 @@ import Footer from '@/Components/Footer.vue'
 import AuthModal from '@/Components/AuthModal.vue'
 import SearchOverlay from '@/Components/SearchOverlay.vue'
 import NotificationBell from '@/Components/Notifications/NotificationBell.vue'
+import UserAvatar from '@/Components/Workspace/UserAvatar.vue'
 import {
     HomeIcon, PlusCircleIcon,
     SunIcon, MoonIcon, Bars3Icon,
@@ -112,14 +113,14 @@ function logout() {
     <div class="ui-app-shell min-h-screen flex flex-col">
         <Head :title="title"/>
         <nav aria-label="Основная навигация" class="ui-site-header sticky top-0 z-40 pt-safe-t">
-            <div class="relative flex items-center h-16 px-4 sm:px-8">
+            <div class="relative mx-auto flex h-16 w-full max-w-screen-2xl items-center gap-2 px-4 sm:gap-4 sm:px-8 lg:px-10">
                 <!-- Left -->
-                <div class="flex items-center gap-4">
+                <div class="flex shrink-0 items-center gap-4">
 
                     <!-- Logo -->
-                    <Link :href="route('home')" class="ui-brand hidden lg:inline-flex" aria-label="LibraryStroll — главная">
+                    <Link :href="route('home')" class="ui-brand" aria-label="LibraryStroll — главная">
                         <span class="ui-brand-mark"><PhotoIcon class="h-5 w-5" /></span>
-                        <span class="text-lg">Library<span class="text-primary">Stroll</span></span>
+                        <span class="hidden text-lg xl:inline">Library<span class="text-primary">Stroll</span></span>
                     </Link>
 
                     <!-- Навигация -->
@@ -134,34 +135,34 @@ function logout() {
                 </div>
 
                 <!-- Center -->
-                <div class="hidden lg:flex flex-1 justify-center px-2">
+                <div class="hidden min-w-0 flex-1 justify-center lg:flex">
                     <button type="button"
                         class="ui-search-trigger w-full max-w-lg"
                         @click="searchModal?.open()"
                     >
                         <MagnifyingGlassIcon class="h-5 w-5 shrink-0" />
-                        <span>Работы, авторы, вдохновение…</span>
+                        <span class="truncate">Работы, авторы, вдохновение…</span>
                     </button>
                 </div>
 
                 <SearchOverlay ref="searchModal" />
-                <div class="block lg:hidden w-full pe-4 py-2">
+                <div class="min-w-0 flex-1 py-2 lg:hidden">
                     <button type="button"
                         class="ui-search-trigger w-full"
                         @click="searchModal?.open()"
                     >
                         <MagnifyingGlassIcon class="h-5 w-5 shrink-0" />
-                        <span>Поиск работ…</span>
+                        <span class="truncate">Поиск работ…</span>
                     </button>
                 </div>
                 <!-- Right -->
-                <div class="flex items-center ml-auto space-x-2">
+                <div class="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
                     <button type="button" @click="toggleTheme" class="ui-icon-button" :aria-label="isDark ? 'Включить светлую тему' : 'Включить тёмную тему'" :aria-pressed="isDark">
                         <component :is="isDark?SunIcon:MoonIcon" class="w-6 h-6"/>
                     </button>
 
-                    <NotificationBell />
-                    <Link :href="route('messenger.index')" class="ui-icon-button relative" aria-label="Сообщения">
+                    <NotificationBell v-if="isAuth" />
+                    <Link v-if="isAuth" :href="route('messenger.index')" class="ui-icon-button relative" aria-label="Сообщения">
                         <ChatBubbleLeftIcon class="w-6 h-6"/>
                         <span v-if="msgUnread" class="badge badge-xs badge-primary absolute -top-0.5 -right-0.5">
                     {{ msgUnread }}
@@ -170,9 +171,7 @@ function logout() {
 
                     <template v-if="isAuth">
                         <div class="dropdown dropdown-end hidden lg:block">
-                            <div tabindex="0" role="button">
-                                <img :src="user.profile_photo_url" class="w-8 h-8 rounded-full object-cover" />
-                            </div>
+                            <button type="button" class="ui-icon-button" aria-label="Меню профиля"><UserAvatar :src="user.profile_photo_url" :name="user.name" :size="32" /></button>
                             <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-50 w-64 p-2 shadow-md">
                                 <li>
                                     <a :href="route('dashboard')" class="flex items-center gap-2">
@@ -216,7 +215,7 @@ function logout() {
 
                     <button
                         v-else
-                        class="btn btn-primary btn-sm hidden lg:inline-flex"
+                        class="btn btn-primary btn-sm"
                         @click="actions.showAuthModal = true"
                     >
                         Войти
@@ -251,7 +250,7 @@ function logout() {
                                       stroke-width="2" d="M15 19l-7-7 7-7" />
                             </svg>
                         </label>
-                        <img :src="user.profile_photo_url" class="w-10 h-10 rounded-full object-cover" />
+                        <UserAvatar :src="user.profile_photo_url" :name="user.name" :size="40" />
                         <span class="font-semibold truncate">{{ user.name }}</span>
                     </div>
                     <Link :href="route('dashboard')" class="flex items-center gap-2 py-1">
@@ -308,7 +307,7 @@ function logout() {
                    :class="{
            'dock-active': ['dashboard', 'profile.show', 'profile'].includes(route().current()),
          }">
-                <img :src="user.profile_photo_url" class="w-6 h-6 rounded-full object-cover" />
+                <UserAvatar :src="user.profile_photo_url" :name="user.name" :size="24" />
                 <span class="dock-label text-xs">Меню</span>
             </label>
         </div>
