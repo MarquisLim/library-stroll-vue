@@ -2,6 +2,8 @@
 
 Проект использует **Laravel 13, PHP 8.5, Inertia 2 и Vue 3**. Версии зависимостей закреплены в `composer.lock` и `package-lock.json`; для установки используйте `install` / `npm ci`, а не повторное обновление пакетов.
 
+Что изменилось и как пользоваться обновлением от **02.11.2026**: [обновление проекта, студия, администрация и мониторинг AI](docs/ru/2026-11-02-project-update-and-usage.md).
+
 Docker (PowerShell, из корня проекта):
 
 ```powershell
@@ -37,7 +39,7 @@ php artisan test
 
 Для Admin и SuperAdmin доступен раздел **Администрирование → AI и векторы** (`/admin/ai`). Он показывает статусы опубликованных работ, этапы активных запусков, последние 20 попыток, ошибки, модели Ollama, состояние коллекции Qdrant и счётчики очереди. Вкладка «Как это работает» объясняет цепочку. Тест поиска действительно вызывает embedding-модель и Qdrant и возвращает только публичные работы.
 
-После обновления выполните `php artisan migrate`, обновите/перезапустите Python AI-сервис (добавлен защищённый `/api/v1/diagnostics`) и перезапустите Laravel workers: `php artisan queue:restart`. Для фоновой обработки настройте `QUEUE_CONNECTION=redis` или `database`, `AI_SERVICE_ENABLED=true`, адрес и общий ключ AI API. Запускайте worker с очередью из `AI_QUEUE` (по умолчанию `ai`), например:
+После обновления выполните `php artisan migrate`, обновите/перезапустите Python AI-сервис (добавлен защищённый `/api/v1/diagnostics`) и перезапустите Laravel workers: `php artisan queue:restart`. Для фоновой обработки настройте `QUEUE_CONNECTION=redis` или `database`, `AI_SERVICE_ENABLED=true`, адрес и общий ключ AI API. Запускайте worker с очередью из `AI_PROCESSING_QUEUE` (по умолчанию `ai`), например:
 
 ```sh
 php artisan queue:work --queue=ai --timeout=600 --tries=3
