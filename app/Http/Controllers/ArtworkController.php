@@ -19,7 +19,7 @@ class ArtworkController extends Controller
 {
     public function show($id)
     {
-        $artwork = Artwork::with(['media', 'user', 'tags', 'likes', 'collections'])
+        $artwork = Artwork::with(['media', 'user', 'tags', 'likes', 'collections', 'provenance'])
             ->where('is_published', true)
             ->withCount('comments', 'likes')
             ->findOrFail($id);

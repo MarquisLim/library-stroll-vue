@@ -25,6 +25,9 @@ class ArtworkImportTest extends TestCase
         parent::setUp();
         Storage::fake('public');
         Http::preventStrayRequests();
+        $this->partialMock(\App\Services\DemoContent\MediaUrlPolicy::class, function ($mock) {
+            $mock->shouldReceive('addresses')->andReturn(['93.184.216.34']);
+        });
         config(['media-library.image_optimizers' => []]);
     }
 

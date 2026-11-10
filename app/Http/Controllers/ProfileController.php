@@ -37,11 +37,11 @@ class ProfileController extends Controller
                 $query->where('is_private', false);
             })
             ->withCount('artworks')
-            ->with(['artworks.media' => function($q) use ($isOwner) {
+            ->with(['artworks' => function($q) use ($isOwner) {
                 if (! $isOwner) {
                     $q->publiclyVisible();
                 }
-                $q->limit(3);
+                $q->with('media')->limit(3);
             }])
             ->get();
 
@@ -56,7 +56,7 @@ class ProfileController extends Controller
 
 
         return inertia('Profile/ProfileShow', [
-            'profileUser' => $user->only('id', 'name', 'profile_photo_url', 'created_at'),
+            'profileUser' => $user->only('id', 'name', 'profile_photo_url', 'created_at', 'description'),
             'artworks' => $artworks,
             'collections' => $collections,
             'isOwner' => $isOwner,

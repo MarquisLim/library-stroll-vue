@@ -19,8 +19,8 @@ class CheckArtworkImportsCommand extends Command
 
             return self::FAILURE;
         }
-        if ($this->option('source') && ! in_array($this->option('source'), ['artic', 'met'], true)) {
-            $this->error('Источник должен быть artic или met.');
+        if ($this->option('source') && ! in_array($this->option('source'), array_keys(config('demo_content.sources')), true)) {
+            $this->error('Неизвестный источник.');
 
             return self::INVALID;
         }
@@ -37,14 +37,18 @@ class CheckArtworkImportsCommand extends Command
             $readable = is_string($path) && is_file($path) && is_readable($path);
             $expectedTags = $import->metadata['tags'] ?? [];
             $checks = [
-                'оригинал' => $readable && @getimagesize($path) !== false,
-                'SHA256' => $readable && hash_file('sha256', $path) === $import->image_sha256,
+                'оригинал' => $readable && ($artwork->type === 'video' ? in_array((new \finfo(FILEINFO_MIME_TYPE))->file($path), ['video/mp4', 'video/webm'], true) : @getimagesize($path) !== false),
+                'SHA256' => $readable && hash_file('sha256', $path) === ($import->media_sha256 ?: $import->image_sha256),
                 'один файл' => $artwork?->getMedia('artworks')->count() === 1,
                 'миниатюра' => $media !== null && $media->hasGeneratedConversion('thumb') && is_file($media->getPath('thumb')),
                 'теги источника' => $expectedTags !== [] && $artwork !== null
                     && array_diff($expectedTags, $artwork->tags->pluck('name')->all()) === [],
                 'происхождение' => filled($import->source_url) && filled($import->license),
             ];
+            if ($artwork?->type === 'video') {
+                $preview = $artwork->getFirstMedia('preview');
+                $checks['видеопревью'] = $preview && is_file($preview->getPath()) && $media?->getCustomProperty('duration') > 0;
+            }
             $problems = array_keys(array_filter($checks, fn ($ok) => ! $ok));
             if ($problems !== []) {
                 $failed++;

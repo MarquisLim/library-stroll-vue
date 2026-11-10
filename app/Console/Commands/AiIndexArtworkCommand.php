@@ -34,7 +34,10 @@ class AiIndexArtworkCommand extends Command
             return self::FAILURE;
         }
 
-        app(ArtworkIndexingService::class)->dispatch($artwork, force: true);
+        if (! app(ArtworkIndexingService::class)->dispatch($artwork, force: true)) {
+            $this->error('AI indexing is deferred for this artwork.');
+            return self::FAILURE;
+        }
 
         $this->info("Dispatched AI analysis for artwork #{$artwork->id}.");
 

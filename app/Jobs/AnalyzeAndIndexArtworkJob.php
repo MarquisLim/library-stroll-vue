@@ -63,7 +63,7 @@ class AnalyzeAndIndexArtworkJob implements ShouldBeUnique, ShouldQueue
 
         $artwork = Artwork::withoutGlobalScopes()->find($this->artworkId);
 
-        if (! $artwork || ! $artwork->is_published) {
+        if (! $artwork || ! $artwork->is_published || ! $artwork->indexingEnabled()) {
             Log::info('Skipping AI analysis for non-existent or unpublished artwork.', [
                 'artwork_id' => $this->artworkId,
             ]);
@@ -147,7 +147,7 @@ class AnalyzeAndIndexArtworkJob implements ShouldBeUnique, ShouldQueue
             ]));
 
             $freshArtwork = Artwork::withoutGlobalScopes()->find($this->artworkId);
-            if (! $freshArtwork || ! $freshArtwork->is_published) {
+            if (! $freshArtwork || ! $freshArtwork->is_published || ! $freshArtwork->indexingEnabled()) {
                 $metadata->update(['status' => ArtworkAiMetadata::STATUS_STALE]);
                 $this->recordRun($requestId, 'analyze_and_index', 'skipped', $startedAt, parameters: ['reason' => 'artwork_unpublished_or_deleted']);
 
@@ -188,7 +188,7 @@ class AnalyzeAndIndexArtworkJob implements ShouldBeUnique, ShouldQueue
                 throw new \RuntimeException('AI index response has no point ID or valid embedding dimension. Update the AI service.');
             }
             $latest = Artwork::withoutGlobalScopes()->find($this->artworkId);
-            if (! $latest || ! $latest->is_published) {
+            if (! $latest || ! $latest->is_published || ! $latest->indexingEnabled()) {
                 $metadata->update(['status' => ArtworkAiMetadata::STATUS_STALE]);
                 $aiClient->deleteArtworkIndex($this->artworkId);
 

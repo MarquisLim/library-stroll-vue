@@ -7,6 +7,7 @@
                 <img :src="profileUser.profile_photo_url"
                      class="w-40 h-40 rounded-full object-cover mb-2 ring ring-primary/50"/>
                 <h1 class="text-2xl font-bold text-primary">{{ profileUser.name }}</h1>
+                <p v-if="profileUser.description" class="mx-auto mt-3 max-w-2xl whitespace-pre-line break-words text-sm leading-relaxed text-base-content/70">{{ profileUser.description }}</p>
                 <p class="text-base-content/70 text-sm">
                     Присоединился: {{ new Date(profileUser.created_at).toLocaleDateString() }}
                 </p>

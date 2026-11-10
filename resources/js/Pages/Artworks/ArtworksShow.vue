@@ -200,6 +200,12 @@ watch(
                     >
                         {{ artwork.title || "Без названия" }}
                     </h1>
+                    <dl v-if="artwork.provenance" class="mt-5 space-y-2 rounded-xl bg-base-200/60 p-4 text-xs leading-relaxed">
+                        <div v-if="artwork.provenance.creator_name"><dt class="text-base-content/50">Автор оригинала</dt><dd>{{ artwork.provenance.creator_name }}</dd></div>
+                        <div><dt class="text-base-content/50">Источник</dt><dd><a :href="artwork.provenance.source_url" target="_blank" rel="noopener noreferrer" class="break-all text-primary hover:underline">{{ artwork.provenance.source }}</a></dd></div>
+                        <div><dt class="text-base-content/50">Лицензия</dt><dd><a v-if="/^https:\/\//.test(artwork.provenance.license_url || '')" :href="artwork.provenance.license_url" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline">{{ artwork.provenance.license }}</a><span v-else>{{ artwork.provenance.license }}</span></dd></div>
+                        <div v-if="artwork.provenance.attribution_text"><dt class="text-base-content/50">Атрибуция</dt><dd class="break-words">{{ artwork.provenance.attribution_text }}</dd></div>
+                    </dl>
                     <Link
                         v-if="author"
                         :href="`/profile/${author.id}`"
@@ -211,7 +217,7 @@ watch(
                         /><span class="min-w-0 flex-1"
                             ><span
                                 class="block text-[11px] text-base-content/50"
-                                >Автор / коллекция</span
+                                >{{ artwork.provenance ? 'Куратор публикации' : 'Автор / коллекция' }}</span
                             ><span
                                 class="mt-0.5 block truncate text-sm font-bold"
                                 >{{ author.name }}</span

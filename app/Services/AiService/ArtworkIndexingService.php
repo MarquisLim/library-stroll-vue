@@ -26,7 +26,7 @@ class ArtworkIndexingService
 
     public function dispatch(Artwork $artwork, bool $force = false): bool
     {
-        if (! config('ai.enabled') || ! $artwork->is_published) {
+        if (! config('ai.enabled') || ! $artwork->is_published || ! $artwork->indexingEnabled()) {
             return false;
         }
         $hash = $this->contentHash($artwork);

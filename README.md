@@ -1,5 +1,7 @@
 # LibraryStroll
 
+Демонстрационный медиакаталог без AI-обработки: [demo:populate и demo:verify](docs/ru/demo-content.md) (10.11.2026).
+
 Проект использует **Laravel 13, PHP 8.5, Inertia 2 и Vue 3**. Версии зависимостей закреплены в `composer.lock` и `package-lock.json`; для установки используйте `install` / `npm ci`, а не повторное обновление пакетов.
 
 Что изменилось и как пользоваться обновлением от **02.11.2026**: [обновление проекта, студия, администрация и мониторинг AI](docs/ru/2026-11-02-project-update-and-usage.md).

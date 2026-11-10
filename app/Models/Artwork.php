@@ -90,6 +90,16 @@ class Artwork extends Model implements HasMedia
         return $this->hasOne(ArtworkAiMetadata::class);
     }
 
+    public function provenance(): HasOne
+    {
+        return $this->hasOne(ArtworkImport::class);
+    }
+
+    public function indexingEnabled(): bool
+    {
+        return (bool) ($this->getAttributes()['ai_indexing_enabled'] ?? true);
+    }
+
     public function complaints(): MorphMany
     {
         return $this->morphMany(Complaint::class, 'complaintable');
@@ -152,7 +162,7 @@ class Artwork extends Model implements HasMedia
 
         // Video: случайный кадр, ширина 300px
         if (str_starts_with($media->mime_type, 'video/')) {
-            $randomSecond = rand(1, 20);
+            $randomSecond = 0;
             $this->addMediaConversion('thumb')
                 ->extractVideoFrameAtSecond($randomSecond)
                 ->width(300)

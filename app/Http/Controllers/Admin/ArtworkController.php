@@ -96,6 +96,10 @@ class ArtworkController extends Controller
     {
         $artwork = Artwork::withoutGlobalScopes()->findOrFail($id);
 
+        if (! $artwork->indexingEnabled()) {
+            return response()->json(['message' => 'Индексация этой работы отложена.'], 422);
+        }
+
         if (! config('ai.enabled')) {
             return response()->json(['message' => 'AI-сервис выключен.'], 422);
         }

@@ -35,6 +35,9 @@ ENV VITE_APP_NAME=$VITE_APP_NAME VITE_REVERB_ENABLED=true \
 RUN npm run build
 
 FROM php-base AS app
+COPY --from=frontend /usr/local/bin/node /usr/local/bin/node
+COPY --from=frontend /build/node_modules/@dicebear ./node_modules/@dicebear
+COPY --from=frontend /build/node_modules/@resvg ./node_modules/@resvg
 COPY . .
 COPY --from=dependencies /var/www/html/vendor ./vendor
 COPY --from=frontend /build/public/build ./public/build

@@ -2,8 +2,10 @@
 
 namespace App\Services\ArtworkImport;
 
+use App\Services\DemoContent\SourceHttp;
 use Generator;
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 
 class MuseumSource
@@ -17,26 +19,25 @@ class MuseumSource
     /** @return Generator<SourceArtwork> */
     public function candidates(string $source, string $query, int $page, int $maxPages): Generator
     {
+        $pageSize = config("demo_content.sources.$source.page_size", self::PAGE_SIZE);
         for ($current = $page; $current < $page + $maxPages; $current++) {
             $params = $source === 'artic'
-                ? ['q' => $query, 'page' => $current, 'limit' => self::PAGE_SIZE,
+                ? ['q' => $query, 'page' => $current, 'limit' => $pageSize,
                     'query' => ['bool' => ['filter' => [
                         ['term' => ['is_public_domain' => true]],
                         ['exists' => ['field' => 'image_id']],
                     ]]],
                     'fields' => 'id,title,image_id,is_public_domain,artist_title,date_display,medium_display,subject_titles,style_titles,classification_title,artwork_type_title']
                 : ['q' => $query ?: 'painting', 'hasImages' => 'true',
-                    'offset' => ($current - 1) * self::PAGE_SIZE, 'limit' => self::PAGE_SIZE];
+                    'offset' => ($current - 1) * $pageSize, 'limit' => $pageSize];
 
-            $url = $source === 'artic'
-                ? 'https://api.artic.edu/api/v1/artworks/search'
-                : 'https://collectionapi.metmuseum.org/public/collection/v1.1/search';
+            $url = rtrim(config("demo_content.sources.$source.base_url"), '/').config("demo_content.sources.$source.search_endpoint");
             // JSON preserves boolean true. Bracket query encoding turns it into "1",
             // which the museum's Elasticsearch API rejects as a boolean.
             $queryParams = $source === 'artic'
                 ? ['params' => json_encode($params, JSON_THROW_ON_ERROR)]
                 : $params;
-            $data = $this->http()->get($url, $queryParams)->throw()->json();
+            $data = app(SourceHttp::class)->get($source, config("demo_content.sources.$source.search_endpoint"), $queryParams);
             $items = $source === 'artic' ? ($data['data'] ?? []) : ($data['objectIDs'] ?? []);
             if (! is_array($items) || $items === []) {
                 return;
@@ -44,18 +45,20 @@ class MuseumSource
 
             foreach ($items as $item) {
                 if ($source === 'met') {
-                    $response = $this->http()->get('https://collectionapi.metmuseum.org/public/collection/v1/objects/'.(int) $item);
-                    if ($response->status() === 404) {
-                        continue;
+                    try {
+                        $item = app(SourceHttp::class)->get($source, str_replace('{id}', (string) (int) $item, config("demo_content.sources.$source.detail_endpoint")));
+                    } catch (RequestException $e) {
+                        if ($e->response->status() === 404) {
+                            continue;
+                        } throw $e;
                     }
-                    $item = $response->throw()->json();
                 }
                 $artwork = $source === 'artic' ? $this->fromArtic($item) : $this->fromMet($item);
                 if ($artwork !== null) {
                     yield $artwork;
                 }
             }
-            if (count($items) < self::PAGE_SIZE) {
+            if (count($items) < $pageSize) {
                 return;
             }
         }
@@ -73,7 +76,7 @@ class MuseumSource
             artist: trim($item['artist_title'] ?? ''), date: trim($item['date_display'] ?? ''),
             medium: trim($item['medium_display'] ?? ''),
             sourceUrl: 'https://www.artic.edu/artworks/'.(int) $item['id'],
-            imageUrl: 'https://www.artic.edu/iiif/2/'.rawurlencode($item['image_id']).'/full/843,/0/default.jpg',
+            imageUrl: str_replace('{image_id}', rawurlencode($item['image_id']), config('demo_content.sources.artic.media_url_template')),
             tags: $this->tags->normalize([
                 ...($item['subject_titles'] ?? []), ...($item['style_titles'] ?? []),
                 $item['classification_title'] ?? '', $item['artwork_type_title'] ?? '',

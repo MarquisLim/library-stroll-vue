@@ -34,7 +34,7 @@ class AiReconcileCommand extends Command
         }
         $dispatched = 0;
 
-        $staleItems = ArtworkAiMetadata::where(function ($query) use ($staleHours, $pendingHours) {
+        $staleItems = ArtworkAiMetadata::whereHas('artwork', fn ($q) => $q->where('ai_indexing_enabled', true))->where(function ($query) use ($staleHours, $pendingHours) {
             $query->where('status', ArtworkAiMetadata::STATUS_STALE)
                 ->orWhere(fn ($q) => $q->where('status', ArtworkAiMetadata::STATUS_PROCESSING)
                     ->where('updated_at', '<', now()->subHours($pendingHours)))
@@ -52,6 +52,7 @@ class AiReconcileCommand extends Command
         $remaining = $limit - $dispatched;
         if ($remaining > 0) {
             $failedItems = ArtworkAiMetadata::where('status', ArtworkAiMetadata::STATUS_FAILED)
+                ->whereHas('artwork', fn ($q) => $q->where('ai_indexing_enabled', true))
                 ->where('attempts', '<', 5)
                 ->limit($remaining)
                 ->get();
@@ -65,6 +66,7 @@ class AiReconcileCommand extends Command
         $remaining = $limit - $dispatched;
         if ($remaining > 0) {
             $stuckPending = ArtworkAiMetadata::where('status', ArtworkAiMetadata::STATUS_PENDING)
+                ->whereHas('artwork', fn ($q) => $q->where('ai_indexing_enabled', true))
                 ->where('updated_at', '<', now()->subHours($pendingHours))
                 ->limit($remaining)
                 ->get();
@@ -78,6 +80,7 @@ class AiReconcileCommand extends Command
         $remaining = $limit - $dispatched;
         if ($remaining > 0) {
             $missing = Artwork::where('is_published', true)
+                ->where('ai_indexing_enabled', true)
                 ->whereDoesntHave('aiMetadata')
                 ->limit($remaining)
                 ->get();

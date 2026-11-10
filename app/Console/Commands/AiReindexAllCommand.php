@@ -20,7 +20,7 @@ class AiReindexAllCommand extends Command
             return self::FAILURE;
         }
 
-        $count = Artwork::where('is_published', true)->count();
+        $count = Artwork::where('is_published', true)->where('ai_indexing_enabled', true)->count();
 
         if ($count === 0) {
             $this->info('No published artworks to reindex.');
@@ -43,6 +43,7 @@ class AiReindexAllCommand extends Command
         $dispatched = 0;
 
         Artwork::where('is_published', true)
+            ->where('ai_indexing_enabled', true)
             ->with('media')
             ->chunkById($chunkSize, function ($artworks) use (&$dispatched) {
                 foreach ($artworks as $artwork) {
