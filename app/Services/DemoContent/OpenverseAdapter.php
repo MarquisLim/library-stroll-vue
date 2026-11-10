@@ -21,6 +21,9 @@ class OpenverseAdapter implements ContentSource
                     },
                     $r['license_url'] ?? null, array_column($r['tags'] ?? [], 'name'), creator_url: $r['creator_url'] ?? null, attribution_text: ContentItem::text($r['attribution'] ?? '') ?: null, original_metadata: array_intersect_key($r, array_flip(['id', 'title', 'creator', 'creator_url', 'license', 'license_url', 'tags', 'attribution', 'foreign_landing_url'])));
             }
+            if (count($data['results']) < ($data['page_size'] ?? config('demo_content.sources.openverse.page_size', 25))) {
+                break;
+            }
         }
     }
 }

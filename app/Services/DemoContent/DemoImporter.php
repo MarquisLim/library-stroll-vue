@@ -22,7 +22,7 @@ class DemoImporter
             return ['status' => 'license'];
         }
         $tags = app(SourceTags::class)->normalize($item->original_tags);
-        if (! $owner->is_demo || ! $item->original_title || parse_url($item->source_url, PHP_URL_SCHEME) !== 'https' || parse_url($item->license_url ?? '', PHP_URL_SCHEME) !== 'https' || ! $item->media_url || ! $item->creator_name || ! $tags) {
+        if (! $owner->is_demo || ! $item->original_title || parse_url($item->source_url, PHP_URL_SCHEME) !== 'https' || parse_url($item->license_url ?? '', PHP_URL_SCHEME) !== 'https' || ! $item->media_url || ! $tags) {
             return ['status' => 'metadata'];
         }
         $path = app(ArtworkImageDownloader::class)->download($item->media_url, $item->source, $item->media_type);
@@ -52,13 +52,13 @@ class DemoImporter
                     $artwork->tags()->sync(array_map(fn ($tag) => Tag::firstOrCreate(['name' => $tag])->id, $tags));
                     ArtworkImport::create(['artwork_id' => $artwork->id, 'source' => $item->source, 'external_id' => $item->external_id, 'source_url' => $item->source_url,
                         'image_url' => $item->media_url, 'license' => $item->license, 'image_sha256' => $hash, 'media_sha256' => $hash,
-                        'creator_name' => $item->creator_name, 'creator_url' => $item->creator_url, 'license_url' => $item->license_url, 'attribution_text' => $item->attribution_text,
+                        'creator_name' => app(SourceRegistry::class)->creator($item), 'creator_url' => $item->creator_url, 'license_url' => $item->license_url, 'attribution_text' => $item->attribution_text,
                         'original_description' => $item->original_description, 'original_date' => $item->creation_date, 'original_medium' => $item->medium,
-                        'primary_category' => $category, 'is_demo' => true, 'metadata' => ['original' => $item->original_metadata, 'tags' => $tags, 'language' => $item->language, 'dataset_seed' => $seed]]);
+                        'primary_category' => $category, 'is_demo' => true, 'metadata' => ['original' => $item->original_metadata, 'tags' => $tags, 'language' => $item->language, 'dataset_seed' => $seed, 'dataset_preset' => config('demo_content.active_preset', 'balanced')]]);
                     $days = hexdec(substr(hash('sha256', "$seed:{$item->source}:{$item->external_id}"), 0, 6)) % 730;
-                    $days %= max(1,(int)$owner->created_at->diffInDays(now()));
-                    $publishedAt=now()->subDays($days);
-                    $artwork->forceFill(['created_at'=>$publishedAt,'is_published'=>true,'published_at'=>$publishedAt])->save();
+                    $days %= max(1, (int) $owner->created_at->diffInDays(now()));
+                    $publishedAt = now()->subDays($days);
+                    $artwork->forceFill(['created_at' => $publishedAt, 'is_published' => true, 'published_at' => $publishedAt])->save();
 
                     return ['status' => 'imported', 'artwork_id' => $artwork->id, 'sha256' => $hash];
                 } catch (\Throwable $e) {

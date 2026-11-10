@@ -57,7 +57,7 @@ class DemoVerifyCommand extends Command
             $check((bool) $a->title && (bool) $a->description && (bool) $a->published_at && (bool) $a->is_published, 'incomplete publication');
             $check((bool) $a->user?->is_demo && $a->tags->isNotEmpty(), 'owner/tags');
             $check(! $a->indexingEnabled() && ! $a->aiMetadata && ! AiProcessingRun::where('artwork_id', $a->id)->exists(), 'unexpected AI state');
-            $check((bool) $p?->is_demo && (bool) $p?->creator_name && (bool) $p?->license_url && (bool) $p?->primary_category, 'provenance');
+            $check((bool) $p?->is_demo && (bool) $p?->license_url && (bool) $p?->primary_category, 'provenance');
             if ($p) {
                 $item = new ContentItem($p->source, $p->external_id, $a->type, $p->source_url, $p->image_url, $a->title, $p->creator_name, $p->license, $p->license_url, attribution_text: $p->attribution_text);
                 $check((bool) app(SourceRegistry::class)->allowed($item), 'license');
@@ -100,12 +100,12 @@ class DemoVerifyCommand extends Command
                 }
             }
             foreach ($manifest['quotas'] ?? [] as $category => $target) {
-                $actual = ArtworkImport::where('is_demo', true)->where('metadata->dataset_seed', $manifest['seed'])->where('primary_category', $category)->whereHas('artwork', fn ($q) => $q->where('type', 'image'))->count();
+                $actual = ArtworkImport::forDemoDataset($manifest['seed'], $manifest['preset'] ?? 'balanced')->where('primary_category', $category)->whereHas('artwork', fn ($q) => $q->where('type', 'image'))->count();
                 if ($actual < $target) {
                     $shortfalls[basename($file).':'.$category] = $target - $actual;
                 }
             }
-            $actualVideos = ArtworkImport::where('is_demo', true)->where('metadata->dataset_seed', $manifest['seed'])->whereHas('artwork', fn ($q) => $q->where('type', 'video'))->count();
+            $actualVideos = ArtworkImport::forDemoDataset($manifest['seed'], $manifest['preset'] ?? 'balanced')->whereHas('artwork', fn ($q) => $q->where('type', 'video'))->count();
             if ($actualVideos < ($manifest['targets']['video'] ?? 0)) {
                 $shortfalls[basename($file).':video'] = $manifest['targets']['video'] - $actualVideos;
             }
@@ -117,6 +117,10 @@ class DemoVerifyCommand extends Command
         $path = config('demo_content.root').'/reports/verify-'.now()->format('Ymd-His').'.json';
         app(Manifest::class)->save($path, $result);
         $this->table(['Показатель', 'Количество'], array_map(fn ($k, $n) => [$k, $n], array_keys($counts), $counts));
+        foreach ($shortfalls as $category => $missing) {
+            $this->warn("$category: не хватает $missing");
+        }
+        $this->line($issues ? 'Проверка завершена: обнаружены проблемы файлов или метаданных.' : ($shortfalls ? 'Проверка завершена. Целевое количество изображений пока не достигнуто.' : 'Проверка завершена успешно.'));
         foreach ($issues as $issue) {
             $this->warn($issue);
         }$this->line('Недобор квот: '.array_sum($shortfalls));

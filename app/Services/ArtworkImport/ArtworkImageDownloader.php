@@ -33,6 +33,7 @@ class ArtworkImageDownloader
         try {
             if ($source) {
                 app(SourceHttp::class)->throttle($source);
+                app(SourceHttp::class)->record($source, 'download_attempts');
             }
             $response = Http::withUserAgent(config('demo_content.user_agent'))->accept($type === 'video' ? 'video/*' : 'image/*')
                 ->retry(config("demo_content.sources.$source.retry_attempts", 1) + 1, function ($attempt, $exception) use ($source) {
@@ -40,6 +41,12 @@ class ArtworkImageDownloader
                     $seconds = $header ? (ctype_digit($header) ? (int) $header : max(0, strtotime($header) - time())) : config("demo_content.sources.$source.retry_delay", 500) / 1000 * (2 ** ($attempt - 1));
                     if ($seconds > 30) {
                         throw new RuntimeException('Media source paused for Retry-After');
+                    }
+                    if ($source) {
+                        app(SourceHttp::class)->record($source, 'media_retries');
+                        if ($exception instanceof ConnectionException) {
+                            app(SourceHttp::class)->record($source, 'network_errors');
+                        }
                     }
 
                     return (int) ($seconds * 1000);
@@ -67,6 +74,9 @@ class ArtworkImageDownloader
                 if ($duration <= 0 || ! is_finite($duration) || $duration > config('demo_content.max_video_seconds') || ! $probe->streams($path)->videos()->first()) {
                     throw new RuntimeException('Invalid video duration/stream');
                 }
+                if ($source) {
+                    app(SourceHttp::class)->record($source, 'downloads_successful');
+                }
 
                 return $path;
             }
@@ -76,8 +86,18 @@ class ArtworkImageDownloader
                 throw new RuntimeException('Файл не является допустимым JPEG/PNG/WebP или превышает 40 MP.');
             }
 
+            if ($source) {
+                app(SourceHttp::class)->record($source, 'downloads_successful');
+            }
+
             return $path;
         } catch (Throwable $exception) {
+            if ($source) {
+                app(SourceHttp::class)->record($source, 'media_errors');
+                if ($exception instanceof ConnectionException) {
+                    app(SourceHttp::class)->record($source, 'network_errors');
+                }
+            }
             File::delete($path);
             throw $exception;
         }

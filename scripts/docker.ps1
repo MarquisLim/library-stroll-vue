@@ -63,9 +63,12 @@ function Initialize-DockerEnv {
     Write-Host 'Docker environment ready. Existing secrets and OpenServer .env were preserved.'
 }
 
-function Invoke-Compose([string[]]$ComposeArguments) {
+function Invoke-Compose([string[]]$ComposeArguments, [switch]$ArtisanCommand) {
     & docker @script:composeFlags @ComposeArguments
-    if ($LASTEXITCODE -ne 0) { throw "Docker Compose failed (exit $LASTEXITCODE)." }
+    if ($LASTEXITCODE -ne 0) {
+        if ($ArtisanCommand) { throw "Command exited with code $LASTEXITCODE. If Artisan printed an import/verification report, check it for missing content or validation errors. This code alone does not diagnose a Docker failure." }
+        throw "Docker Compose failed (exit $LASTEXITCODE)."
+    }
 }
 
 Push-Location $projectRoot
@@ -98,7 +101,7 @@ try {
         'restart' { Invoke-Compose (@('restart') + $Arguments); break }
         'artisan' {
             if (!$Arguments) { throw 'Specify an artisan command, for example: artisan ai:status' }
-            Invoke-Compose (@('exec','-T','app','php','artisan') + $Arguments); break
+            Invoke-Compose (@('exec','-T','app','php','artisan') + $Arguments) -ArtisanCommand; break
         }
         'check' {
             Invoke-Compose @('ps','-a')

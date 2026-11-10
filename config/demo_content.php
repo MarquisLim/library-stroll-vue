@@ -7,7 +7,12 @@ $source = fn ($url, $search, $detail, $hosts, $types = ['image'], $enabled = tru
     'retry_delay' => 1000, 'max_pages' => 3, 'weight' => 1, 'supported_media_types' => $types,
 ];
 
-return [
+$config = [
+    'unknown_creator_labels' => ['unknown', 'unknown artist', 'anonymous', 'неизвестен', 'автор неизвестен'],
+    'relevance' => ['threshold' => 2, 'weights' => ['title' => 2, 'subject_tags' => 3, 'categories' => 3, 'classification' => 2, 'description' => 1]],
+    'small_quota_threshold' => 10, 'metadata_cache_limit' => 256, 'checkpoint_every' => 25,
+    'diagnostic_candidates' => 5, 'diagnostic_page_size' => 10, 'diagnostic_max_pages' => 1,
+    'diagnostic_queries' => ['met' => 'landscape', 'artic' => 'landscape', 'commons' => 'landscape', 'nasa' => 'moon', 'openverse' => 'landscape', 'smithsonian' => 'landscape'],
     'max_creator_share' => .25,
     'max_source_share' => .65,
     'root' => storage_path('app/demo-import'),
@@ -21,7 +26,7 @@ return [
         'artic' => $source('https://api.artic.edu/api/v1', '/artworks/search', '/artworks/{id}', ['www.artic.edu'], template: 'https://www.artic.edu/iiif/2/{image_id}/full/843,/0/default.jpg'),
         'commons' => $source('https://commons.wikimedia.org', '/w/api.php', '/w/api.php', ['upload.wikimedia.org'], ['image', 'video']),
         'nasa' => $source('https://images-api.nasa.gov', '/search', '/asset/{id}', ['images-assets.nasa.gov'], ['image', 'video']),
-        'openverse' => [...$source('https://api.openverse.org/v1', '/images/', '/images/{id}/', [], enabled: (bool) env('OPENVERSE_ENABLED', false)),
+        'openverse' => [...$source('https://api.openverse.org/v1', '/images/', '/images/{id}/', ['live.staticflickr.com', 'images.unsplash.com', 'upload.wikimedia.org', 'images.metmuseum.org', 'www.artic.edu'], enabled: (bool) env('OPENVERSE_ENABLED', false)),
             'client_id' => env('OPENVERSE_CLIENT_ID'), 'client_secret' => env('OPENVERSE_CLIENT_SECRET'), 'token_endpoint' => '/auth_tokens/token/'],
         'smithsonian' => $source('https://api.si.edu/openaccess/api/v1.0', '/search', '/content/{id}', ['ids.si.edu', 'nmaahc.si.edu'], enabled: (bool) env('SMITHSONIAN_ENABLED', false), key: env('SMITHSONIAN_API_KEY')),
     ],
@@ -44,3 +49,27 @@ return [
         'sport' => ['label' => 'Спорт и движение', 'quota' => 20, 'queries' => ['sport', 'athletics', 'dance'], 'sources' => ['commons', 'artic']],
     ]],
 ];
+$synonyms = require __DIR__.'/demo_relevance.php';
+foreach ($config['presets']['balanced'] as $key => &$theme) {
+    $theme['synonyms'] = $synonyms[$key];
+    $theme['sources'][] = 'openverse';
+}
+unset($theme);
+$config['sources']['smithsonian']['search_query_template'] = '{query} AND online_media_type:Images';
+$config['sources']['smithsonian']['media_url_template'] = 'https://ids.si.edu/ids/iiif/{image_id}/full/!1200,1200/0/default.jpg';
+$pilot = ['nature' => 8, 'animals' => 8, 'city' => 7, 'people' => 6, 'graphics' => 7, 'space' => 5, 'plants' => 5, 'history' => 4];
+foreach ($pilot as $key => $quota) {
+    $config['presets']['pilot'][$key] = $config['presets']['balanced'][$key];
+    $config['presets']['pilot'][$key]['quota'] = $quota;
+}
+$config['presets']['pilot']['graphics']['label'] = 'Живопись и графика';
+$config['presets']['pilot']['graphics']['synonyms'] = array_merge($config['presets']['pilot']['graphics']['synonyms'], ['painting', 'paintings', 'живопись']);
+$config['presets']['pilot']['graphics']['queries'][] = 'painting';
+$config['presets']['pilot']['space']['label'] = 'Космос и технологии';
+$config['presets']['pilot']['history']['label'] = 'История и культура';
+$config['presets']['pilot']['space']['synonyms'] = array_merge($config['presets']['pilot']['space']['synonyms'], $config['presets']['balanced']['science']['synonyms']);
+$config['presets']['pilot']['space']['queries'][] = 'technology';
+$config['presets']['pilot']['history']['synonyms'] = array_merge($config['presets']['pilot']['history']['synonyms'], $config['presets']['balanced']['culture']['synonyms']);
+$config['presets']['pilot']['history']['queries'][] = 'culture';
+
+return $config;

@@ -17,7 +17,7 @@ class MuseumSource
     public function __construct(private readonly SourceTags $tags) {}
 
     /** @return Generator<SourceArtwork> */
-    public function candidates(string $source, string $query, int $page, int $maxPages): Generator
+    public function candidates(string $source, string $query, int $page, int $maxPages, ?callable $skip = null): Generator
     {
         $pageSize = config("demo_content.sources.$source.page_size", self::PAGE_SIZE);
         for ($current = $page; $current < $page + $maxPages; $current++) {
@@ -44,6 +44,10 @@ class MuseumSource
             }
 
             foreach ($items as $item) {
+                $externalId = (string) ($source === 'met' ? $item : ($item['id'] ?? ''));
+                if ($skip && $skip($externalId)) {
+                    continue;
+                }
                 if ($source === 'met') {
                     try {
                         $item = app(SourceHttp::class)->get($source, str_replace('{id}', (string) (int) $item, config("demo_content.sources.$source.detail_endpoint")));

@@ -7,9 +7,11 @@ use App\Models\Artwork;
 use App\Models\ArtworkImport;
 use App\Models\Collection;
 use App\Models\User;
+use App\Services\DemoContent\MediaUrlPolicy;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\UserSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
@@ -25,7 +27,7 @@ class ArtworkImportTest extends TestCase
         parent::setUp();
         Storage::fake('public');
         Http::preventStrayRequests();
-        $this->partialMock(\App\Services\DemoContent\MediaUrlPolicy::class, function ($mock) {
+        $this->partialMock(MediaUrlPolicy::class, function ($mock) {
             $mock->shouldReceive('addresses')->andReturn(['93.184.216.34']);
         });
         config(['media-library.image_optimizers' => []]);
@@ -66,8 +68,8 @@ class ArtworkImportTest extends TestCase
     {
         $this->withoutMockingConsoleOutput();
         $this->fakeArtic();
-        $status = \Illuminate\Support\Facades\Artisan::call('artworks:import', ['--source' => 'artic', '--query' => 'cats', '--limit' => 1, '--publish' => true]);
-        $this->assertSame(0, $status, \Illuminate\Support\Facades\Artisan::output());
+        $status = Artisan::call('artworks:import', ['--source' => 'artic', '--query' => 'cats', '--limit' => 1, '--publish' => true]);
+        $this->assertSame(0, $status, Artisan::output());
 
         $artwork = Artwork::firstOrFail();
         $this->assertSame('The Bedroom', $artwork->title);
@@ -92,7 +94,7 @@ class ArtworkImportTest extends TestCase
 
             return $params['query']['bool']['filter'][0]['term']['is_public_domain'] === true;
         });
-        $this->assertSame(0, \Illuminate\Support\Facades\Artisan::call('artworks:check-imports'), \Illuminate\Support\Facades\Artisan::output());
+        $this->assertSame(0, Artisan::call('artworks:check-imports'), Artisan::output());
     }
 
     public function test_import_is_idempotent_and_does_not_rewrite_an_existing_artwork(): void
@@ -106,7 +108,7 @@ class ArtworkImportTest extends TestCase
         $this->assertSame(1, ArtworkImport::count());
         $this->assertSame('Edited by owner', $artwork->fresh()->title);
         $this->assertFalse((bool) $artwork->fresh()->is_published);
-        Http::assertSentCount(3); // Two metadata requests, one image.
+        Http::assertSentCount(2); // Metadata is cached for the current process; one image download.
     }
 
     public function test_dry_run_never_creates_an_owner_or_downloads_an_image(): void

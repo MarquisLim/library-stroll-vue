@@ -19,13 +19,16 @@ class NasaAdapter implements ContentSource
                 // Only explicit NASA credits, no blanket CC0 assignment or third-party credits.
                 $safe = preg_match('/^(NASA|JSC|JPL|GSFC|KSC|MSFC|GRC|ARC|AFRC|LaRC)(\s|$)/i', $credit)
                     && ! preg_match('/copyright|©|ESA|Getty|Reuters|SpaceX|STScI|Caltech/i', json_encode($d));
-                $assets = $id ? app(SourceHttp::class)->get('nasa', str_replace('{id}', rawurlencode($id), config('demo_content.sources.nasa.detail_endpoint'))) : [];
+                $assets = $id && $safe && ! isset(app(SourceHttp::class)->known['nasa:'.$id]) ? app(SourceHttp::class)->get('nasa', str_replace('{id}', rawurlencode($id), config('demo_content.sources.nasa.detail_endpoint'))) : [];
                 $urls = array_column($assets['collection']['items'] ?? [], 'href');
                 $urls = array_values(array_filter($urls, fn ($url) => preg_match($type === 'video' ? '/\.mp4$/i' : '/\.(jpg|jpeg|png)$/i', $url)));
-                usort($urls, fn ($a, $b) => strcmp($a, $b));
+                usort($urls, fn ($a, $b) => ((str_contains($a, '~medium') ? 0 : (str_contains($a, '~small') ? 1 : 2)) <=> (str_contains($b, '~medium') ? 0 : (str_contains($b, '~small') ? 1 : 2))) ?: strcmp($a, $b));
                 yield new ContentItem('nasa', $id, $type, 'https://images.nasa.gov/details/'.$id, $urls[0] ?? '', ContentItem::text($d['title'] ?? ''),
                     $credit ?: null, $safe ? 'NASA Media Usage Guidelines' : 'unverified', config('demo_content.nasa_license_url'),
                     $d['keywords'] ?? [], creation_date: $d['date_created'] ?? null, attribution_text: $credit ?: null, original_metadata: array_intersect_key($d, array_flip(['nasa_id', 'title', 'keywords', 'center', 'photographer', 'secondary_creator', 'date_created'])));
+            }
+            if (count($rows) < config('demo_content.sources.nasa.page_size', 25)) {
+                break;
             }
         }
     }

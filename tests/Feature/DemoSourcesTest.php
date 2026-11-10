@@ -11,10 +11,27 @@ use App\Services\DemoContent\SourceHttp;
 use App\Services\DemoContent\SourceRegistry;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
+use Symfony\Component\Process\Process;
 use Tests\TestCase;
 
 class DemoSourcesTest extends TestCase
 {
+    public function test_bootstrap_overrides_inherited_live_database_variables_before_laravel(): void
+    {
+        $program = <<<'PHP'
+$_SERVER['APP_ENV'] = 'local';
+$_SERVER['DB_CONNECTION'] = 'mysql';
+$_SERVER['DB_DATABASE'] = 'live_catalog';
+$_ENV['DB_URL'] = 'mysql://forbidden.invalid/live';
+require $argv[1];
+echo json_encode([getenv('APP_ENV'), $_SERVER['DB_CONNECTION'], $_SERVER['DB_DATABASE'], $_ENV['DB_URL']]);
+PHP;
+        $process = new Process([PHP_BINARY, '-r', $program, base_path('tests/bootstrap.php')]);
+        $process->mustRun();
+        $this->assertSame(['testing', 'sqlite', ':memory:', ''], json_decode($process->getOutput(), true));
+        $this->assertSame('sqlite', config('database.default'));
+    }
+
     public function test_smithsonian_accepts_only_explicit_media_cc0(): void
     {
         config(['demo_content.sources.smithsonian.api_key' => 'test-only']);
@@ -41,6 +58,7 @@ class DemoSourcesTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config(['demo_content.sources.openverse.client_id' => null, 'demo_content.sources.openverse.client_secret' => null]);
         Http::preventStrayRequests();
         foreach (array_keys(config('demo_content.sources')) as $s) {
             config(["demo_content.sources.$s.max_pages" => 1, "demo_content.sources.$s.rate_limit" => 1000000, "demo_content.sources.$s.retry_delay" => 0]);
