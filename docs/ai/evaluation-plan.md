@@ -1,28 +1,28 @@
 # Evaluation Plan — Search Quality Benchmarking
 
-## Golden Dataset Format
+## Research Dataset Format (implemented 2026-11-11)
 
-JSON file with query-relevance pairs:
+Preparation and annotation workflow: [Research dataset instructions](../ru/research-dataset.md).
+The old illustrative `relevant_artwork_ids` JSON is replaced by a fixed corpus and graded independent human judgments:
 
-```json
-{
-  "version": 1,
-  "queries": [
-    {
-      "id": "q001",
-      "query": "watercolor landscape",
-      "relevant_artwork_ids": [12, 34, 56, 78, 90],
-      "notes": "Artworks with watercolor style and landscape theme"
-    },
-    {
-      "id": "q002",
-      "query": "кот акварель",
-      "relevant_artwork_ids": [23, 45],
-      "notes": "Russian query for cat watercolor"
-    }
-  ]
-}
+```text
+storage/app/research-datasets/<name>/versions/<version>/
+  manifest.json            # schema/rule versions, seed, policy, intent partitions
+  artworks.jsonl           # stable source:external_id, provenance, hashes, local media references
+  queries.jsonl            # query_id, intent_id, text, language, type, split
+  pool.jsonl               # candidate pairs and inclusion methods, not automatic grades
+  judgments.csv            # query_id,dataset_item_id,relevance,annotator_id,judged_at
+  judgment-context.json    # binds human grades to corpus and question text
+  checksums.sha256
+  validation.json
+  README.md
 ```
+
+`DatasetVersionManager::readVersion($name, $version)` verifies and reads these fixed artifacts without accessing the demo manifest, database or AI. Future evaluators must use stable dataset IDs, preserve grades 0–3 and annotator provenance, and document their relevance threshold/adjudication policy. Missing pairs are **unjudged**, not grade 0. Source metadata, Laravel-normalized metadata and future AI metadata are separate layers. LLM metadata must never become ground-truth relevance labels.
+
+Queries, not documents, are split approximately 25% development / 75% evaluation by intent. Equivalent RU/EN questions share a partition. Tune only on development queries; freeze independent evaluation queries before experiments. A bounded lexical/category/random/cross-category annotation pool has selection bias. Extend it with other systems' results before claiming comprehensive recall; never silently treat unjudged results as irrelevant.
+
+`dataset:prepare` creates a draft; `dataset:validate` distinguishes structural errors, warnings and readiness blockers; `dataset:freeze --name=... --dataset-version=1.0` refuses unfinished catalog/query review/human annotation and never overwrites an existing version. Media are referenced, not duplicated: preserve separately licensed media backups and verify original SHA-256 before reproducing experiments. No experimental variants or metrics are run during preparation.
 
 ## Metrics
 
@@ -65,11 +65,11 @@ Report: nDCG@10
 | hybrid_metadata | Hybrid + LLM-extracted metadata |
 | multimodal | Hybrid + vision-analyzed images |
 
-## Artisan Command
+## Planned Evaluation Command (not implemented in this stage)
 
 ```powershell
-php artisan ai:evaluate --dataset=golden.json --variant=baseline_sql
-php artisan ai:evaluate --dataset=golden.json --variant=hybrid_search
+php artisan ai:evaluate --dataset=library-stroll-v1 --dataset-version=1.0 --variant=baseline_sql
+php artisan ai:evaluate --dataset=library-stroll-v1 --dataset-version=1.0 --variant=hybrid_search
 ```
 
 ## Output Format
