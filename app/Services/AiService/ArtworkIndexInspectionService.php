@@ -33,7 +33,7 @@ class ArtworkIndexInspectionService
             return [...$report, 'group' => 'E', 'reason' => 'artwork does not exist'];
         }
 
-        $eligible = $artwork->indexingEnabled() && Artwork::publiclyVisible()->whereKey($artworkId)->exists();
+        $eligible = $this->isEligible($artwork);
         $hash = $this->indexing->contentHash($artwork);
         $savedId = $metadata?->qdrant_point_id;
         try {
@@ -131,9 +131,7 @@ class ArtworkIndexInspectionService
             return [...$report, 'group' => 'B', 'reason' => 'embedding provenance has not been confirmed'];
         }
 
-        $run = AiProcessingRun::where('artwork_id', $artworkId)
-            ->where('operation', 'analyze_and_index')->where('status', 'success')->whereNotNull('finished_at')
-            ->latest('finished_at')->latest('id')->first();
+        $run = $this->lastSuccessfulIndexRun($artworkId);
         $receipt = $run?->parameters ?? [];
         $recordedFingerprint = $this->fingerprint($receipt['embedding_model_digest'] ?? null);
         if ($recordedFingerprint === null || ($receipt['collection'] ?? null) !== $collection
@@ -142,9 +140,49 @@ class ArtworkIndexInspectionService
             return [...$report, 'group' => 'B', 'reason' => 'no matching provenance in the latest successful run'];
         }
 
-        return $recordedFingerprint === $report['fingerprint'] && $receipt['embedding_model'] === $pointModel
-            ? [...$report, 'group' => 'A', 'reason' => 'point and successful run record the same embedding provenance']
-            : [...$report, 'group' => 'F', 'reason' => 'point and successful run disagree on embedding provenance'];
+        if ($recordedFingerprint !== $report['fingerprint'] || $receipt['embedding_model'] !== $pointModel) {
+            return [...$report, 'group' => 'F', 'reason' => 'point and successful run disagree on embedding provenance'];
+        }
+
+        return [...$report, 'group' => 'A', 'reason' => 'point and successful run record the same embedding provenance',
+            'recovery_evidence' => [
+                'sql' => $this->sqlRevision($artwork, $hash, $run),
+                'indexed_at' => $metadata->getRawOriginal('indexed_at'),
+                'point' => [$collection, $point['id'], $pointHash, $dimension, $report['fingerprint']],
+            ]];
+    }
+
+    public function sqlRevisionMatches(int $artworkId, string $expected): bool
+    {
+        $artwork = Artwork::withoutGlobalScopes()->with('aiMetadata')->find($artworkId);
+        if ($artwork === null || $artwork->aiMetadata === null || ! $this->isEligible($artwork)) {
+            return false;
+        }
+
+        $run = $this->lastSuccessfulIndexRun($artworkId);
+
+        return $run !== null && $this->sqlRevision($artwork, $this->indexing->contentHash($artwork), $run) === $expected;
+    }
+
+    private function isEligible(Artwork $artwork): bool
+    {
+        return $artwork->indexingEnabled() && Artwork::publiclyVisible()->whereKey($artwork->getKey())->exists();
+    }
+
+    private function lastSuccessfulIndexRun(int $artworkId): ?AiProcessingRun
+    {
+        return AiProcessingRun::where('artwork_id', $artworkId)
+            ->where('operation', 'analyze_and_index')->where('status', 'success')->whereNotNull('finished_at')
+            ->latest('finished_at')->latest('id')->first();
+    }
+
+    private function sqlRevision(Artwork $artwork, string $contentHash, AiProcessingRun $run): string
+    {
+        return hash('sha256', serialize([
+            $contentHash,
+            $artwork->aiMetadata->getRawOriginal(),
+            $run->getRawOriginal(),
+        ]));
     }
 
     private function fingerprint(mixed $value): ?string

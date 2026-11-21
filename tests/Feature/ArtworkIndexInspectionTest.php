@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\AnalyzeAndIndexArtworkJob;
 use App\Models\AiProcessingRun;
 use App\Models\Artwork;
 use App\Models\ArtworkAiMetadata;
 use App\Services\AiService\ArtworkIndexingService;
+use Illuminate\Contracts\Cache\Repository as Cache;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\DB;
@@ -34,25 +36,8 @@ class ArtworkIndexInspectionTest extends TestCase
 
     public function test_a_requires_matching_embedding_provenance_in_the_latest_successful_run(): void
     {
-        [$artwork, $metadata, $point, $response] = $this->indexedFixture();
-        $digest = str_repeat('a', 64);
-        AiProcessingRun::create([
-            'artwork_id' => $artwork->id,
-            'operation' => 'analyze_and_index',
-            'status' => 'success',
-            'started_at' => now()->subMinute(),
-            'finished_at' => now(),
-            'parameters' => [
-                'collection' => $response['collection'],
-                'qdrant_point_id' => $metadata->qdrant_point_id,
-                'content_hash' => $metadata->content_hash,
-                'embedding_model' => $metadata->embedding_model,
-                'embedding_model_digest' => 'sha256:'.strtoupper($digest),
-            ],
-        ]);
-        Http::fake(['*/index/inspect*' => Http::response([
-            ...$response, 'points' => [[...$point, 'embedding_fingerprint' => $digest]],
-        ])]);
+        [$artwork, , , $response] = $this->confirmedFixture();
+        Http::fake(['*/index/inspect*' => Http::response($response)]);
 
         $this->artisan('ai:reconcile-artwork', ['id' => $artwork->id, '--dry-run' => true])
             ->expectsOutput('Classification: A')->assertSuccessful();
@@ -185,6 +170,218 @@ class ArtworkIndexInspectionTest extends TestCase
 
         $this->artisan('ai:reconcile-artwork', ['id' => $artwork->id, '--dry-run' => true])
             ->expectsOutput('Qdrant: unavailable')->expectsOutput('Classification: F')->assertFailed();
+    }
+
+    public function test_confirmed_failed_record_passes_preflight_but_writes_are_disabled(): void
+    {
+        [$artwork, $metadata, , $response] = $this->confirmedFixture();
+        $metadata->update(['last_error' => 'Historical failure']);
+        $snapshot = $metadata->refresh()->getRawOriginal();
+        Http::fake(['*/index/inspect*' => Http::response($response)]);
+
+        DB::statement('PRAGMA query_only = ON');
+        try {
+            for ($attempt = 0; $attempt < 2; $attempt++) {
+                $this->artisan('ai:reconcile-artwork', ['id' => $artwork->id, '--apply-status' => true, '--confirm-id' => $artwork->id])
+                    ->expectsOutput('Classification: A')
+                    ->expectsOutput('Status writes are disabled until index, delete and publication writers share a concurrency guard.')
+                    ->expectsOutput('Action taken: none')->assertFailed();
+            }
+        } finally {
+            DB::statement('PRAGMA query_only = OFF');
+        }
+
+        $this->assertSame($snapshot, $metadata->refresh()->getRawOriginal());
+        $this->assertDatabaseCount('ai_processing_runs', 1);
+        Http::assertSentCount(4);
+        Http::assertNotSent(fn (Request $request) => $request->method() !== 'GET' || ! str_contains($request->url(), '/index/inspect'));
+        Queue::assertNothingPushed();
+    }
+
+    public function test_already_indexed_verified_record_is_an_idempotent_no_op(): void
+    {
+        [$artwork, $metadata, , $response] = $this->confirmedFixture();
+        $metadata->update(['status' => ArtworkAiMetadata::STATUS_INDEXED]);
+        $snapshot = $metadata->refresh()->getRawOriginal();
+        Http::fake(['*/index/inspect*' => Http::response($response)]);
+
+        for ($attempt = 0; $attempt < 2; $attempt++) {
+            $this->artisan('ai:reconcile-artwork', ['id' => $artwork->id, '--apply-status' => true, '--confirm-id' => $artwork->id])
+                ->expectsOutput('The artwork is already indexed.')
+                ->expectsOutput('Action taken: none')->assertSuccessful();
+        }
+
+        $this->assertSame($snapshot, $metadata->refresh()->getRawOriginal());
+        $this->assertDatabaseCount('ai_processing_runs', 1);
+        Queue::assertNothingPushed();
+    }
+
+    #[DataProvider('unrecoverablePoints')]
+    public function test_apply_rejects_groups_b_through_f(string $group, array $pointChanges, array $responseChanges, array $artworkChanges = []): void
+    {
+        [$artwork, $metadata, , $response] = $this->confirmedFixture();
+        $artwork->forceFill($artworkChanges)->save();
+        $response['points'][0] = [...$response['points'][0], ...$pointChanges];
+        Http::fake(['*/index/inspect*' => Http::response([...$response, ...$responseChanges])]);
+        $snapshot = $metadata->refresh()->getRawOriginal();
+
+        $this->artisan('ai:reconcile-artwork', ['id' => $artwork->id, '--apply-status' => true, '--confirm-id' => $artwork->id])
+            ->expectsOutput("Classification: {$group}")
+            ->expectsOutput('Status recovery requires a verified group A point.')->assertFailed();
+
+        $this->assertSame($snapshot, $metadata->refresh()->getRawOriginal());
+        $this->assertDatabaseCount('ai_processing_runs', 1);
+        Http::assertSentCount(1);
+        Queue::assertNothingPushed();
+    }
+
+    public static function unrecoverablePoints(): array
+    {
+        return [
+            'B missing fingerprint' => ['B', ['embedding_fingerprint' => null], []],
+            'C outdated hash' => ['C', ['content_hash' => 'outdated'], []],
+            'D point absent' => ['D', [], ['points' => [], 'saved_point' => 'missing', 'vector_present' => null]],
+            'E indexing disabled' => ['E', [], [], ['ai_indexing_enabled' => false]],
+            'F duplicate point' => ['F', [], ['has_duplicates' => true]],
+        ];
+    }
+
+    public function test_fingerprint_without_successful_upsert_history_cannot_be_applied(): void
+    {
+        [$artwork, $metadata, $run, $response] = $this->confirmedFixture();
+        $run->update(['status' => 'failed']);
+        Http::fake(['*/index/inspect*' => Http::response($response)]);
+
+        $this->artisan('ai:reconcile-artwork', ['id' => $artwork->id, '--apply-status' => true, '--confirm-id' => $artwork->id])
+            ->expectsOutput('Classification: B')->assertFailed();
+
+        $this->assertTrue($metadata->refresh()->isFailed());
+        $this->assertDatabaseCount('ai_processing_runs', 1);
+        Queue::assertNothingPushed();
+    }
+
+    public function test_confirmed_point_without_original_indexed_at_cannot_be_applied(): void
+    {
+        [$artwork, $metadata, , $response] = $this->confirmedFixture();
+        $metadata->update(['indexed_at' => null]);
+        Http::fake(['*/index/inspect*' => Http::response($response)]);
+
+        $this->artisan('ai:reconcile-artwork', ['id' => $artwork->id, '--apply-status' => true, '--confirm-id' => $artwork->id])
+            ->expectsOutput('Classification: A')
+            ->expectsOutput('Status recovery requires a failed or indexed record with its original indexed_at.')->assertFailed();
+
+        $this->assertTrue($metadata->refresh()->isFailed());
+        $this->assertNull($metadata->indexed_at);
+        Http::assertSentCount(1);
+        Queue::assertNothingPushed();
+    }
+
+    public function test_apply_requires_matching_confirmation_and_cannot_be_combined_with_dry_run(): void
+    {
+        [$artwork] = $this->indexedFixture();
+        Http::fake();
+        $options = ['id' => $artwork->id, '--apply-status' => true];
+
+        foreach ([[], ['--confirm-id' => $artwork->id + 1], ['--confirm-id' => $artwork->id, '--dry-run' => true]] as $invalid) {
+            $this->artisan('ai:reconcile-artwork', [...$options, ...$invalid])->assertExitCode(2);
+        }
+
+        Http::assertNothingSent();
+        Queue::assertNothingPushed();
+    }
+
+    public function test_active_index_job_lock_blocks_the_recovery_preflight(): void
+    {
+        [$artwork, $metadata, , $response] = $this->confirmedFixture();
+        Http::fake(['*/index/inspect*' => Http::response($response)]);
+        $job = new AnalyzeAndIndexArtworkJob($artwork->id);
+        $lock = app(Cache::class)->lock($job->middleware()[0]->getLockKey($job), 60);
+        $this->assertTrue($lock->get());
+
+        try {
+            $this->artisan('ai:reconcile-artwork', ['id' => $artwork->id, '--apply-status' => true, '--confirm-id' => $artwork->id])
+                ->expectsOutput('The artwork is currently locked by indexing.')->assertFailed();
+        } finally {
+            $lock->release();
+        }
+
+        $this->assertTrue($metadata->refresh()->isFailed());
+        Http::assertSentCount(1);
+        Queue::assertNothingPushed();
+    }
+
+    #[DataProvider('changesDuringInspection')]
+    public function test_apply_rejects_changes_during_the_second_inspection(array $artworkChanges, array $metadataChanges): void
+    {
+        [$artwork, $metadata, , $response] = $this->confirmedFixture();
+        $reads = 0;
+        Http::fake(['*/index/inspect*' => function () use ($artwork, $metadata, $response, &$reads, $artworkChanges, $metadataChanges) {
+            if (++$reads === 2) {
+                $artwork->forceFill($artworkChanges)->save();
+                $metadata->update($metadataChanges);
+            }
+
+            return Http::response($response);
+        }]);
+
+        $this->artisan('ai:reconcile-artwork', ['id' => $artwork->id, '--apply-status' => true, '--confirm-id' => $artwork->id])
+            ->expectsOutput('The artwork, SQL metadata or Qdrant point changed during verification.')->assertFailed();
+
+        $this->assertNotSame(ArtworkAiMetadata::STATUS_INDEXED, $metadata->refresh()->status);
+        $this->assertDatabaseCount('ai_processing_runs', 1);
+        Http::assertSentCount(2);
+        Queue::assertNothingPushed();
+    }
+
+    public static function changesDuringInspection(): array
+    {
+        return [
+            'changed revision' => [['title' => 'New revision'], []],
+            'unpublished' => [['is_published' => false], []],
+            'indexing disabled' => [['ai_indexing_enabled' => false], []],
+            'stored hash changed' => [[], ['content_hash' => 'new stored hash']],
+            'stored point ID changed' => [[], ['qdrant_point_id' => 'decce4fd-d713-4d09-be51-276e375f3978']],
+            'status changed' => [[], ['status' => ArtworkAiMetadata::STATUS_PROCESSING]],
+        ];
+    }
+
+    public function test_apply_rejects_concurrent_deletion_of_the_point(): void
+    {
+        [$artwork, $metadata, , $response] = $this->confirmedFixture();
+        Http::fake(['*/index/inspect*' => Http::sequence()->push($response)->push([
+            ...$response, 'points' => [], 'saved_point' => 'missing', 'vector_present' => null,
+        ])]);
+
+        $this->artisan('ai:reconcile-artwork', ['id' => $artwork->id, '--apply-status' => true, '--confirm-id' => $artwork->id])
+            ->expectsOutput('The artwork, SQL metadata or Qdrant point changed during verification.')->assertFailed();
+
+        $this->assertTrue($metadata->refresh()->isFailed());
+        $this->assertDatabaseCount('ai_processing_runs', 1);
+        Http::assertSentCount(2);
+        Queue::assertNothingPushed();
+    }
+
+    private function confirmedFixture(): array
+    {
+        [$artwork, $metadata, , $response] = $this->indexedFixture();
+        $digest = str_repeat('a', 64);
+        $run = AiProcessingRun::create([
+            'artwork_id' => $artwork->id,
+            'operation' => 'analyze_and_index',
+            'status' => 'success',
+            'started_at' => now()->subMinute(),
+            'finished_at' => now(),
+            'parameters' => [
+                'collection' => $response['collection'],
+                'qdrant_point_id' => $metadata->qdrant_point_id,
+                'content_hash' => $metadata->content_hash,
+                'embedding_model' => $metadata->embedding_model,
+                'embedding_model_digest' => 'sha256:'.strtoupper($digest),
+            ],
+        ]);
+        $response['points'][0]['embedding_fingerprint'] = $digest;
+
+        return [$artwork, $metadata, $run, $response];
     }
 
     private function indexedFixture(): array
