@@ -14,6 +14,7 @@ use App\Models\Collection;
 use App\Models\Tag;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -129,28 +130,24 @@ class StudioController extends Controller
     {
         $user = Auth::user();
 
-        $art = Artwork::when(! $user->hasAnyRole(['Admin', 'SuperAdmin']), function ($q) use ($user) {
-            $q->where('user_id', $user->id);
-        })->findOrFail($id);
-        $this->authorize('update', $art);
+        return DB::transaction(function () use ($user, $id) {
+            $art = Artwork::when(! $user->hasAnyRole(['Admin', 'SuperAdmin']), function ($q) use ($user) {
+                $q->where('user_id', $user->id);
+            })->lockForUpdate()->findOrFail($id);
+            $this->authorize('update', $art);
 
-        if(!$art->getFirstMediaUrl('artworks'))
-            return response()->json(['error'=>'Сначала загрузите файл'],422);
+            if (! $art->getFirstMediaUrl('artworks')) {
+                return response()->json(['error' => 'Сначала загрузите файл'], 422);
+            }
 
-        if(trim($art->title)==='')
-            return response()->json(['error'=>'Добавьте название'],422);
+            if (trim($art->title) === '') {
+                return response()->json(['error' => 'Добавьте название'], 422);
+            }
 
-        $art->is_published = true;
-        $art->published_at = now();
-        $art->save();
+            $art->update(['is_published' => true, 'published_at' => now()]);
 
-        if (config('ai.enabled') && config('ai.auto_analyze_on_publish')) {
-            app(\App\Services\AiService\ArtworkIndexingService::class)->dispatch($art);
-        }
-
-        return response()->json([
-            'message'=>'Арт опубликован'
-        ]);
+            return response()->json(['message' => 'Арт опубликован']);
+        });
     }
 
     /* --- Удаление черновика --- */

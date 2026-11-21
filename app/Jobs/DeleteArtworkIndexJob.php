@@ -6,10 +6,12 @@ use App\Contracts\AiServiceClient;
 use App\Jobs\Middleware\ArtworkAiJobLock;
 use App\Models\AiProcessingRun;
 use App\Models\Artwork;
+use App\Services\AiService\ArtworkIndexingService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Throwable;
@@ -26,8 +28,11 @@ class DeleteArtworkIndexJob implements ShouldQueue
 
     public bool $failOnTimeout = true;
 
-    public function __construct(protected int $artworkId)
+    protected ?int $intentId = null;
+
+    public function __construct(protected int $artworkId, ?int $intentId = null)
     {
+        $this->intentId = $intentId;
         $this->onQueue(config('ai.queue', 'ai'));
         $this->afterCommit();
     }
@@ -47,21 +52,30 @@ class DeleteArtworkIndexJob implements ShouldQueue
 
     public function handle(AiServiceClient $aiClient): void
     {
-        $requestId = Str::uuid()->toString();
         $startedAt = now();
+        $intent = null;
+        if ($this->intentId !== null) {
+            $intent = AiProcessingRun::whereKey($this->intentId)->where('operation', 'delete_index')
+                ->whereIn('status', ['pending', 'failed'])->first();
+            if (! $intent || ($intent->parameters['deleted_artwork_id'] ?? null) !== $this->artworkId) {
+                return;
+            }
+            $artwork = Artwork::withoutGlobalScopes()->find($this->artworkId);
+            if (app(ArtworkIndexingService::class)->canIndex($artwork)) {
+                $intent->update(['status' => 'skipped', 'finished_at' => now()]);
+
+                return;
+            }
+        }
+
+        $requestId = $intent?->request_id ?? Str::uuid()->toString();
 
         try {
             $aiClient->deleteArtworkIndex($this->artworkId);
 
-            AiProcessingRun::create([
-                'artwork_id' => Artwork::withoutGlobalScopes()->whereKey($this->artworkId)->exists() ? $this->artworkId : null,
-                'parameters' => ['deleted_artwork_id' => $this->artworkId],
-                'operation' => 'delete_index',
+            $this->finishRun($intent, $requestId, $startedAt, [
                 'status' => 'success',
-                'request_id' => $requestId,
-                'latency_ms' => (int) abs(now()->diffInMilliseconds($startedAt)),
-                'started_at' => $startedAt,
-                'finished_at' => now(),
+                'error' => null,
             ]);
 
             Log::info('Artwork index deleted.', [
@@ -69,20 +83,34 @@ class DeleteArtworkIndexJob implements ShouldQueue
                 'request_id' => $requestId,
             ]);
         } catch (Throwable $e) {
-            AiProcessingRun::create([
-                'artwork_id' => Artwork::withoutGlobalScopes()->whereKey($this->artworkId)->exists() ? $this->artworkId : null,
-                'parameters' => ['deleted_artwork_id' => $this->artworkId],
-                'operation' => 'delete_index',
+            $this->finishRun($intent, $requestId, $startedAt, [
                 'status' => 'failed',
-                'request_id' => $requestId,
-                'latency_ms' => (int) abs(now()->diffInMilliseconds($startedAt)),
                 'error' => Str::limit($e->getMessage(), 500),
-                'started_at' => $startedAt,
-                'finished_at' => now(),
             ]);
 
             throw $e;
         }
+    }
+
+    private function finishRun(?AiProcessingRun $intent, string $requestId, \DateTimeInterface $startedAt, array $fields): void
+    {
+        $fields += ['latency_ms' => (int) abs(now()->diffInMilliseconds($startedAt)), 'finished_at' => now()];
+        if ($intent) {
+            $intent->update($fields);
+
+            return;
+        }
+
+        DB::transaction(function () use ($requestId, $startedAt, $fields) {
+            $artwork = Artwork::withoutGlobalScopes()->lockForUpdate()->find($this->artworkId);
+            AiProcessingRun::create($fields + [
+                'artwork_id' => $artwork?->id,
+                'parameters' => ['deleted_artwork_id' => $this->artworkId],
+                'operation' => 'delete_index',
+                'request_id' => $requestId,
+                'started_at' => $startedAt,
+            ]);
+        });
     }
 
     public function failed(?Throwable $exception): void

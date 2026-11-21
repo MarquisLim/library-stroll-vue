@@ -74,19 +74,13 @@ class AnalyzeAndIndexArtworkJob implements ShouldBeUnique, ShouldQueue
         $startedAt = now();
 
         $indexing = app(ArtworkIndexingService::class);
-        $claim = $this->claimRevision($indexing);
+        $claim = $this->claimRevision($indexing, $requestId, $startedAt);
 
         if ($claim === null) {
             return;
         }
 
         [$artwork, $currentMedia, $contentHash, $metadata] = $claim;
-
-        AiProcessingRun::create([
-            'artwork_id' => $artwork->id, 'operation' => 'analyze_and_index', 'status' => 'processing',
-            'request_id' => $requestId, 'started_at' => $startedAt,
-            'parameters' => ['stage' => 'analysis', 'content_hash' => $contentHash, 'attempt' => $metadata->attempts],
-        ]);
 
         try {
             $imagePath = null;
@@ -133,15 +127,15 @@ class AnalyzeAndIndexArtworkJob implements ShouldBeUnique, ShouldQueue
                 implode(' ', $analysis->colors),
             ]));
 
-            $freshArtwork = Artwork::withoutGlobalScopes()->find($this->artworkId);
-            if (! $freshArtwork || ! $freshArtwork->is_published || ! $freshArtwork->indexingEnabled()) {
-                $metadata->update(['status' => ArtworkAiMetadata::STATUS_STALE]);
+            [$outcome, $freshArtwork] = $this->saveCurrentRevision($indexing, $metadata, $contentHash, [
+                ...$analysis->toMetadataArray(), 'processed_at' => now(),
+            ]);
+            if ($outcome === 'ineligible') {
                 $this->recordRun($requestId, 'analyze_and_index', 'skipped', $startedAt, parameters: ['reason' => 'artwork_unpublished_or_deleted']);
 
                 return;
             }
-            if ($indexing->contentHash($freshArtwork) !== $contentHash) {
-                $metadata->markStale();
+            if ($outcome === 'changed') {
                 $this->dispatchReplacement($freshArtwork, $indexing);
 
                 $this->recordRun($requestId, 'analyze_and_index', 'skipped', $startedAt, parameters: ['reason' => 'revision_changed']);
@@ -149,7 +143,6 @@ class AnalyzeAndIndexArtworkJob implements ShouldBeUnique, ShouldQueue
                 return;
             }
 
-            $metadata->fill([...$analysis->toMetadataArray(), 'processed_at' => now()])->save();
             $run = AiProcessingRun::where('request_id', $requestId)->firstOrFail();
             $run->update(['model' => $analysis->chatModel, 'parameters' => [...$run->parameters, 'stage' => 'embedding_and_indexing',
                 'analysis_source' => $analysis->analysisSource, 'warnings' => $analysis->warnings]]);
@@ -175,25 +168,7 @@ class AnalyzeAndIndexArtworkJob implements ShouldBeUnique, ShouldQueue
             if (empty($indexResult['qdrant_point_id']) || ($indexResult['embedding_dimension'] ?? 0) < 1) {
                 throw new \RuntimeException('AI index response has no point ID or valid embedding dimension. Update the AI service.');
             }
-            $latest = Artwork::withoutGlobalScopes()->find($this->artworkId);
-            if (! $latest || ! $latest->is_published || ! $latest->indexingEnabled()) {
-                $metadata->update(['status' => ArtworkAiMetadata::STATUS_STALE]);
-                $aiClient->deleteArtworkIndex($this->artworkId);
-
-                $this->recordRun($requestId, 'analyze_and_index', 'skipped', $startedAt, parameters: ['reason' => 'artwork_unpublished_or_deleted']);
-
-                return;
-            }
-            if ($indexing->contentHash($latest) !== $contentHash) {
-                $metadata->markStale();
-                $this->dispatchReplacement($latest, $indexing);
-
-                $this->recordRun($requestId, 'analyze_and_index', 'skipped', $startedAt, parameters: ['reason' => 'revision_changed']);
-
-                return;
-            }
-
-            $metadata->fill([
+            [$outcome, $latest] = $this->saveCurrentRevision($indexing, $metadata, $contentHash, [
                 'status' => ArtworkAiMetadata::STATUS_INDEXED,
                 'qdrant_point_id' => $indexResult['qdrant_point_id'] ?? null,
                 'content_hash' => $contentHash,
@@ -206,7 +181,18 @@ class AnalyzeAndIndexArtworkJob implements ShouldBeUnique, ShouldQueue
                 'processed_at' => now(),
                 'indexed_at' => now(),
             ]);
-            $metadata->save();
+            if ($outcome === 'ineligible') {
+                $aiClient->deleteArtworkIndex($this->artworkId);
+                $this->recordRun($requestId, 'analyze_and_index', 'skipped', $startedAt, parameters: ['reason' => 'artwork_unpublished_or_deleted']);
+
+                return;
+            }
+            if ($outcome === 'changed') {
+                $this->dispatchReplacement($latest, $indexing);
+                $this->recordRun($requestId, 'analyze_and_index', 'skipped', $startedAt, parameters: ['reason' => 'revision_changed']);
+
+                return;
+            }
 
             $this->recordRun($requestId, 'analyze_and_index', 'success', $startedAt, $analysis->chatModel,
                 parameters: ['analysis_source' => $analysis->analysisSource, 'warnings' => $analysis->warnings]);
@@ -217,7 +203,7 @@ class AnalyzeAndIndexArtworkJob implements ShouldBeUnique, ShouldQueue
                 'latency_ms' => $analysis->latencyMs,
             ]);
         } catch (Throwable $e) {
-            $metadata->update([
+            $this->processingMetadata($metadata)->update([
                 'status' => ArtworkAiMetadata::STATUS_FAILED,
                 'last_error' => Str::limit($e->getMessage(), 500),
             ]);
@@ -228,11 +214,11 @@ class AnalyzeAndIndexArtworkJob implements ShouldBeUnique, ShouldQueue
         }
     }
 
-    private function claimRevision(ArtworkIndexingService $indexing): ?array
+    private function claimRevision(ArtworkIndexingService $indexing, string $requestId, \DateTimeInterface $startedAt): ?array
     {
-        return DB::transaction(function () use ($indexing) {
+        return DB::transaction(function () use ($indexing, $requestId, $startedAt) {
             $artwork = Artwork::withoutGlobalScopes()->lockForUpdate()->find($this->artworkId);
-            if (! $artwork || ! $artwork->is_published || ! $artwork->indexingEnabled()) {
+            if (! $indexing->canIndex($artwork)) {
                 return null;
             }
 
@@ -259,9 +245,41 @@ class AnalyzeAndIndexArtworkJob implements ShouldBeUnique, ShouldQueue
             $metadata->status = ArtworkAiMetadata::STATUS_PROCESSING;
             $metadata->attempts = $metadata->attempts + 1;
             $metadata->save();
+            AiProcessingRun::create([
+                'artwork_id' => $artwork->id, 'operation' => 'analyze_and_index', 'status' => 'processing',
+                'request_id' => $requestId, 'started_at' => $startedAt,
+                'parameters' => ['stage' => 'analysis', 'content_hash' => $hash, 'attempt' => $metadata->attempts],
+            ]);
 
             return [$artwork, $media, $hash, $metadata];
         });
+    }
+
+    private function saveCurrentRevision(ArtworkIndexingService $indexing, ArtworkAiMetadata $metadata, string $hash, array $fields): array
+    {
+        return DB::transaction(function () use ($indexing, $metadata, $hash, $fields) {
+            $latest = Artwork::withoutGlobalScopes()->lockForUpdate()->find($this->artworkId);
+            $current = $this->processingMetadata($metadata)->lockForUpdate()->first();
+            if (! $indexing->canIndex($latest)) {
+                $current?->markStale();
+
+                return ['ineligible', $latest];
+            }
+            if (! $current || $indexing->contentHash($latest) !== $hash) {
+                $current?->markStale();
+
+                return ['changed', $latest];
+            }
+
+            $current->update($fields);
+
+            return ['current', $latest];
+        });
+    }
+
+    private function processingMetadata(ArtworkAiMetadata $metadata): \Illuminate\Database\Eloquent\Builder
+    {
+        return ArtworkAiMetadata::whereKey($metadata->id)->where('status', ArtworkAiMetadata::STATUS_PROCESSING);
     }
 
     private function dispatchReplacement(Artwork $artwork, ArtworkIndexingService $indexing): void
@@ -272,8 +290,10 @@ class AnalyzeAndIndexArtworkJob implements ShouldBeUnique, ShouldQueue
 
         // If the edit was reverted, the unique key can still belong to this running job.
         $latest = $artwork->fresh();
-        if ($latest && $latest->is_published && $latest->indexingEnabled()
-            && $indexing->contentHash($latest) === $this->expectedContentHash) {
+        if ($indexing->canIndex($latest)
+            && $indexing->contentHash($latest) === $this->expectedContentHash
+            && ! $latest->aiMetadata()->where('status', ArtworkAiMetadata::STATUS_INDEXED)
+                ->where('content_hash', $this->expectedContentHash)->exists()) {
             $this->release(ArtworkAiJobLock::RELEASE_DELAY);
         }
     }
@@ -296,9 +316,8 @@ class AnalyzeAndIndexArtworkJob implements ShouldBeUnique, ShouldQueue
         string $error = '',
         array $parameters = [],
     ): void {
-        $previous = AiProcessingRun::where('request_id', $requestId)->first();
-        AiProcessingRun::updateOrCreate(['request_id' => $requestId], [
-            'artwork_id' => Artwork::withoutGlobalScopes()->whereKey($this->artworkId)->exists() ? $this->artworkId : null,
+        $previous = AiProcessingRun::where('request_id', $requestId)->firstOrFail();
+        $previous->update([
             'operation' => $operation,
             'status' => $status,
             'request_id' => $requestId,

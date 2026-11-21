@@ -140,7 +140,7 @@ class ArtworkIndexInspectionTest extends TestCase
     {
         [$artwork, , , $response] = $this->indexedFixture();
         if ($hidden) {
-            $artwork->update(['is_private' => true]);
+            $artwork->fill(['is_private' => true])->saveQuietly();
         }
         Http::fake(['*/index/inspect*' => Http::response([...$response, ...$overrides])]);
 
@@ -221,7 +221,7 @@ class ArtworkIndexInspectionTest extends TestCase
     public function test_apply_rejects_groups_b_through_f(string $group, array $pointChanges, array $responseChanges, array $artworkChanges = []): void
     {
         [$artwork, $metadata, , $response] = $this->confirmedFixture();
-        $artwork->forceFill($artworkChanges)->save();
+        $artwork->forceFill($artworkChanges)->saveQuietly();
         $response['points'][0] = [...$response['points'][0], ...$pointChanges];
         Http::fake(['*/index/inspect*' => Http::response([...$response, ...$responseChanges])]);
         $snapshot = $metadata->refresh()->getRawOriginal();
@@ -340,7 +340,8 @@ class ArtworkIndexInspectionTest extends TestCase
         $reads = 0;
         Http::fake(['*/index/inspect*' => function () use ($artwork, $metadata, $response, &$reads, $artworkChanges, $metadataChanges) {
             if (++$reads === 2) {
-                $artwork->forceFill($artworkChanges)->save();
+                // Simulate an out-of-band SQL change while the read-only probe is running.
+                $artwork->forceFill($artworkChanges)->saveQuietly();
                 $metadata->update($metadataChanges);
             }
 

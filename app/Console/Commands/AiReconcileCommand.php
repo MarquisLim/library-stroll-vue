@@ -48,7 +48,7 @@ class AiReconcileCommand extends Command
             }
         };
 
-        $eligibleArtwork = fn ($query) => $query->where('is_published', true)->where('ai_indexing_enabled', true);
+        $eligibleArtwork = fn ($query) => $query->publiclyVisible()->where('ai_indexing_enabled', true);
         $staleItems = ArtworkAiMetadata::whereHas('artwork', $eligibleArtwork)->where(function ($query) use ($pendingHours) {
             $query->where('status', ArtworkAiMetadata::STATUS_STALE)
                 ->orWhere(fn ($q) => $q->where('status', ArtworkAiMetadata::STATUS_PROCESSING)
@@ -89,7 +89,7 @@ class AiReconcileCommand extends Command
 
         $remaining = $limit - $examined;
         if ($remaining > 0) {
-            $missing = Artwork::where('is_published', true)
+            $missing = Artwork::publiclyVisible()
                 ->where('ai_indexing_enabled', true)
                 ->whereDoesntHave('aiMetadata')
                 ->limit($remaining)

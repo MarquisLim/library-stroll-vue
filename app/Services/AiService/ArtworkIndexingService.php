@@ -17,6 +17,12 @@ class ArtworkIndexingService
 {
     public const RECONCILIATION_ATTEMPT_LIMIT = 5;
 
+    public function canIndex(?Artwork $artwork): bool
+    {
+        return $artwork && $artwork->is_published && ! $artwork->is_private && ! $artwork->is_blocked
+            && $artwork->indexingEnabled() && $artwork->user()->where('is_blocked', false)->exists();
+    }
+
     public function contentHash(Artwork $artwork): string
     {
         return hash('sha256', json_encode([
@@ -62,7 +68,7 @@ class ArtworkIndexingService
     private function enqueue(int $artworkId, bool $force, ?array $observed = null): bool
     {
         $artwork = Artwork::withoutGlobalScopes()->find($artworkId);
-        if (! config('ai.enabled') || ! $artwork || ! $artwork->is_published || ! $artwork->indexingEnabled()) {
+        if (! config('ai.enabled') || ! $this->canIndex($artwork)) {
             return false;
         }
         $hash = $this->contentHash($artwork);

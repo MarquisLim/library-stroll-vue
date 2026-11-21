@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Models\Complaint\Complaint;
+use App\Services\AiService\ArtworkIndexVisibility;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -31,6 +32,16 @@ class Artwork extends Model implements HasMedia
             $q->where('is_blocked', false)
                 ->whereDoesntHave('user', fn($uq) => $uq->where('is_blocked', true));
         });
+        static::updated(fn (Artwork $artwork) => app(ArtworkIndexVisibility::class)->artworkUpdated($artwork));
+    }
+
+    protected function performUpdate(Builder $query)
+    {
+        if ($this->isDirty(['is_published', 'is_private', 'is_blocked', 'ai_indexing_enabled'])) {
+            return $this->getConnection()->transaction(fn () => parent::performUpdate($query));
+        }
+
+        return parent::performUpdate($query);
     }
 
     public function scopePubliclyVisible(Builder $query): Builder

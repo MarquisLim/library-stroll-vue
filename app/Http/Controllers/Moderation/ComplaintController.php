@@ -13,6 +13,7 @@ use App\Notifications\ComplaintRejected;
 use App\Notifications\ContentBlocked;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class ComplaintController extends Controller
@@ -72,22 +73,29 @@ class ComplaintController extends Controller
             'moderator_note' => 'nullable|string|max:2000',
         ]);
 
-        $complaint->update([
-            'status'         => $data['status'],
-            'moderator_note' => $data['moderator_note'] ?? null,
-            'moderator_id'   => Auth::id(),
-            'reviewed_at'    => now(),
-        ]);
+        [$complaint, $owner] = DB::transaction(function () use ($complaint, $data) {
+            $subject = $complaint->complaintable()->lockForUpdate()->firstOrFail();
+            $complaint = Complaint::lockForUpdate()->findOrFail($complaint->id);
+            $owner = $subject instanceof User ? $subject : $subject->user;
+            $complaint->update([
+                'status'         => $data['status'],
+                'moderator_note' => $data['moderator_note'] ?? null,
+                'moderator_id'   => Auth::id(),
+                'reviewed_at'    => now(),
+            ]);
+            if ($data['status'] === 'approved') {
+                $subject->block();
+            } else {
+                $subject->unblock();
+            }
 
-        $subject = $complaint->complaintable;
-        $owner   = $subject instanceof User ? $subject : $subject->user;
+            return [$complaint, $owner];
+        });
 
         if ($data['status'] === 'approved') {
-            optional($subject)->block();
-            $owner->notify(new ContentBlocked($complaint, $request->user()));
+            $owner?->notify(new ContentBlocked($complaint, $request->user()));
             $complaint->user->notify(new ComplaintApproved($complaint, $request->user()));
         } else {
-            optional($subject)->unblock();
             $complaint->user->notify(
                 new ComplaintRejected($complaint, $request->user())
             );

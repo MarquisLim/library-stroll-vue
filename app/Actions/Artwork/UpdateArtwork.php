@@ -6,14 +6,15 @@ use App\Models\Artwork;
 use App\Models\Collection;
 use App\Models\Tag;
 use App\Models\User;
-use App\Services\AiService\ArtworkIndexingService;
+use App\Services\AiService\ArtworkIndexVisibility;
 use Illuminate\Support\Facades\DB;
 
 class UpdateArtwork
 {
     public function handle(Artwork $artwork, User $actor, array $data): Artwork
     {
-        $artwork = DB::transaction(function () use ($artwork, $actor, $data) {
+        return DB::transaction(function () use ($artwork, $actor, $data) {
+            $artwork = Artwork::withoutGlobalScopes()->lockForUpdate()->findOrFail($artwork->id);
             $fields = [
                 'title',
                 'description',
@@ -46,12 +47,10 @@ class UpdateArtwork
 
             $artwork->load('media', 'tags', 'collections');
 
+            $this->maybeDispatchReindex($artwork, $data);
+
             return $artwork;
         });
-
-        $this->maybeDispatchReindex($artwork, $data);
-
-        return $artwork;
     }
 
     private function maybeDispatchReindex(Artwork $artwork, array $data): void
@@ -64,13 +63,13 @@ class UpdateArtwork
             return;
         }
 
-        $relevantKeys = ['title', 'description', 'tags', 'is_private', 'has_ai'];
+        $relevantKeys = ['title', 'description', 'tags', 'has_ai'];
         $hasRelevantChange = collect($relevantKeys)->contains(fn ($key) => array_key_exists($key, $data));
 
         if (! $hasRelevantChange) {
             return;
         }
 
-        app(ArtworkIndexingService::class)->dispatch($artwork);
+        app(ArtworkIndexVisibility::class)->indexAfterCommit($artwork);
     }
 }

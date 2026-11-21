@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Services\AiService\ArtworkIndexVisibility;
+
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Models\Models\Complaint\Complaint;
 use Illuminate\Database\Eloquent\Builder;
@@ -78,6 +80,16 @@ class User extends Authenticatable
         static::addGlobalScope('not_blocked', function (Builder $b) {
             $b->where('is_blocked', false);
         });
+        static::updated(fn (User $user) => app(ArtworkIndexVisibility::class)->authorUpdated($user));
+    }
+
+    protected function performUpdate(Builder $query)
+    {
+        if ($this->isDirty('is_blocked')) {
+            return $this->getConnection()->transaction(fn () => parent::performUpdate($query));
+        }
+
+        return parent::performUpdate($query);
     }
 
     public function artworks()

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Contracts\AiServiceClient;
 use App\Jobs\AnalyzeAndIndexArtworkJob;
+use App\Jobs\DeleteArtworkIndexJob;
 use App\Models\Artwork;
 use App\Models\ArtworkAiMetadata;
 use App\Services\AiService\ArtworkIndexingService;
@@ -287,7 +288,8 @@ class ArtworkIndexDispatchTest extends TestCase
             $artwork->fresh()->forceFill(['ai_indexing_enabled' => false])->save();
         });
 
-        Queue::assertNothingPushed();
+        Queue::assertNotPushed(AnalyzeAndIndexArtworkJob::class);
+        Queue::assertPushed(DeleteArtworkIndexJob::class, 1);
         $this->assertDatabaseCount('artwork_ai_metadata', 0);
     }
 
