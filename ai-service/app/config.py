@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     ollama_keep_alive: str = "5m"
     ollama_think: bool = False
     ollama_num_predict: int = 768
+    ollama_vision_num_predict: int = 3072
     ollama_vision_timeout: int = 45
     ollama_text_timeout: int = 100
 

@@ -3,6 +3,7 @@ from unittest.mock import patch, AsyncMock
 from app.config import settings
 from app.schemas.metadata import ArtworkMetadata
 import httpx
+import pytest
 
 
 def test_embedding_endpoint(test_app, mock_ollama):
@@ -150,8 +151,26 @@ def test_embed_timeout_returns_502(test_app, mock_ollama):
         assert resp.status_code == 502
 
 
-def test_vision_timeout_uses_explicit_text_fallback(test_app, mock_ollama):
-    mock_ollama.analyze_image.side_effect = httpx.ReadTimeout("Vision slow")
+def test_valid_vision_output_is_not_replaced_with_text(test_app, mock_ollama):
+    mock_ollama.analyze_image.return_value = ArtworkMetadata(summary="A blue circle", colors=["blue"])
+    with patch("app.api.dependencies.settings") as ms:
+        ms.auth_enabled = False
+        response = test_app.post("/api/v1/artworks/analyze", data={"artwork_id": 1, "title": "Sample"},
+                                 files={"image": ("test.jpg", b"image", "image/jpeg")})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["analysis_source"] == "vision"
+    assert body["vision_model"] == settings.ollama_vision_model
+    assert ArtworkMetadata.model_validate(body).colors == ["blue"]
+    mock_ollama.analyze_text.assert_not_awaited()
+
+
+@pytest.mark.parametrize("error", [
+    httpx.ReadTimeout("Vision slow"),
+    ValueError("Ollama reached the generation limit before returning valid metadata"),
+])
+def test_vision_errors_use_explicit_text_fallback(test_app, mock_ollama, error):
+    mock_ollama.analyze_image.side_effect = error
     mock_ollama.analyze_text.return_value = ArtworkMetadata(summary="Museum description", tags_en=["cat"])
     with patch("app.api.dependencies.settings") as ms:
         ms.auth_enabled = False
@@ -163,3 +182,4 @@ def test_vision_timeout_uses_explicit_text_fallback(test_app, mock_ollama):
     assert body["vision_model"] == ""
     assert body["warnings"]
     assert body["summary"] == "Museum description"
+    mock_ollama.analyze_text.assert_awaited_once()

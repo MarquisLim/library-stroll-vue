@@ -1,15 +1,9 @@
 import base64
-import json
-import logging
-import time
-from pathlib import Path
 
 import httpx
 
 from app.config import settings
 from app.schemas.metadata import ArtworkMetadata
-
-logger = logging.getLogger(__name__)
 
 METADATA_JSON_SCHEMA = {
     "type": "object",
@@ -163,7 +157,6 @@ class OllamaClient:
         system: str,
         user: str,
         images: list[str] | None = None,
-        max_retries: int = 0,
     ) -> ArtworkMetadata:
         messages = [
             {"role": "system", "content": system},
@@ -172,6 +165,9 @@ class OllamaClient:
         if images:
             messages[-1]["images"] = images
 
+        # The qwen3-vl:4b thinking model can spend part of this budget before message.content begins.
+        num_predict = settings.ollama_vision_num_predict if images else settings.ollama_num_predict
+        timeout = settings.ollama_vision_timeout if images else settings.ollama_text_timeout
         payload: dict = {
             "model": model,
             "messages": messages,
@@ -181,34 +177,27 @@ class OllamaClient:
             "keep_alive": settings.ollama_keep_alive,
             "options": {
                 "temperature": 0.1,
-                "num_predict": settings.ollama_num_predict,
+                "num_predict": num_predict,
             },
         }
 
-        last_error: Exception | None = None
-        for attempt in range(1 + max_retries):
-            try:
-                timeout = settings.ollama_vision_timeout if images else settings.ollama_text_timeout
-                resp = await self._client.post("/api/chat", json=payload, timeout=timeout)
-                resp.raise_for_status()
-                data = resp.json()
-                content = data.get("message", {}).get("content", "")
-                parsed = json.loads(content)
-                metadata = ArtworkMetadata.model_validate(parsed)
-                return metadata.deduplicated()
-            except (json.JSONDecodeError, ValueError) as exc:
-                last_error = exc
-                logger.warning(
-                    "Structured output attempt %d/%d failed: %s",
-                    attempt + 1,
-                    1 + max_retries,
-                    exc,
-                )
-                continue
+        resp = await self._client.post("/api/chat", json=payload, timeout=timeout)
+        resp.raise_for_status()
+        try:
+            data = resp.json()
+        except ValueError:
+            raise ValueError("Ollama returned an invalid chat response") from None
+        if not isinstance(data, dict):
+            raise ValueError("Ollama returned an invalid chat response")
 
-        raise ValueError(
-            f"Failed to get valid structured output after {1 + max_retries} attempts: {last_error}"
-        )
+        message = data.get("message")
+        content = message.get("content") if isinstance(message, dict) else None
+        try:
+            return ArtworkMetadata.model_validate_json(content).deduplicated()
+        except ValueError:
+            if data.get("done_reason") == "length":
+                raise ValueError("Ollama reached the generation limit before returning valid metadata") from None
+            raise ValueError("Ollama returned invalid structured metadata") from None
 
     async def close(self) -> None:
         await self._client.aclose()
