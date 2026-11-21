@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\Log;
 
 class HybridSearchService
 {
+    private const RERANK_LIMIT = 30;
+
     public function __construct(
         private readonly ReciprocalRankFusion $rrf,
     ) {}
@@ -35,6 +37,9 @@ class HybridSearchService
         $semanticIds = [];
         if (config('ai.enabled')) {
             $semanticIds = $this->semanticSearch($query, $filters, $semanticLimit);
+            if (config('ai.rerank_enabled') && $semanticIds !== []) {
+                $semanticIds = $this->rerankSemanticResults($query, $semanticIds);
+            }
         }
 
         if (empty($lexicalIds) && empty($semanticIds)) {
@@ -133,6 +138,47 @@ class HybridSearchService
 
             return [];
         }
+    }
+
+    /**
+     * @param  int[]  $denseIds
+     * @return int[]
+     */
+    private function rerankSemanticResults(string $query, array $denseIds): array
+    {
+        $candidates = array_slice($denseIds, 0, self::RERANK_LIMIT);
+        $count = count($candidates);
+
+        try {
+            $result = app(AiServiceClient::class)->rerank($query, $candidates, $count);
+            $rerankedIds = $result->artworkIds();
+            $expectedIds = $candidates;
+            $returnedIds = $rerankedIds;
+            sort($expectedIds);
+            sort($returnedIds);
+
+            if (! $result->reranked
+                || count($result->results) !== $count
+                || array_column($result->results, 'rank') !== range(1, $count)
+                || count(array_unique($rerankedIds)) !== $count
+                || $expectedIds !== $returnedIds) {
+                throw new \UnexpectedValueException('Invalid ColBERT candidate permutation.');
+            }
+        } catch (\Throwable $e) {
+            Log::warning('ColBERT reranking failed. Using Dense order.', [
+                'candidates' => $count,
+                'reason' => $e::class,
+            ]);
+
+            return $denseIds;
+        }
+
+        Log::debug('ColBERT reranking applied.', [
+            'candidates' => $count,
+            'latency_ms' => $result->latencyMs,
+        ]);
+
+        return [...$rerankedIds, ...array_slice($denseIds, $count)];
     }
 
     private function applyFilters(Builder $query, array $filters): void

@@ -167,17 +167,40 @@ class HttpAiServiceClient implements AiServiceClient
 
     public function rerank(string $query, array $artworkIds, int $limit = 20): AiSearchResult
     {
-        $response = $this->client()
-            ->retry(0)
+        $url = config('ai.colbert_url');
+        if (! is_string($url) || trim($url) === '') {
+            throw new \LogicException('ColBERT URL is not configured.');
+        }
+
+        $timeout = max(1, min(5, (int) config('ai.colbert_timeout', 2)));
+        $response = Http::baseUrl($url)
+            ->acceptJson()
+            ->withoutRedirecting()
+            ->connectTimeout($timeout)
+            ->timeout($timeout)
             ->post('/api/v1/rerank', [
                 'query' => $query,
                 'artwork_ids' => $artworkIds,
                 'limit' => $limit,
             ]);
 
-        $response->throw();
+        $data = $response->throw()->json();
+        if (! $response->successful()
+            || ! is_array($data)
+            || ! is_bool($data['reranked'] ?? null)
+            || ! is_array($data['results'] ?? null)
+            || ! array_is_list($data['results'])) {
+            throw new \UnexpectedValueException('Invalid ColBERT response.');
+        }
 
-        return AiSearchResult::fromResponse($response->json());
+        foreach ($data['results'] as $hit) {
+            $score = $hit['score'] ?? null;
+            if ((! is_float($score) && ! is_int($score)) || ! is_finite($score)) {
+                throw new \UnexpectedValueException('Invalid ColBERT score.');
+            }
+        }
+
+        return AiSearchResult::fromResponse($data);
     }
 
     private function client(): PendingRequest

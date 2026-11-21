@@ -27,6 +27,8 @@ return [
     'auto_reindex_on_update' => (bool) env('AI_AUTO_REINDEX_ON_UPDATE', true),
 
     'rerank_enabled' => (bool) env('AI_RERANK_ENABLED', false),
+    'colbert_url' => env('AI_COLBERT_URL'),
+    'colbert_timeout' => (int) env('AI_COLBERT_TIMEOUT', 2),
 
     'search' => [
         'lexical_limit' => (int) env('AI_SEARCH_LEXICAL_LIMIT', 50),

@@ -183,24 +183,30 @@ class AiServiceClientTest extends TestCase
         });
     }
 
-    public function test_rerank_returns_search_result(): void
+    public function test_rerank_uses_configured_colbert_endpoint_without_the_main_service_key(): void
     {
+        config(['ai.colbert_url' => 'http://colbert.test:8001', 'ai.api_key' => 'test-main-key']);
+        Http::preventStrayRequests();
         Http::fake([
-            '*/api/v1/rerank' => Http::response([
+            'http://colbert.test:8001/api/v1/rerank' => Http::response([
                 'results' => [
                     ['artwork_id' => 3, 'score' => 0.0, 'rank' => 1],
                     ['artwork_id' => 1, 'score' => 0.0, 'rank' => 2],
                 ],
-                'reranked' => false,
-                'model' => 'none',
-                'latency_ms' => 0,
+                'reranked' => true,
+                'model' => 'jinaai/jina-colbert-v2',
+                'latency_ms' => 20,
             ]),
         ]);
 
-        $result = app(AiServiceClient::class)->rerank('query', [3, 1]);
+        $result = app(AiServiceClient::class)->rerank('query', [1, 3], 2);
 
         $this->assertInstanceOf(AiSearchResult::class, $result);
-        $this->assertFalse($result->reranked);
+        $this->assertTrue($result->reranked);
+        $this->assertSame([3, 1], $result->artworkIds());
+        Http::assertSent(fn ($request) => $request->url() === 'http://colbert.test:8001/api/v1/rerank'
+            && ! $request->hasHeader('X-AI-Service-Key')
+            && $request->data() === ['query' => 'query', 'artwork_ids' => [1, 3], 'limit' => 2]);
     }
 
     public function test_empty_search_result_helper(): void
