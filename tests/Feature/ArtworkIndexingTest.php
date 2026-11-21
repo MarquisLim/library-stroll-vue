@@ -11,10 +11,13 @@ use App\Models\Artwork;
 use App\Models\ArtworkAiMetadata;
 use App\Models\Tag;
 use App\Services\AiService\ArtworkIndexingService;
+use Illuminate\Console\Scheduling\Event;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class ArtworkIndexingTest extends TestCase
@@ -69,16 +72,25 @@ class ArtworkIndexingTest extends TestCase
             && $r['payload']['is_published'] === true);
     }
 
-    public function test_tag_only_edit_changes_hash_and_dispatches_reindex(): void
+    #[DataProvider('indexableEdits')]
+    public function test_relevant_artwork_edit_changes_hash_and_dispatches_reindex(array $changes): void
     {
         Queue::fake();
         $artwork = $this->artwork();
         $hash = app(ArtworkIndexingService::class)->contentHash($artwork);
         ArtworkAiMetadata::create(['artwork_id' => $artwork->id, 'status' => 'indexed', 'content_hash' => $hash]);
-        app(UpdateArtwork::class)->handle($artwork, $artwork->user, ['tags' => ['new tag']]);
+        app(UpdateArtwork::class)->handle($artwork, $artwork->user, $changes);
         $this->assertNotSame($hash, app(ArtworkIndexingService::class)->contentHash($artwork->fresh()));
         Queue::assertPushedOn('ai', AnalyzeAndIndexArtworkJob::class);
         $this->assertSame('pending', $artwork->aiMetadata()->first()->status);
+    }
+
+    public static function indexableEdits(): array
+    {
+        return [
+            'tags only' => [['tags' => ['new tag']]],
+            'title and description' => [['title' => 'New title', 'description' => 'New description']],
+        ];
     }
 
     public function test_invalid_index_response_does_not_mark_artwork_indexed(): void
@@ -173,13 +185,119 @@ class ArtworkIndexingTest extends TestCase
         Queue::assertNothingPushed();
     }
 
-    public function test_reconcile_recovers_stuck_processing_jobs(): void
+    #[DataProvider('indexedAges')]
+    public function test_reconcile_does_not_reindex_unchanged_artwork_due_to_age(int $ageHours, array $options): void
     {
         Queue::fake();
         $artwork = $this->artwork();
-        ArtworkAiMetadata::create(['artwork_id' => $artwork->id, 'status' => 'processing'])
-            ->forceFill(['updated_at' => now()->subHours(4)])->save();
+        $indexedAt = now()->subHours($ageHours)->startOfSecond();
+        $metadata = $artwork->aiMetadata()->create([
+            'status' => ArtworkAiMetadata::STATUS_INDEXED,
+            'content_hash' => app(ArtworkIndexingService::class)->contentHash($artwork),
+            'indexed_at' => $indexedAt,
+        ]);
+
+        $this->artisan('ai:reconcile', $options)->assertSuccessful();
+
+        Queue::assertNothingPushed();
+        $this->assertTrue($metadata->refresh()->isIndexed());
+        $this->assertTrue($metadata->indexed_at->equalTo($indexedAt));
+    }
+
+    public static function indexedAges(): array
+    {
+        return [
+            'older than 24 hours' => [25, []],
+            'older than seven days' => [192, []],
+            'deprecated age option' => [2, ['--stale-hours' => 1]],
+        ];
+    }
+
+    #[DataProvider('recoverableMetadata')]
+    public function test_reconcile_queues_recoverable_metadata(string $status, int $ageHours, int $attempts): void
+    {
+        Queue::fake();
+        $artwork = $this->artwork();
+        $metadata = $artwork->aiMetadata()->create(['status' => $status, 'attempts' => $attempts]);
+        $metadata->forceFill(['updated_at' => now()->subHours($ageHours)])->save();
+
+        $this->artisan('ai:reconcile', ['--max-pending-hours' => 3])->assertSuccessful();
+
+        Queue::assertPushedOn('ai', AnalyzeAndIndexArtworkJob::class);
+        $this->assertSame(ArtworkAiMetadata::STATUS_PENDING, $metadata->refresh()->status);
+    }
+
+    public static function recoverableMetadata(): array
+    {
+        return [
+            'stale' => [ArtworkAiMetadata::STATUS_STALE, 0, 1],
+            'stuck processing' => [ArtworkAiMetadata::STATUS_PROCESSING, 4, 1],
+            'old pending' => [ArtworkAiMetadata::STATUS_PENDING, 4, 0],
+            'failed with attempts remaining' => [ArtworkAiMetadata::STATUS_FAILED, 0, 4],
+        ];
+    }
+
+    public function test_reconcile_does_not_queue_failed_metadata_at_the_attempt_limit(): void
+    {
+        Queue::fake();
+        $metadata = $this->artwork()->aiMetadata()->create([
+            'status' => ArtworkAiMetadata::STATUS_FAILED,
+            'attempts' => 5,
+        ]);
+
         $this->artisan('ai:reconcile')->assertSuccessful();
-        Queue::assertPushed(AnalyzeAndIndexArtworkJob::class);
+
+        Queue::assertNothingPushed();
+        $this->assertTrue($metadata->refresh()->isFailed());
+    }
+
+    public function test_reconcile_does_not_queue_stale_metadata_when_indexing_is_disabled(): void
+    {
+        Queue::fake();
+        $artwork = $this->artwork();
+        $artwork->forceFill(['ai_indexing_enabled' => false])->save();
+        $metadata = $artwork->aiMetadata()->create(['status' => ArtworkAiMetadata::STATUS_STALE]);
+
+        $this->artisan('ai:reconcile')->assertSuccessful();
+
+        Queue::assertNothingPushed();
+        $this->assertTrue($metadata->refresh()->isStale());
+    }
+
+    public function test_reconcile_queues_published_artwork_without_metadata(): void
+    {
+        Queue::fake();
+        $artwork = $this->artwork();
+
+        $this->artisan('ai:reconcile')->assertSuccessful();
+
+        Queue::assertPushedOn('ai', AnalyzeAndIndexArtworkJob::class);
+        $this->assertSame(ArtworkAiMetadata::STATUS_PENDING, $artwork->aiMetadata()->firstOrFail()->status);
+    }
+
+    public function test_successive_scheduled_reconciliations_leave_unchanged_indexed_artwork_alone(): void
+    {
+        Queue::fake();
+        $artwork = $this->artwork();
+        $firstRun = now()->startOfHour()->addMinutes(30);
+        $metadata = $artwork->aiMetadata()->create([
+            'status' => ArtworkAiMetadata::STATUS_INDEXED,
+            'content_hash' => app(ArtworkIndexingService::class)->contentHash($artwork),
+            'indexed_at' => $firstRun->copy()->subDays(8),
+        ]);
+
+        foreach ([$firstRun, $firstRun->copy()->addMinutes(30)] as $runAt) {
+            $this->travelTo($runAt, function () {
+                $event = app(Schedule::class)->dueEvents($this->app)
+                    ->sole(fn (Event $event) => str_contains($event->command ?? '', 'ai:reconcile --limit=25'));
+                $this->assertTrue($event->filtersPass($this->app));
+
+                // Run the registered command in-process so SQLite and the queue fake are shared.
+                $this->artisan(strstr($event->command, 'ai:reconcile'))->assertSuccessful();
+            });
+        }
+
+        Queue::assertNothingPushed();
+        $this->assertTrue($metadata->refresh()->isIndexed());
     }
 }

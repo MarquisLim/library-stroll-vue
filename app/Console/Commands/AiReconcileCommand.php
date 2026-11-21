@@ -10,7 +10,7 @@ use Illuminate\Console\Command;
 class AiReconcileCommand extends Command
 {
     protected $signature = 'ai:reconcile
-        {--stale-hours=24 : Reprocess metadata older than N hours}
+        {--stale-hours= : Deprecated. Accepted for compatibility and ignored.}
         {--max-pending-hours=2 : Reprocess stuck pending items older than N hours}
         {--limit=50 : Maximum items to process per run}';
 
@@ -24,22 +24,19 @@ class AiReconcileCommand extends Command
             return self::SUCCESS;
         }
 
-        $staleHours = (int) $this->option('stale-hours');
         $pendingHours = (int) $this->option('max-pending-hours');
         $limit = (int) $this->option('limit');
-        if ($limit < 1 || $limit > 1000 || $staleHours < 1 || $pendingHours < 1) {
-            $this->error('limit must be 1..1000 and hour intervals must be positive.');
+        if ($limit < 1 || $limit > 1000 || $pendingHours < 1) {
+            $this->error('limit must be 1..1000 and max-pending-hours must be positive.');
 
             return self::INVALID;
         }
         $dispatched = 0;
 
-        $staleItems = ArtworkAiMetadata::whereHas('artwork', fn ($q) => $q->where('ai_indexing_enabled', true))->where(function ($query) use ($staleHours, $pendingHours) {
+        $staleItems = ArtworkAiMetadata::whereHas('artwork', fn ($q) => $q->where('ai_indexing_enabled', true))->where(function ($query) use ($pendingHours) {
             $query->where('status', ArtworkAiMetadata::STATUS_STALE)
                 ->orWhere(fn ($q) => $q->where('status', ArtworkAiMetadata::STATUS_PROCESSING)
-                    ->where('updated_at', '<', now()->subHours($pendingHours)))
-                ->orWhere(fn ($q) => $q->where('status', ArtworkAiMetadata::STATUS_INDEXED)
-                    ->where('indexed_at', '<', now()->subHours($staleHours)));
+                    ->where('updated_at', '<', now()->subHours($pendingHours)));
         })
             ->limit($limit)
             ->get();
