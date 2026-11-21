@@ -117,6 +117,22 @@ class HttpAiServiceClient implements AiServiceClient
         return $response->json();
     }
 
+    public function inspectArtworkIndex(int $artworkId, ?string $pointId = null): array
+    {
+        $data = $this->client()
+            ->connectTimeout(3)
+            ->timeout(10)
+            ->get("/api/v1/artworks/{$artworkId}/index/inspect", $pointId === null ? [] : ['point_id' => $pointId])
+            ->throw()
+            ->json();
+
+        if (! is_array($data)) {
+            throw new \UnexpectedValueException('Invalid artwork index inspection response.');
+        }
+
+        return $data;
+    }
+
     public function search(string $query, int $limit = 20, array $filters = []): AiSearchResult
     {
         $response = $this->client()

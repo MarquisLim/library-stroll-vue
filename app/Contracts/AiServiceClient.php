@@ -29,6 +29,8 @@ interface AiServiceClient
 
     public function deleteArtworkIndex(int $artworkId): array;
 
+    public function inspectArtworkIndex(int $artworkId, ?string $pointId = null): array;
+
     public function search(string $query, int $limit = 20, array $filters = []): AiSearchResult;
 
     public function similar(int $artworkId, int $limit = 20, array $filters = []): AiSearchResult;

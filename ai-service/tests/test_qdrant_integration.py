@@ -1,7 +1,7 @@
 import uuid
 
 import pytest
-from qdrant_client import AsyncQdrantClient
+from qdrant_client import AsyncQdrantClient, models
 
 from app.clients.qdrant import QdrantService
 
@@ -56,3 +56,69 @@ async def test_incompatible_dimension_is_explicit_and_missing_collection_is_not_
     assert await vectors.health() is True
     with pytest.raises(ValueError, match="dimension"):
         await vectors.ensure_collection(4)
+
+
+async def test_inspect_returns_hidden_point_metadata_without_vector_or_other_payload(vectors):
+    first = await vectors.upsert(7, [1.0, 0.0], public_payload(
+        is_private=True, is_blocked=True, tags=["hidden"], content_hash="revision",
+        schema_version=1, prompt_version=2, embedding_model="test-model", embedding_fingerprint="stored",
+    ))
+
+    result = (await vectors.inspect_artwork(7, first)).model_dump()
+
+    assert result == {
+        "artwork_id": 7, "collection": "audit", "dimension": 2, "saved_point": "matched",
+        "has_duplicates": False, "vector_present": True,
+        "points": [{
+            "id": first, "artwork_id": 7, "content_hash": "revision", "schema_version": 1, "prompt_version": 2,
+            "is_published": True, "is_private": True, "is_blocked": True, "embedding_model": "test-model",
+            "embedding_model_digest": None, "embedding_fingerprint": "stored",
+        }],
+    }
+
+
+async def test_inspect_distinguishes_absent_point_from_missing_collection(vectors):
+    assert await vectors.inspect_artwork(7) is None
+    assert not await vectors._client.collection_exists("audit")
+    await vectors.ensure_collection(2)
+
+    result = await vectors.inspect_artwork(7, str(uuid.uuid4()))
+
+    assert result.points == []
+    assert result.saved_point == "missing"
+    assert result.vector_present is None
+
+
+async def test_inspect_bounds_duplicate_results(vectors):
+    for _ in range(3):
+        await vectors.upsert(7, [1.0, 0.0], public_payload(), str(uuid.uuid4()))
+
+    result = await vectors.inspect_artwork(7)
+
+    assert result.has_duplicates
+    assert len(result.points) == 2
+    assert all(point.artwork_id == 7 for point in result.points)
+
+
+async def test_inspect_detects_a_saved_id_belonging_to_another_artwork(vectors):
+    own = await vectors.upsert(7, [1.0, 0.0], public_payload())
+    other = await vectors.upsert(8, [1.0, 0.0], public_payload())
+
+    result = await vectors.inspect_artwork(7, other)
+
+    assert result.saved_point == "conflict"
+    assert [point.id for point in result.points] == [own]
+    assert (await vectors.inspect_artwork(9, other)).saved_point == "conflict"
+    assert (await vectors.inspect_artwork(7, str(uuid.uuid4()))).saved_point == "missing"
+
+
+async def test_inspect_distinguishes_a_payload_only_point(vectors):
+    await vectors.ensure_collection(2)
+    point = models.PointStruct(id=1, payload=public_payload(artwork_id=7), vector={})
+    await vectors._client.upsert("audit", [point])
+
+    result = await vectors.inspect_artwork(7)
+
+    assert [point.id for point in result.points] == ["1"]
+    assert result.vector_present is False
+    assert result.points[0].embedding_model_digest is None

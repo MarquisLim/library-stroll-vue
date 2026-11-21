@@ -1,11 +1,12 @@
 import asyncio
 import logging
 from typing import Annotated
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Path, UploadFile
 from fastapi.responses import JSONResponse
 
-from app.api.dependencies import verify_api_key
+from app.api.dependencies import require_api_key, verify_api_key
 from app.config import settings
 from app.schemas.requests import (
     EmbeddingRequest,
@@ -16,6 +17,7 @@ from app.schemas.requests import (
 )
 from app.schemas.responses import (
     AnalyzeResponse,
+    ArtworkIndexInspection,
     DeleteIndexResponse,
     EmbeddingResponse,
     HealthResponse,
@@ -180,6 +182,28 @@ async def index_artwork(
     except Exception as exc:
         logger.exception("Indexing failed for artwork %d", body.artwork_id)
         raise HTTPException(status_code=502, detail=str(exc) or type(exc).__name__)
+
+
+@router.get(
+    "/api/v1/artworks/{artwork_id}/index/inspect",
+    response_model=ArtworkIndexInspection,
+    dependencies=[Depends(require_api_key)],
+)
+async def inspect_artwork_index(
+    artwork_id: Annotated[int, Path(gt=0, le=2**63 - 1)],
+    svc: Annotated[ArtworkService, Depends(get_artwork_service)],
+    point_id: UUID | None = None,
+):
+    try:
+        async with asyncio.timeout(5):
+            result = await svc.qdrant.inspect_artwork(artwork_id, str(point_id) if point_id else None)
+    except Exception:
+        logger.warning("Qdrant index inspection failed")
+        raise HTTPException(status_code=503, detail="qdrant_inspection_failed") from None
+
+    if result is None:
+        raise HTTPException(status_code=503, detail="qdrant_collection_missing")
+    return result
 
 
 @router.delete(

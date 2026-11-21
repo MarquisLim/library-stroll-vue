@@ -6,12 +6,15 @@ from qdrant_client.models import (
     Distance,
     FieldCondition,
     Filter,
+    HasIdCondition,
+    HasVectorCondition,
     MatchValue,
     PointStruct,
     VectorParams,
 )
 
 from app.config import settings
+from app.schemas.responses import ArtworkIndexInspection, ArtworkIndexPoint
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +58,52 @@ class QdrantService:
             "distance": getattr(distance, "value", str(distance)) if distance else None,
             "collection_status": getattr(info.status, "value", str(info.status)),
         }
+
+    async def inspect_artwork(
+        self, artwork_id: int, point_id: str | None = None,
+    ) -> ArtworkIndexInspection | None:
+        if not await self._client.collection_exists(self.collection):
+            return None
+
+        info = await self._client.get_collection(self.collection)
+        points, next_offset = await self._client.scroll(
+            collection_name=self.collection,
+            scroll_filter=Filter(must=[FieldCondition(key="artwork_id", match=MatchValue(value=artwork_id))]),
+            limit=2,
+            with_payload=[key for key in ArtworkIndexPoint.model_fields if key != "id"],
+            with_vectors=False,
+        )
+
+        saved_point = "not_provided"
+        if point_id is not None:
+            if any(str(point.id) == point_id for point in points):
+                saved_point = "matched"
+            else:
+                saved = await self._client.retrieve(
+                    collection_name=self.collection, ids=[point_id], with_payload=False, with_vectors=False,
+                )
+                # The saved ID exists but was not returned for this artwork.
+                saved_point = "conflict" if saved else "missing"
+
+        has_duplicates = len(points) > 1 or next_offset is not None
+        vector_present = None
+        if len(points) == 1 and not has_duplicates:
+            count = await self._client.count(
+                collection_name=self.collection,
+                count_filter=Filter(must=[HasIdCondition(has_id=[points[0].id]), HasVectorCondition(has_vector="")]),
+                exact=True,
+            )
+            vector_present = count.count == 1
+
+        return ArtworkIndexInspection(
+            artwork_id=artwork_id,
+            collection=self.collection,
+            dimension=getattr(info.config.params.vectors, "size", None),
+            saved_point=saved_point,
+            has_duplicates=has_duplicates,
+            vector_present=vector_present,
+            points=[ArtworkIndexPoint(**{**(point.payload or {}), "id": str(point.id)}) for point in points],
+        )
 
     async def ensure_collection(self, dimension: int) -> None:
         collections = await self._client.get_collections()
