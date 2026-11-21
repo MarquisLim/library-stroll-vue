@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Contracts\AiServiceClient;
+use App\Jobs\Middleware\ArtworkAiJobLock;
 use App\Models\AiProcessingRun;
 use App\Models\Artwork;
 use App\Models\ArtworkAiMetadata;
@@ -11,7 +12,6 @@ use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\InteractsWithQueue;
-use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -21,7 +21,9 @@ class AnalyzeAndIndexArtworkJob implements ShouldBeUnique, ShouldQueue
 {
     use InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $tries = 3;
+    public int $tries = ArtworkAiJobLock::MAX_RESERVATIONS;
+
+    public int $maxExceptions = ArtworkAiJobLock::MAX_EXCEPTIONS;
 
     public int $timeout = 600;
 
@@ -45,7 +47,7 @@ class AnalyzeAndIndexArtworkJob implements ShouldBeUnique, ShouldQueue
 
     public function middleware(): array
     {
-        return [(new WithoutOverlapping('artwork-ai-'.$this->artworkId))->releaseAfter(30)->expireAfter(660)];
+        return [ArtworkAiJobLock::middleware($this->artworkId)];
     }
 
     /**

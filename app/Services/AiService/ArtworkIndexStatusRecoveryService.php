@@ -2,7 +2,7 @@
 
 namespace App\Services\AiService;
 
-use App\Jobs\AnalyzeAndIndexArtworkJob;
+use App\Jobs\Middleware\ArtworkAiJobLock;
 use App\Models\ArtworkAiMetadata;
 use Illuminate\Contracts\Cache\Repository as Cache;
 
@@ -21,12 +21,9 @@ class ArtworkIndexStatusRecoveryService
             return 'Status recovery requires a failed or indexed record with its original indexed_at.';
         }
 
-        // Reuse the index job's current cache key. Delete and other writers do not share it yet.
-        $job = new AnalyzeAndIndexArtworkJob($artworkId);
-        $middleware = $job->middleware()[0];
-        $lock = app(Cache::class)->lock($middleware->getLockKey($job), 30);
+        $lock = app(Cache::class)->lock(ArtworkAiJobLock::key($artworkId), 30);
         if (! $lock->get()) {
-            return 'The artwork is currently locked by indexing.';
+            return 'The artwork is currently locked by an AI job.';
         }
 
         try {

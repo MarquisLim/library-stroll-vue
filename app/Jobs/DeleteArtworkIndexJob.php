@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Contracts\AiServiceClient;
+use App\Jobs\Middleware\ArtworkAiJobLock;
 use App\Models\AiProcessingRun;
 use App\Models\Artwork;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -17,7 +18,9 @@ class DeleteArtworkIndexJob implements ShouldQueue
 {
     use InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $tries = 3;
+    public int $tries = ArtworkAiJobLock::MAX_RESERVATIONS;
+
+    public int $maxExceptions = ArtworkAiJobLock::MAX_EXCEPTIONS;
 
     public int $timeout = 60;
 
@@ -27,6 +30,11 @@ class DeleteArtworkIndexJob implements ShouldQueue
     {
         $this->onQueue(config('ai.queue', 'ai'));
         $this->afterCommit();
+    }
+
+    public function middleware(): array
+    {
+        return [ArtworkAiJobLock::middleware($this->artworkId)];
     }
 
     /**

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Jobs\AnalyzeAndIndexArtworkJob;
+use App\Jobs\DeleteArtworkIndexJob;
 use App\Models\AiProcessingRun;
 use App\Models\Artwork;
 use App\Models\ArtworkAiMetadata;
@@ -290,23 +291,45 @@ class ArtworkIndexInspectionTest extends TestCase
         Queue::assertNothingPushed();
     }
 
-    public function test_active_index_job_lock_blocks_the_recovery_preflight(): void
+    #[DataProvider('aiJobsHoldingTheLock')]
+    public function test_active_ai_job_lock_blocks_the_recovery_preflight(string $jobClass): void
     {
         [$artwork, $metadata, , $response] = $this->confirmedFixture();
         Http::fake(['*/index/inspect*' => Http::response($response)]);
-        $job = new AnalyzeAndIndexArtworkJob($artwork->id);
+        $job = new $jobClass($artwork->id);
         $lock = app(Cache::class)->lock($job->middleware()[0]->getLockKey($job), 60);
         $this->assertTrue($lock->get());
 
         try {
             $this->artisan('ai:reconcile-artwork', ['id' => $artwork->id, '--apply-status' => true, '--confirm-id' => $artwork->id])
-                ->expectsOutput('The artwork is currently locked by indexing.')->assertFailed();
+                ->expectsOutput('The artwork is currently locked by an AI job.')->assertFailed();
         } finally {
             $lock->release();
         }
 
         $this->assertTrue($metadata->refresh()->isFailed());
         Http::assertSentCount(1);
+        Queue::assertNothingPushed();
+    }
+
+    public static function aiJobsHoldingTheLock(): array
+    {
+        return ['index' => [AnalyzeAndIndexArtworkJob::class], 'delete' => [DeleteArtworkIndexJob::class]];
+    }
+
+    public function test_reconcile_does_not_enqueue_recovery_for_21_failed_artworks_with_exhausted_attempts(): void
+    {
+        $artworks = Artwork::factory()->count(21)->create();
+        foreach ($artworks as $artwork) {
+            $artwork->aiMetadata()->create(['status' => ArtworkAiMetadata::STATUS_FAILED, 'attempts' => 7]);
+        }
+        Http::fake();
+
+        $this->artisan('ai:reconcile')->assertSuccessful();
+
+        $this->assertSame(21, ArtworkAiMetadata::where('status', ArtworkAiMetadata::STATUS_FAILED)->where('attempts', 7)->count());
+        $this->assertDatabaseCount('ai_processing_runs', 0);
+        Http::assertNothingSent();
         Queue::assertNothingPushed();
     }
 
