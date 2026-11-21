@@ -118,13 +118,7 @@ def rerank(model, text, hits, document_vectors, synchronize):
     return result, (finished - started) * 1_000, (encoded - started) * 1_000
 
 
-def run(directory, model_path, device):
-    documents, plan, candidates = load_inputs(directory)
-    if sha256(model_path / "model.safetensors") != WEIGHTS_SHA256:
-        raise ValueError("Model weights differ from the pinned Jina revision")
-    if (model_path / "model-revision.txt").read_text(encoding="utf-8-sig").strip() != MODEL_REVISION:
-        raise ValueError("Unexpected model revision")
-
+def prepare_device(device):
     use_cuda = device == "cuda"
     if use_cuda:
         if not torch.cuda.is_available():
@@ -137,7 +131,15 @@ def run(directory, model_path, device):
             torch.cuda.synchronize()
 
     torch.set_num_threads(4)
-    before_load = runtime_memory(use_cuda)
+    return synchronize
+
+
+def load_model(model_path, device, synchronize):
+    if sha256(model_path / "model.safetensors") != WEIGHTS_SHA256:
+        raise ValueError("Model weights differ from the pinned Jina revision")
+    if (model_path / "model-revision.txt").read_text(encoding="utf-8-sig").strip() != MODEL_REVISION:
+        raise ValueError("Unexpected model revision")
+
     started = time.perf_counter()
     model = MultiVectorEncoder(
         str(model_path),
@@ -150,7 +152,6 @@ def run(directory, model_path, device):
     model.eval()
     synchronize()
     model_load_seconds = time.perf_counter() - started
-    after_load = runtime_memory(use_cuda)
 
     projections = [module for module in model.modules()
                    if isinstance(module, torch.nn.Linear) and tuple(module.weight.shape) == (128, 1024)]
@@ -159,18 +160,34 @@ def run(directory, model_path, device):
     if len(projections) != 1 or not torch.equal(projections[0].weight.detach().cpu().float(), stored_projection):
         raise ValueError("The trained Jina ColBERT token projection was not loaded")
 
-    document_ids = sorted({hit["id"] for row in candidates for hit in row["results"]})
-    started = time.perf_counter()
+    return model, model_load_seconds
+
+
+def encode_documents(model, documents, document_ids):
     vectors = model.encode_document(
         [documents[artwork_id] for artwork_id in document_ids],
         batch_size=8,
         show_progress_bar=False,
     )
-    synchronize()
-    document_seconds = time.perf_counter() - started
     document_vectors = dict(zip(document_ids, vectors, strict=True))
     if any(vector.ndim != 2 or vector.shape[1] != 128 for vector in document_vectors.values()):
         raise ValueError("Expected 128-dimensional Jina token vectors")
+    return document_vectors
+
+
+def run(directory, model_path, device):
+    documents, plan, candidates = load_inputs(directory)
+    use_cuda = device == "cuda"
+    synchronize = prepare_device(device)
+    before_load = runtime_memory(use_cuda)
+    model, model_load_seconds = load_model(model_path, device, synchronize)
+    after_load = runtime_memory(use_cuda)
+
+    document_ids = sorted({hit["id"] for row in candidates for hit in row["results"]})
+    started = time.perf_counter()
+    document_vectors = encode_documents(model, documents, document_ids)
+    synchronize()
+    document_seconds = time.perf_counter() - started
 
     # One warm-up query is excluded from the latency distribution.
     rerank(model, plan[0]["text"], candidates[0]["results"], document_vectors, synchronize)
