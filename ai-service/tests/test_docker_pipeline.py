@@ -46,13 +46,14 @@ def test_running_docker_api_indexes_searches_and_deletes():
                 'query': 'кот акварель', 'limit': 5, 'filters': {'user_id': user_id},
             })
             assert response.status_code == 200, response.text
-            assert {item['artwork_id'] for item in response.json()['results']} == set(artwork_ids)
+            # Synthetic points have no corresponding MySQL publication.
+            assert response.json()['results'] == []
 
             response = client.post('/api/v1/similar', json={
                 'artwork_id': artwork_id, 'limit': 5, 'filters': {'user_id': user_id},
             })
-            assert response.status_code == 200, response.text
-            assert [item['artwork_id'] for item in response.json()['results']] == [artwork_id + 1]
+            assert response.status_code == 404, response.text
+            assert response.json()['detail'] == 'artwork_not_available'
         finally:
             for current_id in artwork_ids:
                 deleted = client.delete(f'/api/v1/artworks/{current_id}/index')

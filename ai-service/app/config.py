@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     ai_service_host: str = "127.0.0.1"
     ai_service_port: int = 8001
     ai_service_api_key: str = ""
+    laravel_internal_url: str = ""
 
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_chat_model: str = "qwen3:8b"

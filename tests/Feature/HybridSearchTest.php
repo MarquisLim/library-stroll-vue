@@ -7,6 +7,7 @@ use App\DTOs\AiSearchResult;
 use App\Models\Artwork;
 use App\Models\Tag;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Mockery;
 use Tests\TestCase;
 
@@ -57,7 +58,7 @@ class HybridSearchTest extends TestCase
 
         $response = $this->get('/search?q=Sunset');
 
-        $response->assertOk();
+        $response->assertOk()->assertSee('Sunset painting')->assertSee('Dawn over ocean');
     }
 
     public function test_search_excludes_private_artworks_from_semantic(): void
@@ -85,21 +86,18 @@ class HybridSearchTest extends TestCase
         $response->assertDontSee('Secret Art');
     }
 
-    public function test_search_falls_back_to_lexical_on_ai_error(): void
+    public function test_search_falls_back_to_lexical_when_ai_cannot_verify_visibility(): void
     {
-        config(['ai.enabled' => true]);
+        config(['ai.enabled' => true, 'ai.service_url' => 'http://ai.test']);
 
-        $match = $this->publishedArtwork(['title' => 'Watercolor Forest']);
-
-        $mock = Mockery::mock(AiServiceClient::class);
-        $mock->shouldReceive('search')
-            ->andThrow(new \Exception('AI unavailable'));
-        $this->app->instance(AiServiceClient::class, $mock);
+        $this->publishedArtwork(['title' => 'Watercolor Forest']);
+        Http::fake(['ai.test/api/v1/search' => Http::response(['detail' => 'artwork_visibility_unavailable'], 503)]);
 
         $response = $this->get('/search?q=Watercolor');
 
         $response->assertOk();
         $response->assertSee('Watercolor Forest');
+        Http::assertSentCount(1);
     }
 
     public function test_empty_query_returns_recommendations(): void

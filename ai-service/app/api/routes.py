@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Path, UploadF
 from fastapi.responses import JSONResponse
 
 from app.api.dependencies import require_api_key, verify_api_key
+from app.clients.artwork_visibility import VisibilityUnavailable
 from app.config import settings
 from app.schemas.requests import (
     EmbeddingRequest,
@@ -28,7 +29,7 @@ from app.schemas.responses import (
     SearchResultItem,
     SimilarResponse,
 )
-from app.services.artwork_service import ArtworkService
+from app.services.artwork_service import ArtworkService, SimilarSourceUnavailable
 
 logger = logging.getLogger(__name__)
 
@@ -226,7 +227,7 @@ async def delete_artwork_index(
 @router.post(
     "/api/v1/search",
     response_model=SearchResponse,
-    dependencies=[Depends(verify_api_key)],
+    dependencies=[Depends(require_api_key)],
 )
 async def search(
     body: SearchRequest,
@@ -241,6 +242,8 @@ async def search(
             model=result["model"],
             latency_ms=result["latency_ms"],
         )
+    except VisibilityUnavailable:
+        raise HTTPException(status_code=503, detail="artwork_visibility_unavailable") from None
     except Exception as exc:
         logger.exception("Search failed")
         raise HTTPException(status_code=502, detail=str(exc) or type(exc).__name__)
@@ -249,7 +252,7 @@ async def search(
 @router.post(
     "/api/v1/similar",
     response_model=SimilarResponse,
-    dependencies=[Depends(verify_api_key)],
+    dependencies=[Depends(require_api_key)],
 )
 async def similar(
     body: SimilarRequest,
@@ -264,6 +267,10 @@ async def similar(
             model=result["model"],
             latency_ms=result["latency_ms"],
         )
+    except SimilarSourceUnavailable:
+        raise HTTPException(status_code=404, detail="artwork_not_available") from None
+    except VisibilityUnavailable:
+        raise HTTPException(status_code=503, detail="artwork_visibility_unavailable") from None
     except Exception as exc:
         logger.exception("Similar search failed for artwork %d", body.artwork_id)
         raise HTTPException(status_code=502, detail=str(exc) or type(exc).__name__)

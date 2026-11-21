@@ -1,6 +1,6 @@
 import pytest
 from contextlib import asynccontextmanager
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -33,9 +33,17 @@ def mock_qdrant():
 
 
 @pytest.fixture
-def artwork_service(mock_ollama, mock_qdrant):
+def mock_visibility():
+    from app.clients.artwork_visibility import ArtworkVisibilityClient
+    client = AsyncMock(spec=ArtworkVisibilityClient)
+    client.visible_ids.return_value = set()
+    return client
+
+
+@pytest.fixture
+def artwork_service(mock_ollama, mock_qdrant, mock_visibility):
     from app.services.artwork_service import ArtworkService
-    return ArtworkService(ollama=mock_ollama, qdrant=mock_qdrant)
+    return ArtworkService(ollama=mock_ollama, qdrant=mock_qdrant, visibility=mock_visibility)
 
 
 @pytest.fixture

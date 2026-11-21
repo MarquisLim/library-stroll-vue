@@ -1,5 +1,6 @@
 from unittest.mock import patch, AsyncMock
 
+from app.config import settings
 from app.schemas.metadata import ArtworkMetadata
 import httpx
 
@@ -88,43 +89,34 @@ def test_delete_index_idempotent(test_app, mock_qdrant):
         assert mock_qdrant.delete.call_count == 2
 
 
-def test_search_endpoint(test_app, mock_qdrant, mock_ollama):
-    with patch("app.api.dependencies.settings") as ms:
-        ms.auth_enabled = False
+def test_search_endpoint(test_app, mock_qdrant, mock_visibility, monkeypatch):
+    monkeypatch.setattr(settings, "ai_service_api_key", "test-key")
+    mock_visibility.visible_ids.return_value = {1, 2}
+    mock_qdrant.search.return_value = [
+        {"artwork_id": 1, "score": 0.95},
+        {"artwork_id": 2, "score": 0.80},
+    ]
 
-        mock_qdrant.search.return_value = [
-            {"artwork_id": 1, "score": 0.95},
-            {"artwork_id": 2, "score": 0.80},
-        ]
-
-        resp = test_app.post(
-            "/api/v1/search",
-            json={"query": "cat painting", "limit": 10},
-        )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert len(data["results"]) == 2
-        assert data["results"][0]["artwork_id"] == 1
-        assert data["results"][0]["rank"] == 1
-        assert data["results"][1]["rank"] == 2
+    resp = test_app.post(
+        "/api/v1/search", json={"query": "cat painting", "limit": 10},
+        headers={"X-AI-Service-Key": "test-key"},
+    )
+    assert resp.status_code == 200
+    assert [(row["artwork_id"], row["rank"]) for row in resp.json()["results"]] == [(1, 1), (2, 2)]
+    mock_visibility.visible_ids.assert_awaited_once_with({1, 2})
 
 
-def test_similar_endpoint(test_app, mock_qdrant, mock_ollama):
-    with patch("app.api.dependencies.settings") as ms:
-        ms.auth_enabled = False
+def test_similar_endpoint(test_app, mock_qdrant, mock_visibility, monkeypatch):
+    monkeypatch.setattr(settings, "ai_service_api_key", "test-key")
+    mock_visibility.visible_ids.side_effect = [{1}, {1, 5}]
+    mock_qdrant.similar.return_value = [{"artwork_id": 5, "score": 0.88}]
 
-        mock_qdrant.similar.return_value = [
-            {"artwork_id": 5, "score": 0.88},
-        ]
-
-        resp = test_app.post(
-            "/api/v1/similar",
-            json={"artwork_id": 1, "limit": 5},
-        )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert len(data["results"]) == 1
-        assert data["results"][0]["artwork_id"] == 5
+    resp = test_app.post(
+        "/api/v1/similar", json={"artwork_id": 1, "limit": 5},
+        headers={"X-AI-Service-Key": "test-key"},
+    )
+    assert resp.status_code == 200
+    assert [row["artwork_id"] for row in resp.json()["results"]] == [5]
 
 
 def test_rerank_disabled_returns_original_order(test_app):
@@ -142,12 +134,10 @@ def test_rerank_disabled_returns_original_order(test_app):
         assert ids == [3, 1, 2]
 
 
-def test_search_with_empty_query_returns_422(test_app):
-    with patch("app.api.dependencies.settings") as ms:
-        ms.auth_enabled = False
-
-        resp = test_app.post("/api/v1/search", json={"query": ""})
-        assert resp.status_code == 422
+def test_search_with_empty_query_returns_422(test_app, monkeypatch):
+    monkeypatch.setattr(settings, "ai_service_api_key", "test-key")
+    resp = test_app.post("/api/v1/search", json={"query": ""}, headers={"X-AI-Service-Key": "test-key"})
+    assert resp.status_code == 422
 
 
 def test_embed_timeout_returns_502(test_app, mock_ollama):

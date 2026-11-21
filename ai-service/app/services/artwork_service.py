@@ -1,21 +1,25 @@
-import hashlib
 import logging
 import time
 
 import httpx
 
+from app.clients.artwork_visibility import ArtworkVisibilityClient, is_artwork_id
 from app.clients.ollama import OllamaClient
 from app.clients.qdrant import QdrantService
 from app.config import settings
-from app.schemas.metadata import ArtworkMetadata
 
 logger = logging.getLogger(__name__)
 
 
+class SimilarSourceUnavailable(RuntimeError):
+    pass
+
+
 class ArtworkService:
-    def __init__(self, ollama: OllamaClient, qdrant: QdrantService):
+    def __init__(self, ollama: OllamaClient, qdrant: QdrantService, visibility: ArtworkVisibilityClient):
         self.ollama = ollama
         self.qdrant = qdrant
+        self.visibility = visibility
 
     async def analyze(
         self,
@@ -118,14 +122,12 @@ class ArtworkService:
 
         vector = await self.ollama.embed(query)
         results = await self.qdrant.search(vector=vector, limit=limit, filters=filters)
-
-        for rank, item in enumerate(results, 1):
-            item["rank"] = rank
+        visible = await self.visibility.visible_ids(self._candidate_ids(results))
 
         latency_ms = int((time.monotonic() - start) * 1000)
 
         return {
-            "results": results,
+            "results": self._rank_visible(results, visible),
             "model": settings.ollama_embedding_model,
             "latency_ms": latency_ms,
         }
@@ -138,20 +140,37 @@ class ArtworkService:
     ) -> dict:
         start = time.monotonic()
 
+        if artwork_id not in await self.visibility.visible_ids([artwork_id]):
+            raise SimilarSourceUnavailable()
+
         results = await self.qdrant.similar(
             artwork_id=artwork_id, limit=limit, filters=filters
         )
 
-        for rank, item in enumerate(results, 1):
-            item["rank"] = rank
+        visible = await self.visibility.visible_ids(self._candidate_ids(results) | {artwork_id})
+        if artwork_id not in visible:
+            raise SimilarSourceUnavailable()
 
         latency_ms = int((time.monotonic() - start) * 1000)
 
         return {
-            "results": results,
+            "results": self._rank_visible(results, visible - {artwork_id}),
             "model": settings.ollama_embedding_model,
             "latency_ms": latency_ms,
         }
+
+    @staticmethod
+    def _candidate_ids(results: list[dict]) -> set[int]:
+        return {item["artwork_id"] for item in results if is_artwork_id(item.get("artwork_id"))}
+
+    @staticmethod
+    def _rank_visible(results: list[dict], visible: set[int]) -> list[dict]:
+        ranked = []
+        for item in results:
+            artwork_id = item.get("artwork_id")
+            if is_artwork_id(artwork_id) and artwork_id in visible:
+                ranked.append({**item, "rank": len(ranked) + 1})
+        return ranked
 
     async def embed(self, text: str) -> dict:
         vector = await self.ollama.embed(text)

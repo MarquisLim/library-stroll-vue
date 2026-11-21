@@ -1,6 +1,7 @@
-"""Opt-in real Ollama + real in-memory Qdrant API check. No production data writes."""
+"""Opt-in real Ollama and in-memory Qdrant API check with a mocked Laravel visibility response."""
 import os
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import httpx
 import pytest
@@ -8,6 +9,7 @@ from fastapi import FastAPI
 from qdrant_client import AsyncQdrantClient
 
 from app.api.routes import router
+from app.clients.artwork_visibility import ArtworkVisibilityClient
 from app.clients.ollama import OllamaClient
 from app.clients.qdrant import QdrantService
 from app.config import settings
@@ -20,10 +22,13 @@ async def test_real_analysis_index_search_similar_retry_and_delete(monkeypatch):
 
     ollama = OllamaClient()
     qdrant = QdrantService(client=AsyncQdrantClient(location=":memory:"), collection="smoke")
-    monkeypatch.setattr(main, "_service", ArtworkService(ollama, qdrant))
+    visibility = AsyncMock(spec=ArtworkVisibilityClient)
+    visibility.visible_ids.side_effect = lambda ids: set(ids) & {1, 2}
+    monkeypatch.setattr(main, "_service", ArtworkService(ollama, qdrant, visibility))
+    monkeypatch.setattr(settings, "ai_service_api_key", "isolated-test-key")
     app = FastAPI()
     app.include_router(router)
-    headers = {"X-AI-Service-Key": settings.ai_service_api_key} if settings.auth_enabled else {}
+    headers = {"X-AI-Service-Key": settings.ai_service_api_key}
     try:
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://smoke", headers=headers) as client:
             # Exercise the vision request format used by the Laravel job with a real image.

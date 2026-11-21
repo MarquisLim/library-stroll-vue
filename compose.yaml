@@ -199,6 +199,7 @@ services:
     env_file: docker/.env
     environment:
       QDRANT_URL: http://qdrant:6333
+      LARAVEL_INTERNAL_URL: http://web:8080
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       OLLAMA_THINK: 'false'
       OLLAMA_NUM_PREDICT: 768

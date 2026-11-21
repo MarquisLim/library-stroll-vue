@@ -6,8 +6,10 @@ use App\Contracts\AiServiceClient;
 use App\DTOs\AiSearchResult;
 use App\Models\Artwork;
 use App\Models\ArtworkAiMetadata;
+use App\Models\Tag;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Mockery;
 use Tests\TestCase;
 
@@ -74,6 +76,22 @@ class SemanticSimilarTest extends TestCase
         $response = $this->getJson("/artworks/{$source->id}/similar");
 
         $response->assertOk();
+    }
+
+    public function test_similar_falls_back_to_tags_when_ai_cannot_verify_visibility(): void
+    {
+        config(['ai.enabled' => true, 'ai.service_url' => 'http://ai.test']);
+        $source = $this->publishedArtwork();
+        $target = $this->publishedArtwork();
+        $tag = Tag::create(['name' => 'landscape']);
+        $source->tags()->attach($tag);
+        $target->tags()->attach($tag);
+        $source->aiMetadata()->create(['status' => ArtworkAiMetadata::STATUS_INDEXED]);
+        Http::fake(['ai.test/api/v1/similar' => Http::response(['detail' => 'artwork_visibility_unavailable'], 503)]);
+
+        $this->getJson("/artworks/{$source->id}/similar")
+            ->assertOk()->assertJsonCount(1, 'artworks')->assertJsonPath('artworks.0.id', $target->id);
+        Http::assertSentCount(1);
     }
 
     public function test_similar_excludes_private_artworks_from_python_results(): void

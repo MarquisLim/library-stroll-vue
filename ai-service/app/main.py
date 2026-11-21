@@ -1,9 +1,11 @@
 import logging
 from contextlib import asynccontextmanager
 
+import httpx
 from fastapi import FastAPI
 
 from app.api.routes import router
+from app.clients.artwork_visibility import ArtworkVisibilityClient
 from app.clients.ollama import OllamaClient
 from app.clients.qdrant import QdrantService
 from app.config import settings
@@ -30,7 +32,8 @@ async def lifespan(app: FastAPI):
 
     ollama = OllamaClient()
     qdrant = QdrantService()
-    _service = ArtworkService(ollama=ollama, qdrant=qdrant)
+    visibility_http = httpx.AsyncClient(trust_env=False)
+    _service = ArtworkService(ollama=ollama, qdrant=qdrant, visibility=ArtworkVisibilityClient(visibility_http))
 
     logger.info(
         "AI Service starting — Ollama: %s, Qdrant: %s, Collection: %s",
@@ -45,12 +48,14 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.warning("Could not ensure Qdrant collection at startup", exc_info=True)
 
-    yield
-
-    await ollama.close()
-    await qdrant.close()
-    _service = None
-    logger.info("AI Service stopped")
+    try:
+        yield
+    finally:
+        await visibility_http.aclose()
+        await ollama.close()
+        await qdrant.close()
+        _service = None
+        logger.info("AI Service stopped")
 
 
 app = FastAPI(

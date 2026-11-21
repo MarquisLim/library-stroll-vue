@@ -21,7 +21,7 @@ class SearchRequest(BaseModel):
 
 
 class SimilarRequest(BaseModel):
-    artwork_id: int
+    artwork_id: int = Field(strict=True, ge=1, le=2**63 - 1)
     limit: int = Field(default=20, ge=1, le=100)
     filters: dict = Field(default_factory=dict)
 
