@@ -6,6 +6,7 @@ use App\Models\Artwork;
 use App\Models\ArtworkAiMetadata;
 use App\Services\AiService\ArtworkIndexingService;
 use Illuminate\Console\Command;
+use Throwable;
 
 class AiReconcileCommand extends Command
 {
@@ -16,7 +17,7 @@ class AiReconcileCommand extends Command
 
     protected $description = 'Reconcile stale, failed, and stuck-pending AI metadata';
 
-    public function handle(): int
+    public function handle(ArtworkIndexingService $indexing): int
     {
         if (! config('ai.enabled')) {
             $this->warn('AI service is disabled.');
@@ -32,8 +33,23 @@ class AiReconcileCommand extends Command
             return self::INVALID;
         }
         $dispatched = 0;
+        $examined = 0;
+        $errors = 0;
+        $dispatch = function (int $id, ?ArtworkAiMetadata $observed = null) use ($indexing, &$dispatched, &$examined, &$errors): void {
+            $examined++;
+            try {
+                if ($indexing->dispatchForReconciliation($id, $observed)) {
+                    $dispatched++;
+                }
+            } catch (Throwable $error) {
+                $errors++;
+                report($error);
+                $this->warn("Queue submission failed for artwork #{$id}.");
+            }
+        };
 
-        $staleItems = ArtworkAiMetadata::whereHas('artwork', fn ($q) => $q->where('ai_indexing_enabled', true))->where(function ($query) use ($pendingHours) {
+        $eligibleArtwork = fn ($query) => $query->where('is_published', true)->where('ai_indexing_enabled', true);
+        $staleItems = ArtworkAiMetadata::whereHas('artwork', $eligibleArtwork)->where(function ($query) use ($pendingHours) {
             $query->where('status', ArtworkAiMetadata::STATUS_STALE)
                 ->orWhere(fn ($q) => $q->where('status', ArtworkAiMetadata::STATUS_PROCESSING)
                     ->where('updated_at', '<', now()->subHours($pendingHours)));
@@ -42,39 +58,36 @@ class AiReconcileCommand extends Command
             ->get();
 
         foreach ($staleItems as $meta) {
-            $this->dispatchForMeta($meta);
-            $dispatched++;
+            $dispatch($meta->artwork_id, $meta);
         }
 
-        $remaining = $limit - $dispatched;
+        $remaining = $limit - $examined;
         if ($remaining > 0) {
             $failedItems = ArtworkAiMetadata::where('status', ArtworkAiMetadata::STATUS_FAILED)
-                ->whereHas('artwork', fn ($q) => $q->where('ai_indexing_enabled', true))
-                ->where('attempts', '<', 5)
+                ->whereHas('artwork', $eligibleArtwork)
+                ->where('attempts', '<', ArtworkIndexingService::RECONCILIATION_ATTEMPT_LIMIT)
                 ->limit($remaining)
                 ->get();
 
             foreach ($failedItems as $meta) {
-                $this->dispatchForMeta($meta);
-                $dispatched++;
+                $dispatch($meta->artwork_id, $meta);
             }
         }
 
-        $remaining = $limit - $dispatched;
+        $remaining = $limit - $examined;
         if ($remaining > 0) {
             $stuckPending = ArtworkAiMetadata::where('status', ArtworkAiMetadata::STATUS_PENDING)
-                ->whereHas('artwork', fn ($q) => $q->where('ai_indexing_enabled', true))
+                ->whereHas('artwork', $eligibleArtwork)
                 ->where('updated_at', '<', now()->subHours($pendingHours))
                 ->limit($remaining)
                 ->get();
 
             foreach ($stuckPending as $meta) {
-                $this->dispatchForMeta($meta);
-                $dispatched++;
+                $dispatch($meta->artwork_id, $meta);
             }
         }
 
-        $remaining = $limit - $dispatched;
+        $remaining = $limit - $examined;
         if ($remaining > 0) {
             $missing = Artwork::where('is_published', true)
                 ->where('ai_indexing_enabled', true)
@@ -83,26 +96,13 @@ class AiReconcileCommand extends Command
                 ->get();
 
             foreach ($missing as $artwork) {
-                app(ArtworkIndexingService::class)->dispatch($artwork, force: true);
-                $dispatched++;
+                $dispatch($artwork->id);
             }
         }
 
-        $this->info("Reconciliation complete: {$dispatched} items dispatched.");
+        $skipped = $examined - $dispatched - $errors;
+        $this->info("Reconciliation complete: {$dispatched} dispatched, {$skipped} skipped, {$errors} failed.");
 
-        return self::SUCCESS;
-    }
-
-    private function dispatchForMeta(ArtworkAiMetadata $meta): void
-    {
-        $artwork = Artwork::withoutGlobalScopes()->find($meta->artwork_id);
-
-        if (! $artwork || ! $artwork->is_published) {
-            $meta->delete();
-
-            return;
-        }
-
-        app(ArtworkIndexingService::class)->dispatch($artwork, force: true);
+        return $errors === 0 ? self::SUCCESS : self::FAILURE;
     }
 }

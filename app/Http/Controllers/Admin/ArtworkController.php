@@ -114,7 +114,9 @@ class ArtworkController extends Controller
         if ($metadata && in_array($metadata->status, ['pending', 'processing'], true) && $metadata->updated_at->gt(now()->subSeconds(900))) {
             return response()->json(['message' => 'Обработка уже выполняется или ожидает воркер.'], 409);
         }
-        app(\App\Services\AiService\ArtworkIndexingService::class)->dispatch($artwork, force: true);
+        if (! app(\App\Services\AiService\ArtworkIndexingService::class)->dispatch($artwork, force: true)) {
+            return response()->json(['message' => 'Запрос уже в очереди или работа больше недоступна для индексации.'], 409);
+        }
 
         return response()->json(['message' => 'Запрос на индексацию поставлен в очередь.'], 202);
     }

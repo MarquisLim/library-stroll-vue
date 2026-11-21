@@ -130,8 +130,7 @@ class ArtworkImportTest extends TestCase
         Queue::fake();
         $this->artisan('artworks:import', ['--source' => 'artic', '--limit' => 1, '--publish' => true, '--index' => true])->assertSuccessful();
         Queue::assertPushedOn('ai', AnalyzeAndIndexArtworkJob::class);
-        $this->assertDatabaseHas('artwork_ai_metadata', ['status' => 'pending']);
-        $this->assertDatabaseMissing('artwork_ai_metadata', ['status' => 'indexed']);
+        $this->assertDatabaseCount('artwork_ai_metadata', 0);
     }
 
     public function test_index_option_requires_ai_and_published_artworks_before_import(): void

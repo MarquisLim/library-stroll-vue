@@ -13,6 +13,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Throwable;
@@ -31,11 +32,20 @@ class AnalyzeAndIndexArtworkJob implements ShouldBeUnique, ShouldQueue
 
     public bool $failOnTimeout = true;
 
+    // Older serialized jobs predate these fields and retain their original behavior.
+    protected bool $force = true;
+
+    protected bool $reconciliation = false;
+
     public function __construct(
         protected int $artworkId,
         protected string $expectedContentHash = '',
         protected ?string $expectedMediaUuid = null,
+        bool $force = true,
+        bool $reconciliation = false,
     ) {
+        $this->force = $force;
+        $this->reconciliation = $reconciliation;
         $this->onQueue(config('ai.queue', 'ai'));
         $this->afterCommit();
     }
@@ -63,39 +73,14 @@ class AnalyzeAndIndexArtworkJob implements ShouldBeUnique, ShouldQueue
         $requestId = Str::uuid()->toString();
         $startedAt = now();
 
-        $artwork = Artwork::withoutGlobalScopes()->find($this->artworkId);
-
-        if (! $artwork || ! $artwork->is_published || ! $artwork->indexingEnabled()) {
-            Log::info('Skipping AI analysis for non-existent or unpublished artwork.', [
-                'artwork_id' => $this->artworkId,
-            ]);
-
-            return;
-        }
-
-        $currentMedia = $artwork->getFirstMedia('artworks');
         $indexing = app(ArtworkIndexingService::class);
-        $contentHash = $indexing->contentHash($artwork);
-        if ($this->expectedContentHash !== '' && $this->expectedContentHash !== $contentHash) {
-            $indexing->dispatch($artwork);
+        $claim = $this->claimRevision($indexing);
 
-            return;
-        }
-        if ($this->expectedMediaUuid && $currentMedia?->uuid !== $this->expectedMediaUuid) {
-            Log::info('Skipping AI analysis: media has been replaced.', [
-                'artwork_id' => $this->artworkId,
-                'expected_uuid' => $this->expectedMediaUuid,
-                'current_uuid' => $currentMedia?->uuid,
-            ]);
-
+        if ($claim === null) {
             return;
         }
 
-        $metadata = $artwork->aiMetadata ?? new ArtworkAiMetadata(['artwork_id' => $artwork->id]);
-        $metadata->status = ArtworkAiMetadata::STATUS_PROCESSING;
-        $metadata->attempts = $metadata->attempts + 1;
-        $metadata->artwork_id = $artwork->id;
-        $metadata->save();
+        [$artwork, $currentMedia, $contentHash, $metadata] = $claim;
 
         AiProcessingRun::create([
             'artwork_id' => $artwork->id, 'operation' => 'analyze_and_index', 'status' => 'processing',
@@ -156,7 +141,8 @@ class AnalyzeAndIndexArtworkJob implements ShouldBeUnique, ShouldQueue
                 return;
             }
             if ($indexing->contentHash($freshArtwork) !== $contentHash) {
-                $indexing->dispatch($freshArtwork);
+                $metadata->markStale();
+                $this->dispatchReplacement($freshArtwork, $indexing);
 
                 $this->recordRun($requestId, 'analyze_and_index', 'skipped', $startedAt, parameters: ['reason' => 'revision_changed']);
 
@@ -199,7 +185,8 @@ class AnalyzeAndIndexArtworkJob implements ShouldBeUnique, ShouldQueue
                 return;
             }
             if ($indexing->contentHash($latest) !== $contentHash) {
-                $indexing->dispatch($latest);
+                $metadata->markStale();
+                $this->dispatchReplacement($latest, $indexing);
 
                 $this->recordRun($requestId, 'analyze_and_index', 'skipped', $startedAt, parameters: ['reason' => 'revision_changed']);
 
@@ -238,6 +225,56 @@ class AnalyzeAndIndexArtworkJob implements ShouldBeUnique, ShouldQueue
             $this->recordRun($requestId, 'analyze_and_index', 'failed', $startedAt, error: $e->getMessage());
 
             throw $e;
+        }
+    }
+
+    private function claimRevision(ArtworkIndexingService $indexing): ?array
+    {
+        return DB::transaction(function () use ($indexing) {
+            $artwork = Artwork::withoutGlobalScopes()->lockForUpdate()->find($this->artworkId);
+            if (! $artwork || ! $artwork->is_published || ! $artwork->indexingEnabled()) {
+                return null;
+            }
+
+            $metadata = $artwork->aiMetadata()->lockForUpdate()->first()
+                ?? new ArtworkAiMetadata(['artwork_id' => $artwork->id]);
+            if ($this->reconciliation && $metadata->isFailed()
+                && $metadata->attempts >= ArtworkIndexingService::RECONCILIATION_ATTEMPT_LIMIT) {
+                return null;
+            }
+
+            $media = $artwork->getFirstMedia('artworks');
+            $hash = $indexing->contentHash($artwork);
+            if (($this->expectedContentHash !== '' && $this->expectedContentHash !== $hash)
+                || ($this->expectedMediaUuid && $media?->uuid !== $this->expectedMediaUuid)) {
+                DB::afterCommit(fn () => $this->dispatchReplacement($artwork, $indexing));
+
+                return null;
+            }
+
+            if (! $this->force && $metadata->isIndexed() && $metadata->content_hash === $hash) {
+                return null;
+            }
+
+            $metadata->status = ArtworkAiMetadata::STATUS_PROCESSING;
+            $metadata->attempts = $metadata->attempts + 1;
+            $metadata->save();
+
+            return [$artwork, $media, $hash, $metadata];
+        });
+    }
+
+    private function dispatchReplacement(Artwork $artwork, ArtworkIndexingService $indexing): void
+    {
+        if ($indexing->dispatch($artwork) || $this->job === null || $this->expectedContentHash === '') {
+            return;
+        }
+
+        // If the edit was reverted, the unique key can still belong to this running job.
+        $latest = $artwork->fresh();
+        if ($latest && $latest->is_published && $latest->indexingEnabled()
+            && $indexing->contentHash($latest) === $this->expectedContentHash) {
+            $this->release(ArtworkAiJobLock::RELEASE_DELAY);
         }
     }
 

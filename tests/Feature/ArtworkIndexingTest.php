@@ -82,7 +82,7 @@ class ArtworkIndexingTest extends TestCase
         app(UpdateArtwork::class)->handle($artwork, $artwork->user, $changes);
         $this->assertNotSame($hash, app(ArtworkIndexingService::class)->contentHash($artwork->fresh()));
         Queue::assertPushedOn('ai', AnalyzeAndIndexArtworkJob::class);
-        $this->assertSame('pending', $artwork->aiMetadata()->first()->status);
+        $this->assertSame('indexed', $artwork->aiMetadata()->first()->status);
     }
 
     public static function indexableEdits(): array
@@ -143,7 +143,7 @@ class ArtworkIndexingTest extends TestCase
         (new AnalyzeAndIndexArtworkJob($artwork->id))->handle(app(AiServiceClient::class));
         Http::assertSentCount(1);
         Queue::assertPushed(AnalyzeAndIndexArtworkJob::class);
-        $this->assertSame('pending', $artwork->aiMetadata()->first()->status);
+        $this->assertSame('stale', $artwork->aiMetadata()->first()->status);
         $this->assertSame('skipped', AiProcessingRun::sole()->status);
         $this->assertSame('revision_changed', AiProcessingRun::sole()->parameters['reason']);
         $this->assertNotNull(AiProcessingRun::sole()->finished_at);
@@ -224,7 +224,7 @@ class ArtworkIndexingTest extends TestCase
         $this->artisan('ai:reconcile', ['--max-pending-hours' => 3])->assertSuccessful();
 
         Queue::assertPushedOn('ai', AnalyzeAndIndexArtworkJob::class);
-        $this->assertSame(ArtworkAiMetadata::STATUS_PENDING, $metadata->refresh()->status);
+        $this->assertSame($status, $metadata->refresh()->status);
     }
 
     public static function recoverableMetadata(): array
@@ -272,7 +272,7 @@ class ArtworkIndexingTest extends TestCase
         $this->artisan('ai:reconcile')->assertSuccessful();
 
         Queue::assertPushedOn('ai', AnalyzeAndIndexArtworkJob::class);
-        $this->assertSame(ArtworkAiMetadata::STATUS_PENDING, $artwork->aiMetadata()->firstOrFail()->status);
+        $this->assertNull($artwork->aiMetadata()->first());
     }
 
     public function test_successive_scheduled_reconciliations_leave_unchanged_indexed_artwork_alone(): void
