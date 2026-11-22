@@ -6,6 +6,7 @@ use App\Contracts\AiServiceClient;
 use App\DTOs\AiHealthResult;
 use App\DTOs\AiSearchResult;
 use App\Services\AiService\HttpAiServiceClient;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -188,15 +189,23 @@ class AiServiceClientTest extends TestCase
         config(['ai.colbert_url' => 'http://colbert.test:8001', 'ai.api_key' => 'test-main-key']);
         Http::preventStrayRequests();
         Http::fake([
-            'http://colbert.test:8001/api/v1/rerank' => Http::response([
-                'results' => [
-                    ['artwork_id' => 3, 'score' => 0.0, 'rank' => 1],
-                    ['artwork_id' => 1, 'score' => 0.0, 'rank' => 2],
-                ],
-                'reranked' => true,
-                'model' => 'jinaai/jina-colbert-v2',
-                'latency_ms' => 20,
-            ]),
+            'http://colbert.test:8001/api/v1/rerank' => function ($request, array $options) {
+                $this->assertSame(0.2, $options['connect_timeout']);
+                $this->assertSame(0.5, $options['timeout']);
+                if (defined('CURLOPT_QUICK_EXIT')) {
+                    $this->assertTrue($options['curl'][CURLOPT_QUICK_EXIT]);
+                }
+
+                return Http::response([
+                    'results' => [
+                        ['artwork_id' => 3, 'score' => 0.0, 'rank' => 1],
+                        ['artwork_id' => 1, 'score' => 0.0, 'rank' => 2],
+                    ],
+                    'reranked' => true,
+                    'model' => 'jinaai/jina-colbert-v2',
+                    'latency_ms' => 20,
+                ]);
+            },
         ]);
 
         $result = app(AiServiceClient::class)->rerank('query', [1, 3], 2);
@@ -207,6 +216,27 @@ class AiServiceClientTest extends TestCase
         Http::assertSent(fn ($request) => $request->url() === 'http://colbert.test:8001/api/v1/rerank'
             && ! $request->hasHeader('X-AI-Service-Key')
             && $request->data() === ['query' => 'query', 'artwork_ids' => [1, 3], 'limit' => 2]);
+    }
+
+    public function test_rerank_caps_legacy_timeout_and_makes_one_attempt_on_http_error(): void
+    {
+        config(['ai.colbert_url' => 'http://colbert.test:8001', 'ai.colbert_timeout' => 2.0]);
+        Http::preventStrayRequests();
+        Http::fake([
+            'http://colbert.test:8001/api/v1/rerank' => function ($request, array $options) {
+                $this->assertSame(0.2, $options['connect_timeout']);
+                $this->assertSame(0.8, $options['timeout']);
+
+                return Http::response([], 503);
+            },
+        ]);
+
+        $this->expectException(RequestException::class);
+        try {
+            app(AiServiceClient::class)->rerank('query', [3], 1);
+        } finally {
+            Http::assertSentCount(1);
+        }
     }
 
     public function test_empty_search_result_helper(): void

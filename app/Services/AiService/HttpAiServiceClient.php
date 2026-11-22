@@ -172,17 +172,24 @@ class HttpAiServiceClient implements AiServiceClient
             throw new \LogicException('ColBERT URL is not configured.');
         }
 
-        $timeout = max(1, min(5, (int) config('ai.colbert_timeout', 2)));
-        $response = Http::baseUrl($url)
+        $timeout = max(0.1, min(0.8, (float) config('ai.colbert_timeout', 0.5)));
+        $request = Http::baseUrl($url)
             ->acceptJson()
             ->withoutRedirecting()
-            ->connectTimeout($timeout)
-            ->timeout($timeout)
-            ->post('/api/v1/rerank', [
-                'query' => $query,
-                'artwork_ids' => $artworkIds,
-                'limit' => $limit,
-            ]);
+            ->retry(1)
+            ->connectTimeout(min(0.2, $timeout))
+            ->timeout($timeout);
+
+        // Let libcurl return at the deadline while its DNS resolver finishes in the background.
+        if (defined('CURLOPT_QUICK_EXIT')) {
+            $request->withOptions(['curl' => [CURLOPT_QUICK_EXIT => true]]);
+        }
+
+        $response = $request->post('/api/v1/rerank', [
+            'query' => $query,
+            'artwork_ids' => $artworkIds,
+            'limit' => $limit,
+        ]);
 
         $data = $response->throw()->json();
         if (! $response->successful()
