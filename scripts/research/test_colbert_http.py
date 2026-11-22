@@ -2,6 +2,7 @@ import hashlib
 import unittest
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from threading import Event
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -9,6 +10,7 @@ from unittest.mock import Mock, patch
 from fastapi.testclient import TestClient
 
 import colbert_http
+import colbert_state
 
 
 def fake_encode(model, documents, ids):
@@ -40,8 +42,15 @@ class ColbertDocumentTest(unittest.TestCase):
         ))
 
     def client(self, dynamic=True, **options):
-        app = colbert_http.create_app(Path("."), Path("."), "cpu", dynamic_documents=dynamic)
-        return self.enterContext(TestClient(app, base_url="http://127.0.0.1", client=("127.0.0.1", 12345), **options))
+        return self.enterContext(self.new_client(dynamic, **options))
+
+    @staticmethod
+    def new_client(dynamic=True, state_dir=None, **options):
+        app = colbert_http.create_app(Path("."), Path("."), "cpu", dynamic_documents=dynamic, state_dir=state_dir)
+        return TestClient(app, base_url="http://127.0.0.1", client=("127.0.0.1", 12345), **options)
+
+    def state_dir(self):
+        return Path(self.enterContext(TemporaryDirectory()))
 
     @staticmethod
     def metadata(client, artwork_id):
@@ -163,6 +172,105 @@ class ColbertDocumentTest(unittest.TestCase):
             self.assertEqual(query.result(5).status_code, 200)
             self.assertEqual(deletion.result(5).json()["status"], "deleted")
         self.assertEqual(self.rank(client, 441040).status_code, 422)
+
+    def test_dynamic_without_state_still_discards_changes(self):
+        with self.new_client() as client:
+            self.assertEqual(self.upsert(client, 441101, "ephemeral document").status_code, 200)
+        with self.new_client() as restarted:
+            self.assertEqual(self.rank(restarted, 441101).status_code, 422)
+
+    def test_restart_restores_only_overrides_and_preserves_versions_and_tombstones(self):
+        directory = self.state_dir()
+        path = directory / "state.json"
+        with self.new_client(state_dir=directory) as client:
+            original = self.metadata(client, 441040)
+            created = self.upsert(client, 441101, "new document").json()
+            updated = self.upsert(client, 441040, "a new café image", original).json()
+            original_deleted = self.metadata(client, 441041)
+            deleted = self.delete(client, 441041, original_deleted).json()
+
+        self.encode.reset_mock()
+        with self.new_client(state_dir=directory) as restarted:
+            self.assertEqual(self.metadata(restarted, 441101)["version"], created["version"])
+            self.assertEqual(self.rank(restarted, 441101).status_code, 200)
+            observed = self.metadata(restarted, 441040)
+            self.assertEqual(observed["content_hash"], updated["content_hash"])
+            self.assertEqual(observed["version"], updated["version"])
+            self.assertEqual(self.metadata(restarted, 441041)["version"], deleted["version"])
+            self.assertEqual(self.rank(restarted, 441041).status_code, 422)
+            self.assertEqual(self.upsert(restarted, 441040, "stale edit", original).status_code, 409)
+            self.assertEqual(self.delete(restarted, 441040, original).status_code, 409)
+            before = path.read_bytes()
+            with patch.object(colbert_state.DocumentState, "save") as save:
+                self.assertEqual(self.upsert(restarted, 441040, "a new café image", original).json()["status"], "unchanged")
+                self.assertEqual(self.delete(restarted, 441041, original_deleted).json()["status"], "absent")
+                save.assert_not_called()
+            self.assertEqual(path.read_bytes(), before)
+            self.assertEqual([call.args[2] for call in self.encode.call_args_list], [[441040, 441041], [441040], [441101]])
+            self.assertEqual(self.encode.call_args_list[1].args[1], {441040: "a new café image"})
+            restored = self.upsert(restarted, 441040, "original red object", updated).json()
+            self.assertEqual(restored["content_hash"], original["content_hash"])
+            self.delete(restarted, 441101, created).raise_for_status()
+
+        self.encode.reset_mock()
+        with self.new_client(state_dir=directory) as restarted:
+            self.assertEqual(self.metadata(restarted, 441040)["version"], restored["version"])
+            self.assertEqual(self.delete(restarted, 441040, original).status_code, 409)
+            self.assertEqual(self.rank(restarted, 441101).status_code, 422)
+            self.assertEqual(self.upsert(restarted, 441101, "replayed create").status_code, 409)
+            self.assertEqual(self.encode.call_count, 1)
+
+    def test_failed_replace_keeps_previous_state_and_live_representations(self):
+        directory = self.state_dir()
+        path = directory / "state.json"
+        with self.new_client(state_dir=directory) as client:
+            original = self.metadata(client, 441040)
+            current = self.upsert(client, 441040, "persisted text", original).json()
+            metadata = self.metadata(client, 441040)
+            vector = client.app.state.document_vectors[441040]
+            before = path.read_bytes()
+            with patch.object(colbert_state.os, "replace", side_effect=OSError("simulated replace failure")):
+                self.assertEqual(self.upsert(client, 441040, "uncommitted text", current).status_code, 503)
+                self.assertEqual(self.delete(client, 441040, current).status_code, 503)
+            self.assertEqual(path.read_bytes(), before)
+            self.assertEqual(list(directory.glob(".state-*.tmp")), [])
+            self.assertEqual(self.metadata(client, 441040), metadata)
+            self.assertIs(client.app.state.document_vectors[441040], vector)
+        with self.new_client(state_dir=directory) as restarted:
+            self.assertEqual(self.metadata(restarted, 441040), metadata)
+            self.assertEqual(self.rank(restarted, 441040).status_code, 200)
+
+    def test_state_directory_rejects_another_owner_until_shutdown(self):
+        directory = self.state_dir()
+        with self.new_client(state_dir=directory) as first:
+            state = self.metadata(first, 441040)
+            self.model_load.reset_mock()
+            with self.assertRaisesRegex(RuntimeError, "already in use"), self.new_client(state_dir=directory):
+                self.fail("second owner started")
+            self.model_load.assert_not_called()
+        with self.new_client(state_dir=directory) as next_owner:
+            self.assertEqual(self.metadata(next_owner, 441040), state)
+
+    def test_state_rejects_mismatched_model_corpus_and_checksum_without_overwriting(self):
+        directory = self.state_dir()
+        path = directory / "state.json"
+        with self.new_client(state_dir=directory):
+            state = path.read_bytes()
+        self.model_load.reset_mock()
+        with patch.object(colbert_state, "MODEL_REVISION", "different"):
+            with self.assertRaisesRegex(RuntimeError, "does not match"), self.new_client(state_dir=directory):
+                self.fail("incompatible model started")
+        with patch.object(colbert_http, "load_inputs", return_value=({441040: "different corpus"}, [], [])):
+            with self.assertRaisesRegex(RuntimeError, "does not match"), self.new_client(state_dir=directory):
+                self.fail("incompatible corpus started")
+        self.assertEqual(path.read_bytes(), state)
+        corrupted = state.replace(b'"format_version":1', b'"format_version":2')
+        self.assertNotEqual(state, corrupted)
+        path.write_bytes(corrupted)
+        with self.assertRaisesRegex(RuntimeError, "Invalid ColBERT state"), self.new_client(state_dir=directory):
+            self.fail("corrupted state started")
+        self.assertEqual(path.read_bytes(), corrupted)
+        self.model_load.assert_not_called()
 
 
 if __name__ == "__main__":
