@@ -45,9 +45,14 @@ class ColbertDocumentTest(unittest.TestCase):
         return self.enterContext(self.new_client(dynamic, **options))
 
     @staticmethod
-    def new_client(dynamic=True, state_dir=None, **options):
-        app = colbert_http.create_app(Path("."), Path("."), "cpu", dynamic_documents=dynamic, state_dir=state_dir)
-        return TestClient(app, base_url="http://127.0.0.1", client=("127.0.0.1", 12345), **options)
+    def new_client(dynamic=True, state_dir=None, document_api_key=None, **options):
+        app = colbert_http.create_app(
+            Path("."), Path("."), "cpu", dynamic_documents=dynamic, state_dir=state_dir,
+            document_api_key=document_api_key,
+        )
+        options.setdefault("base_url", "http://127.0.0.1")
+        options.setdefault("client", ("127.0.0.1", 12345))
+        return TestClient(app, **options)
 
     def state_dir(self):
         return Path(self.enterContext(TemporaryDirectory()))
@@ -88,6 +93,38 @@ class ColbertDocumentTest(unittest.TestCase):
             self.assertEqual(self.upsert(external, 441101, "new document").status_code, 403)
         local = self.client()
         self.assertEqual(local.get("/api/v1/documents/441040", headers={"Host": "remote.test"}).status_code, 403)
+
+    def test_internal_documents_require_key_on_each_method(self):
+        directory = self.state_dir()
+        key = "synthetic-test-key"
+        with self.new_client(state_dir=directory, document_api_key=key,
+                             base_url="http://colbert", client=("192.0.2.1", 12345)) as client:
+            path = "/api/v1/documents/441101"
+            upsert = {"searchable_text": "new document", "expected_previous_hash": None, "expected_previous_version": None}
+            deletion = {"expected_previous_hash": "0" * 64, "expected_previous_version": "0" * 32}
+            for headers in ({}, {"X-ColBERT-Sync-Key": ""}, {"X-ColBERT-Sync-Key": "wrong-key"},
+                            [("X-ColBERT-Sync-Key", key), ("X-ColBERT-Sync-Key", "wrong-key")]):
+                for method, options in (("GET", {}), ("PUT", {"json": upsert}), ("DELETE", {"params": deletion})):
+                    with self.subTest(method=method):
+                        response = client.request(method, path, headers=headers, **options)
+                        self.assertEqual(response.status_code, 401)
+                        self.assertNotIn(key, response.text)
+            self.assertEqual(self.encode.call_count, 1)
+            self.assertEqual(client.get("/ready").status_code, 200)
+            self.assertEqual(self.rank(client, 441040).status_code, 200)
+            client.headers["X-ColBERT-Sync-Key"] = key
+            self.assertFalse(self.metadata(client, 441101)["exists"])
+            created = self.upsert(client, 441101, "new document").json()
+            self.assertTrue(self.metadata(client, 441101)["exists"])
+            self.assertEqual(self.delete(client, 441101, created).json()["status"], "deleted")
+
+    def test_internal_documents_require_state_and_a_nonempty_key(self):
+        directory = self.state_dir()
+        for key in ("", "   ", "newline\n", "é"):
+            with self.assertRaisesRegex(ValueError, "API key"):
+                self.new_client(state_dir=directory, document_api_key=key)
+        with self.assertRaisesRegex(ValueError, "require a state directory"):
+            self.new_client(document_api_key="synthetic-test-key")
 
     def test_only_changed_document_is_encoded_and_replays_are_noops(self):
         client = self.client()

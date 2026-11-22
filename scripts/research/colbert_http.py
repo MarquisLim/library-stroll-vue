@@ -1,9 +1,11 @@
-"""Serve the frozen 4.5A corpus through a local-only research Rerank API."""
+"""Serve the frozen 4.5A corpus through the research Rerank API."""
 
 import argparse
 import logging
+import os
 import time
 from contextlib import asynccontextmanager, nullcontext
+from hmac import compare_digest
 from pathlib import Path
 from threading import Lock
 from typing import Annotated
@@ -65,8 +67,18 @@ def require_loopback(request: Request) -> None:
         raise HTTPException(status_code=403, detail="Document operations require local loopback")
 
 
-def add_document_routes(app: FastAPI, inference_lock: Lock) -> None:
-    router = APIRouter(prefix="/api/v1/documents", dependencies=[Depends(require_loopback)])
+def require_document_key(key: str):
+    def authorize(request: Request) -> None:
+        headers = request.headers.getlist("X-ColBERT-Sync-Key")
+        if len(headers) != 1 or not compare_digest(headers[0].encode("latin-1"), key.encode("ascii")):
+            raise HTTPException(status_code=401, detail="ColBERT document authorization required")
+
+    return authorize
+
+
+def add_document_routes(app: FastAPI, inference_lock: Lock, api_key: str | None) -> None:
+    authorize = require_loopback if api_key is None else require_document_key(api_key)
+    router = APIRouter(prefix="/api/v1/documents", dependencies=[Depends(authorize)])
 
     def save_revision(artwork_id: int, revision: DocumentRevision) -> None:
         revisions = app.state.document_revisions
@@ -133,10 +145,21 @@ def add_document_routes(app: FastAPI, inference_lock: Lock) -> None:
 
 
 def create_app(
-    directory: Path, model_path: Path, device: str, *, dynamic_documents: bool = False, state_dir: Path | None = None
+    directory: Path,
+    model_path: Path,
+    device: str,
+    *,
+    dynamic_documents: bool = False,
+    state_dir: Path | None = None,
+    document_api_key: str | None = None,
 ) -> FastAPI:
     if state_dir is not None and not dynamic_documents:
         raise ValueError("state_dir requires dynamic_documents")
+    if document_api_key is not None:
+        if state_dir is None:
+            raise ValueError("Internal dynamic documents require a state directory")
+        if not document_api_key or not all(33 <= ord(char) <= 126 for char in document_api_key):
+            raise ValueError("ColBERT document API key must contain visible ASCII characters")
     inference_lock = Lock()
 
     @asynccontextmanager
@@ -234,7 +257,7 @@ def create_app(
         )
 
     if dynamic_documents:
-        add_document_routes(app, inference_lock)
+        add_document_routes(app, inference_lock, document_api_key)
     return app
 
 
@@ -249,13 +272,31 @@ def main():
         "--container", action="store_true", help="Bind inside a container published to host loopback only"
     )
     binding.add_argument("--dynamic-documents", action="store_true", help="Enable document mutations on local loopback")
+    binding.add_argument(
+        "--internal-dynamic-documents", action="store_true", help="Enable authenticated document mutations on a private network"
+    )
     parser.add_argument("--state-dir", type=Path, help="Persist document revisions in this local directory")
     args = parser.parse_args()
-    if args.state_dir is not None and not args.dynamic_documents:
-        parser.error("--state-dir requires --dynamic-documents")
+    dynamic = args.dynamic_documents or args.internal_dynamic_documents
+    api_key = None
+    if args.internal_dynamic_documents:
+        if args.state_dir is None:
+            parser.error("--internal-dynamic-documents requires --state-dir")
+        key_file = os.environ.get("AI_COLBERT_SYNC_API_KEY_FILE")
+        try:
+            api_key = Path(key_file).read_text(encoding="ascii").rstrip("\r\n") if key_file else ""
+        except (OSError, UnicodeError):
+            parser.error("Cannot read the ColBERT document API key file")
+    try:
+        app = create_app(
+            args.directory, args.model, args.device, dynamic_documents=dynamic,
+            state_dir=args.state_dir, document_api_key=api_key,
+        )
+    except ValueError as error:
+        parser.error(str(error))
     uvicorn.run(
-        create_app(args.directory, args.model, args.device, dynamic_documents=args.dynamic_documents, state_dir=args.state_dir),
-        host="0.0.0.0" if args.container else "127.0.0.1",
+        app,
+        host="0.0.0.0" if args.container or args.internal_dynamic_documents else "127.0.0.1",
         port=args.port,
         workers=1,
     )

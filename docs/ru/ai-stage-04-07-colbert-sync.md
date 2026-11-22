@@ -56,7 +56,7 @@ PYTHONPATH=ai-service python scripts/research/colbert_http.py storage/app/ai-sta
   --dynamic-documents --state-dir storage/app/ai-stage-04-07/local-state
 ```
 
-`--state-dir` требует `--dynamic-documents`. Повторный запуск с тем же каталогом восстанавливает сохранённое состояние. Блокировка `state.lock` занята на всё время работы процесса. Второй процесс с тем же каталогом завершает запуск с ошибкой.
+Для локального запуска `--state-dir` используется вместе с `--dynamic-documents`. Повторный запуск с тем же каталогом восстанавливает сохранённое состояние. Блокировка `state.lock` занята на всё время работы процесса. Второй процесс с тем же каталогом завершает запуск с ошибкой.
 
 `state.json` содержит снимок формата `1` и его SHA-256. В снимке сохранены идентификатор модели, ревизии весов и кода, SHA-256 весов и хеш корпуса по упорядоченным ID и хешам исходных текстов. Для каждого документа сохраняются ID, `content_hash` и `version`. Поле `searchable_text` содержит открытый текст добавленных и изменённых документов. Для исходного текста оно равно `null`. Удаление представлено записью с `content_hash=null`, `searchable_text=null` и действующей версией маркера. Тензоры и веса модели в снимок не записываются.
 
@@ -81,3 +81,51 @@ PYTHONPATH=ai-service python scripts/research/colbert_http.py storage/app/ai-sta
 | Выдача 4.5A | После восстановления корпуса совпали все 720 позиций и все 720 оценок на 24 запросах. Допуск по абсолютному отклонению был `1 × 10⁻⁵` с учётом разницы `1,91 × 10⁻⁶` в 4.7A-1. Фактическое максимальное отклонение равно 0. |
 
 SHA-256 исходных текстов, запросов, Dense-кандидатов и эталонной выдачи совпали с архивом 4.5A. Скрипт прогона, JSON с результатами и журналы сохранены локально в `storage/app/ai-stage-04-07/4.7a-2`.
+
+## 4.7A-3 — Внутреннее взаимодействие Laravel и ColBERT
+
+Дополнительный файл `compose.colbert-research.yaml` подключается к сохранённому проекту `library-stroll-44-dataset`. Он добавляет отдельную сеть с `internal: true` для `app` и `colbert`. Laravel обращается к `http://colbert:8001`. Порт ColBERT внутри сети доступен на контейнерном интерфейсе. На хосте порт не публикуется.
+
+ColBERT запускается с `--internal-dynamic-documents`, и ему нужны `--state-dir` и файл непустого ключа `AI_COLBERT_SYNC_API_KEY_FILE`. Для всех методов маршрута `/api/v1/documents/{id}` требуется заголовок `X-ColBERT-Sync-Key`, сравниваемый через `hmac.compare_digest`. Пропущенный или неверный ключ даёт HTTP 401. `/ready` используется для проверки здоровья внутри контейнера. Локальный `--dynamic-documents` и прежний `--container` сохраняют свои режимы работы. Прототип использует HTTP внутри выделенной сети для некоммерческого исследования. [Лицензия CC BY-NC 4.0](https://huggingface.co/jinaai/jina-colbert-v2).
+
+Веса и Python-окружение 4.5A монтируются только для чтения. Сервис работает в офлайн-режиме. Том `colbert-state-47a-3` монтируется в домашний каталог непривилегированного пользователя образа. Состояние и блокировка хранятся в `/home/service/colbert-state`. Перезапуск ColBERT сохраняет версии и маркеры удалений.
+
+### Запуск в проекте 4.4C
+
+Из корня репозитория создайте отдельный ключ в каталоге, исключённом из Git. Команда сохраняет существующий ключ, если он уже есть.
+
+```powershell
+$secret = Join-Path (Get-Location).Path 'storage/app/ai-stage-04-07/colbert-sync.key'
+if (-not (Test-Path -LiteralPath $secret)) {
+    $null = New-Item -ItemType Directory -Path (Split-Path -Parent $secret) -Force
+    $key = [Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32)).ToLowerInvariant()
+    [IO.File]::WriteAllText($secret, $key + [Environment]::NewLine)
+    Remove-Variable key
+}
+$dataset = 'storage/app/ai-stage-04-04'
+$researchArgs = @('-p', 'library-stroll-44-dataset', '--env-file', "$dataset/isolated.env",
+    '-f', 'compose.yaml', '-f', "$dataset/compose.dataset.yaml", '-f', 'compose.colbert-research.yaml')
+docker compose @researchArgs up -d --no-deps --no-build --pull never app colbert
+docker compose @researchArgs ps app colbert
+```
+
+Оба контейнера получают ключ через Compose secret в `/run/secrets/colbert_sync_key`. Конфигурация основного Compose-проекта подключается как прежде. Отдельный клиент `App\Services\AiService\ColbertDocumentClient` вызывается вручную и пока не подключён к Laravel Jobs.
+
+| Настройка Laravel | Назначение |
+| --- | --- |
+| `AI_COLBERT_SYNC_ENABLED` | По умолчанию `false`. Исследовательский Compose включает клиент только в `app`. |
+| `AI_COLBERT_SYNC_URL` | Адрес операций с документами. В исследовательской сети это `http://colbert:8001`. |
+| `AI_COLBERT_SYNC_API_KEY` | Ключ для явной настройки клиента через переменную окружения. В Compose клиент читает файл `AI_COLBERT_SYNC_API_KEY_FILE`. |
+| `AI_COLBERT_SYNC_CONNECT_TIMEOUT` | Таймаут соединения в секундах, по умолчанию 0,25 с и максимум 2 с. |
+| `AI_COLBERT_SYNC_TIMEOUT` | Таймаут запроса в секундах, по умолчанию 2 с и максимум 10 с. |
+
+Клиент выполняет один HTTP-запрос без редиректов. Методы `get()`, `upsert()` и `delete()` возвращают `content_hash` и `version` ColBERT. Для записи передавайте хеш текста и версию из ответа ColBERT. Хеш ревизии Artwork вычисляется отдельно. При ошибке `ColbertDocumentException` сохраняет код HTTP 401/403, 409 или 503. Сетевая ошибка имеет код `0`. Сообщение исключения формируется локально и не содержит тела ответа или ключа. После сетевого сбоя GET позволяет сверить актуальную версию перед следующей попыткой изменения.
+
+### Результаты проверки
+
+- Прошли 14 тестов Python и 41 целевой тест PHP, включая существующие тесты AI-клиента и Hybrid Search. В PHP проверены обработка 401/403, 409, 503, отказ при редиректе и одна попытка при сетевой ошибке.
+- Из контейнера Laravel запросы GET, PUT и DELETE без ключа и с неверным ключом получили HTTP 401. Клиент со смонтированным ключом добавил и обновил `441101`. Устаревшее обновление получило HTTP 409.
+- После первого перезапуска только ColBERT сохранились хеш и версия обновлённого текста. После удаления и второго перезапуска сохранилась версия маркера удаления, запрос reranking с `441101` вернул HTTP 422. При остановленном ColBERT клиент вернул контролируемую сетевую ошибку за 276 мс.
+- На 24 запросах совпали все 1 200 позиций Hybrid Search в каждом режиме, с включённым и выключенным ColBERT, относительно 4.5B-2. Все 720 порядковых позиций и оценок ColBERT до RRF совпали с 4.5A. Сессия MySQL использовалась только для чтения. В Qdrant осталось 100 точек.
+
+Пробы и результаты сохранены локально в `storage/app/ai-stage-04-07/4.7a-3`. Исследовательский том состояния сохранён для следующего запуска.

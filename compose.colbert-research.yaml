@@ -1,0 +1,55 @@
+name: library-stroll-44-dataset
+
+services:
+  app:
+    networks: [default, colbert-sync]
+    environment:
+      AI_COLBERT_SYNC_ENABLED: 'true'
+      AI_COLBERT_SYNC_URL: http://colbert:8001
+      AI_COLBERT_SYNC_API_KEY_FILE: /run/secrets/colbert_sync_key
+    secrets: [colbert_sync_key]
+
+  colbert:
+    image: library-stroll-ai:local
+    pull_policy: never
+    entrypoint: [/environment/venv/bin/python, -B]
+    command: [/opt/research/colbert_http.py, /input, --model, /input/model, --internal-dynamic-documents, --state-dir, /home/service/colbert-state]
+    environment:
+      PYTHONPATH: /service
+      HF_HOME: /input/hf
+      HF_MODULES_CACHE: /tmp/colbert-modules
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      TOKENIZERS_PARALLELISM: 'false'
+      AI_COLBERT_SYNC_API_KEY_FILE: /run/secrets/colbert_sync_key
+    volumes:
+      - library-stroll-45a-colbert-env:/environment:ro
+      - ./storage/app/ai-stage-04-05:/input:ro
+      - ./scripts/research:/opt/research:ro
+      - ./ai-service/app/schemas:/service/app/schemas:ro
+      - colbert-state-47a-3:/home/service
+    secrets: [colbert_sync_key]
+    networks: [colbert-sync]
+    gpus: all
+    init: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, /environment/venv/bin/python, -c, 'import json, urllib.request; response = json.load(urllib.request.urlopen("http://127.0.0.1:8001/ready", timeout=2)); assert response["status"] == "ready" and response["dynamic_documents"]']
+      start_period: 90s
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+networks:
+  colbert-sync:
+    internal: true
+
+volumes:
+  library-stroll-45a-colbert-env:
+    external: true
+  colbert-state-47a-3:
+
+secrets:
+  colbert_sync_key:
+    file: ./storage/app/ai-stage-04-07/colbert-sync.key

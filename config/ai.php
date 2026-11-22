@@ -29,6 +29,14 @@ return [
     'rerank_enabled' => (bool) env('AI_RERANK_ENABLED', false),
     'colbert_url' => env('AI_COLBERT_URL'),
     'colbert_timeout' => (float) env('AI_COLBERT_TIMEOUT', 0.5),
+    'colbert_sync' => [
+        'enabled' => (bool) env('AI_COLBERT_SYNC_ENABLED', false),
+        'url' => env('AI_COLBERT_SYNC_URL'),
+        'api_key' => env('AI_COLBERT_SYNC_API_KEY'),
+        'api_key_file' => env('AI_COLBERT_SYNC_API_KEY_FILE'),
+        'connect_timeout' => (float) env('AI_COLBERT_SYNC_CONNECT_TIMEOUT', 0.25),
+        'timeout' => (float) env('AI_COLBERT_SYNC_TIMEOUT', 2),
+    ],
 
     'search' => [
         'lexical_limit' => (int) env('AI_SEARCH_LEXICAL_LIMIT', 50),
