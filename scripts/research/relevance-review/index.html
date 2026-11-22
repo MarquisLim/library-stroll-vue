@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Ручная оценка поиска · Library Stroll</title>
+    <link rel="stylesheet" href="/review.css">
+    <script src="/review.js" defer></script>
+</head>
+<body>
+    <header class="site-header">
+        <div class="site-inner">
+            <div>
+                <div class="project">Library Stroll</div>
+                <h1>Ручная оценка поиска</h1>
+            </div>
+            <button class="button quiet" id="switch-reviewer" type="button" hidden></button>
+        </div>
+    </header>
+    <main>
+        <p class="test-notice" id="test-notice" hidden>Тестовый режим. Ответы сохраняются отдельно с отметкой synthetic_test.</p>
+        <form class="card login" id="login">
+            <h2>Начать или продолжить проверку</h2>
+            <p>Введите тот же идентификатор, чтобы вернуться к сохранённой позиции.</p>
+            <label for="reviewer">Идентификатор проверяющего</label>
+            <input id="reviewer" name="reviewer" type="text" placeholder="anna-01" maxlength="40" autocapitalize="off" spellcheck="false" required>
+            <button class="button primary" type="submit">Открыть проверку</button>
+        </form>
+        <p class="error" id="error" role="alert" hidden></p>
+        <section id="workspace" aria-label="Проверка релевантности" hidden>
+            <div class="progress-row">
+                <strong id="position">Пара</strong>
+                <progress id="progress" value="0" aria-label="Проверено пар"></progress>
+                <span id="count"></span>
+            </div>
+            <div class="review-grid">
+                <section class="card artwork">
+                    <header class="query">
+                        <div class="query-label">Запрос <span id="language" class="language"></span></div>
+                        <h2 id="query"></h2>
+                    </header>
+                    <button class="image-frame" id="image-trigger" type="button" aria-label="Увеличить изображение" disabled>
+                        <img id="image" alt="Изображение для оценки" hidden>
+                        <span id="image-status">Загрузка изображения…</span>
+                        <span class="image-action" id="image-action" hidden>Увеличить ↗</span>
+                    </button>
+                </section>
+                <aside class="card controls" aria-label="Оценка и навигация">
+                    <h2>Насколько подходит изображение?</h2>
+                    <div id="grades" class="grades" role="group" aria-label="Релевантность">
+                        <button type="button" data-value="0" aria-pressed="false"><span class="number">0</span><span>Не соответствует запросу</span></button>
+                        <button type="button" data-value="1" aria-pressed="false"><span class="number">1</span><span>Соответствует частично</span></button>
+                        <button type="button" data-value="2" aria-pressed="false"><span class="number">2</span><span>Хорошо соответствует</span></button>
+                        <button type="button" data-value="unsure" aria-pressed="false"><span class="number">?</span><span>Не уверен</span></button>
+                    </div>
+                    <p id="save-status" class="save-status" role="status">Ответы сохраняются автоматически</p>
+                    <nav class="navigation" aria-label="Соседние пары">
+                        <button class="button" id="previous" type="button">← Назад</button>
+                        <button class="button primary" id="next" type="button">Далее →</button>
+                    </nav>
+                    <a class="export" id="download" href="/api/export" download>Экспорт JSON</a>
+                </aside>
+            </div>
+        </section>
+    </main>
+    <dialog id="zoom" aria-label="Увеличенное изображение">
+        <div class="zoom-toolbar">
+            <button class="button" id="zoom-out" type="button" aria-label="Уменьшить">−</button>
+            <button class="button" id="zoom-fit" type="button">Вписать</button>
+            <button class="button" id="zoom-in" type="button" aria-label="Увеличить">+</button>
+            <form method="dialog"><button class="button" type="submit">Закрыть</button></form>
+        </div>
+        <div class="zoom-viewport" id="zoom-viewport"><img id="zoom-image" alt="Увеличенное изображение для оценки"></div>
+    </dialog>
+</body>
+</html>
