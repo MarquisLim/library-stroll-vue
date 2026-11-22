@@ -5,6 +5,8 @@ namespace App\Jobs;
 use App\Jobs\Middleware\ArtworkAiJobLock;
 use App\Models\Artwork;
 use App\Models\ArtworkAiMetadata;
+use App\Models\ArtworkColbertExpectation;
+use App\Services\AiService\ArtworkIndexInspectionService;
 use App\Services\AiService\ArtworkIndexingService;
 use App\Services\AiService\ColbertDocumentClient;
 use App\Services\AiService\ColbertDocumentException;
@@ -28,6 +30,8 @@ class SyncArtworkColbertJob implements ShouldBeEncrypted, ShouldQueue
 
     public bool $failOnTimeout = true;
 
+    protected ?array $repairRevision = null;
+
     public function __construct(
         protected int $artworkId,
         protected string $expectedContentHash,
@@ -35,7 +39,9 @@ class SyncArtworkColbertJob implements ShouldBeEncrypted, ShouldQueue
         protected string $searchableText,
         protected int $metadataId,
         protected int $denseAttempt,
+        ?array $repairRevision = null,
     ) {
+        $this->repairRevision = $repairRevision;
         $this->onQueue(config('ai.queue', 'ai'));
         $this->afterCommit();
     }
@@ -59,6 +65,10 @@ class SyncArtworkColbertJob implements ShouldBeEncrypted, ShouldQueue
         $textHash = hash('sha256', $this->searchableText);
         try {
             $remote = $client->get($this->artworkId);
+            if ($this->repairRevision !== null && $remote['content_hash'] !== $textHash
+                && ($remote['content_hash'] !== $this->repairRevision['content_hash'] || $remote['version'] !== $this->repairRevision['version'])) {
+                throw new ColbertDocumentException('ColBERT document changed after repair inspection.', 409);
+            }
             try {
                 $this->updateIfCurrent($indexing, $client, $textHash, $remote);
             } catch (ColbertDocumentException $error) {
@@ -95,7 +105,7 @@ class SyncArtworkColbertJob implements ShouldBeEncrypted, ShouldQueue
                 return;
             }
             // The remote API does not expose a Dense revision. A different remote text or deletion needs review.
-            if ($remote['exists'] && $previous['exists'] && $remote['content_hash'] === $previous['content_hash']) {
+            if ($this->repairRevision === null && $remote['exists'] && $previous['exists'] && $remote['content_hash'] === $previous['content_hash']) {
                 $this->updateIfCurrent($indexing, $client, $textHash, $remote);
 
                 return;
@@ -116,7 +126,19 @@ class SyncArtworkColbertJob implements ShouldBeEncrypted, ShouldQueue
         string $textHash,
         array $remote,
     ): void {
-        if ($remote['content_hash'] === $textHash || ! $this->isCurrent($indexing)) {
+        if ($remote['content_hash'] === $textHash) {
+            return;
+        }
+        if ($this->repairRevision !== null) {
+            $dense = app(ArtworkIndexInspectionService::class)->inspect($this->artworkId);
+            if ($dense['qdrant_status'] === 'unavailable') {
+                throw new ColbertDocumentException('Could not confirm the Dense index for ColBERT repair.', 503);
+            }
+            if (! in_array($dense['group'], ['A', 'B'], true)) {
+                return;
+            }
+        }
+        if (! $this->isCurrent($indexing)) {
             return;
         }
 
@@ -130,12 +152,21 @@ class SyncArtworkColbertJob implements ShouldBeEncrypted, ShouldQueue
     {
         $artwork = Artwork::withoutGlobalScopes()->find($this->artworkId);
 
-        return $indexing->canIndex($artwork) && $indexing->contentHash($artwork) === $this->expectedContentHash
+        $current = $indexing->canIndex($artwork) && $indexing->contentHash($artwork) === $this->expectedContentHash
             && $artwork->aiMetadata()->whereKey($this->metadataId)
                 ->where('status', ArtworkAiMetadata::STATUS_INDEXED)
                 ->where('content_hash', $this->expectedContentHash)
                 ->where('attempts', $this->denseAttempt)
                 ->exists();
+        if (! $current || $this->repairRevision === null) {
+            return $current;
+        }
+        $expected = ArtworkColbertExpectation::find($this->artworkId);
+
+        return $expected?->state === ArtworkColbertExpectation::INDEXED
+            && $expected->revision_hash === $this->expectedContentHash
+            && $expected->dense_attempt === $this->denseAttempt
+            && $expected->verifiedSearchableText() === $this->searchableText;
     }
 
     public function failed(?Throwable $error): void

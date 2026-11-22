@@ -5,7 +5,6 @@ namespace App\Services\AiService;
 use App\Models\Artwork;
 use App\Models\ArtworkAiMetadata;
 use App\Models\ArtworkColbertExpectation;
-use Illuminate\Contracts\Encryption\DecryptException;
 use LogicException;
 
 class ArtworkColbertInspectionService
@@ -17,6 +16,11 @@ class ArtworkColbertInspectionService
     ) {}
 
     public function inspect(int $artworkId): array
+    {
+        return $this->observe($artworkId)['report'];
+    }
+
+    public function observe(int $artworkId): array
     {
         [$revision, $metadata, $expected] = $this->readLocal($artworkId);
         $dense = $this->denseInspection->inspect($artworkId, inspectMissingArtwork: true);
@@ -41,10 +45,26 @@ class ArtworkColbertInspectionService
             },
         ];
 
-        if ($revision !== $latestRevision || $metadata?->getRawOriginal() !== $latestMetadata?->getRawOriginal()
-            || $expected?->getRawOriginal() !== $latestExpected?->getRawOriginal()) {
+        $changed = $revision !== $latestRevision || $metadata?->getRawOriginal() !== $latestMetadata?->getRawOriginal()
+            || $expected?->getRawOriginal() !== $latestExpected?->getRawOriginal();
+        $report = $this->classify($report, $revision, $metadata, $expected, $dense, $remote, $changed);
+
+        return ['report' => $report, 'metadata' => $metadata, 'expected' => $expected, 'remote' => $remote, 'changed' => $changed];
+    }
+
+    private function classify(
+        array $report,
+        ?string $revision,
+        ?ArtworkAiMetadata $metadata,
+        ?ArtworkColbertExpectation $expected,
+        array $dense,
+        ?array $remote,
+        bool $changed,
+    ): array {
+        if ($changed) {
             return $report + ['category' => 'conflict_or_unavailable', 'reason' => 'Laravel state changed during inspection'];
         }
+        $qdrant = $report['qdrant'];
         if ($remote === null || ! in_array($qdrant, ['point found', 'point not found'], true)
             || ($dense['group'] === 'F' && $qdrant === 'point not found')) {
             return $report + ['category' => 'conflict_or_unavailable', 'reason' => 'service or point identity could not be verified'];
@@ -72,7 +92,7 @@ class ArtworkColbertInspectionService
         if ($expected->revision_hash !== $revision || $expected->dense_attempt !== $metadata->attempts) {
             return $report + ['category' => 'dense_unconfirmed', 'reason' => 'saved expectation belongs to a different Dense revision or attempt'];
         }
-        if (! $this->hasVerifiedText($expected)) {
+        if ($expected->verifiedSearchableText() === null) {
             return $report + ['category' => 'no_saved_text', 'reason' => 'saved text failed decryption or hash verification'];
         }
 
@@ -92,16 +112,5 @@ class ArtworkColbertInspectionService
             $artwork?->aiMetadata,
             ArtworkColbertExpectation::find($artworkId),
         ];
-    }
-
-    private function hasVerifiedText(ArtworkColbertExpectation $expected): bool
-    {
-        try {
-            $text = $expected->searchable_text;
-        } catch (DecryptException) {
-            return false;
-        }
-
-        return is_string($text) && trim($text) !== '' && $expected->text_sha256 === hash('sha256', $text);
     }
 }

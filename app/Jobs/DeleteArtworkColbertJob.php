@@ -3,7 +3,10 @@
 namespace App\Jobs;
 
 use App\Jobs\Middleware\ArtworkAiJobLock;
+use App\Models\AiProcessingRun;
 use App\Models\Artwork;
+use App\Models\ArtworkColbertExpectation;
+use App\Services\AiService\ArtworkIndexInspectionService;
 use App\Services\AiService\ArtworkIndexingService;
 use App\Services\AiService\ColbertDocumentClient;
 use App\Services\AiService\ColbertDocumentException;
@@ -25,8 +28,11 @@ class DeleteArtworkColbertJob implements ShouldQueue
 
     public bool $failOnTimeout = true;
 
-    public function __construct(protected int $artworkId, protected string $requestId)
+    protected ?array $repairRevision = null;
+
+    public function __construct(protected int $artworkId, protected string $requestId, ?array $repairRevision = null)
     {
+        $this->repairRevision = $repairRevision;
         $this->onQueue(config('ai.queue', 'ai'));
         $this->afterCommit();
     }
@@ -51,6 +57,18 @@ class DeleteArtworkColbertJob implements ShouldQueue
             $remote = $client->get($this->artworkId);
             if (! $remote['exists'] || ! $this->canDelete($indexing)) {
                 return;
+            }
+            if ($this->repairRevision !== null) {
+                if ($remote['content_hash'] !== $this->repairRevision['content_hash'] || $remote['version'] !== $this->repairRevision['version']) {
+                    throw new ColbertDocumentException('ColBERT document changed after repair inspection.', 409);
+                }
+                $dense = app(ArtworkIndexInspectionService::class)->inspect($this->artworkId, inspectMissingArtwork: true);
+                if ($dense['qdrant_status'] === 'unavailable') {
+                    throw new ColbertDocumentException('Could not confirm Dense removal for ColBERT repair.', 503);
+                }
+                if ($dense['group'] !== 'E' || $dense['qdrant_status'] !== 'point not found' || ! $this->canDelete($indexing)) {
+                    return;
+                }
             }
 
             $deleted = $client->delete($this->artworkId, $remote['content_hash'], $remote['version']);
@@ -89,7 +107,16 @@ class DeleteArtworkColbertJob implements ShouldQueue
 
     private function canDelete(ArtworkIndexingService $indexing): bool
     {
-        return ! $indexing->canIndex(Artwork::withoutGlobalScopes()->find($this->artworkId));
+        if ($indexing->canIndex(Artwork::withoutGlobalScopes()->find($this->artworkId))) {
+            return false;
+        }
+        if ($this->repairRevision === null) {
+            return true;
+        }
+        $intent = AiProcessingRun::latestPublicationCleanup($this->artworkId);
+
+        return $intent?->request_id === $this->requestId && $intent->status === 'success' && $intent->finished_at !== null
+            && ArtworkColbertExpectation::find($this->artworkId)?->state === ArtworkColbertExpectation::DELETED;
     }
 
     public function failed(?Throwable $error): void

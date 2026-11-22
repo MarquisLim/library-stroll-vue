@@ -34,4 +34,12 @@ class AiProcessingRun extends Model
     {
         return $this->belongsTo(Artwork::class);
     }
+
+    public static function latestPublicationCleanup(int $artworkId): ?self
+    {
+        return self::where('operation', 'delete_index')
+            ->where('parameters->stage', 'publication_cleanup')
+            ->where('parameters->deleted_artwork_id', $artworkId)
+            ->latest('id')->first();
+    }
 }

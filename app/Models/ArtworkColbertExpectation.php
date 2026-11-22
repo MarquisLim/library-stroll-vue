@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Database\Eloquent\Model;
 
 class ArtworkColbertExpectation extends Model
@@ -26,5 +27,16 @@ class ArtworkColbertExpectation extends Model
             'dense_attempt' => 'integer',
             'searchable_text' => 'encrypted',
         ];
+    }
+
+    public function verifiedSearchableText(): ?string
+    {
+        try {
+            $text = $this->searchable_text;
+        } catch (DecryptException) {
+            return null;
+        }
+
+        return is_string($text) && trim($text) !== '' && $this->text_sha256 === hash('sha256', $text) ? $text : null;
     }
 }
