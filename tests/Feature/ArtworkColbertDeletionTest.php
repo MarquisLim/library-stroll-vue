@@ -10,6 +10,7 @@ use App\Jobs\SyncArtworkColbertJob;
 use App\Models\AiProcessingRun;
 use App\Models\Artwork;
 use App\Models\ArtworkAiMetadata;
+use App\Models\ArtworkColbertExpectation;
 use App\Services\AiService\ArtworkIndexingService;
 use App\Services\AiService\ColbertDocumentException;
 use Illuminate\Contracts\Cache\Repository as Cache;
@@ -49,6 +50,12 @@ class ArtworkColbertDeletionTest extends TestCase
         Queue::fake();
         $artwork = $this->indexedArtwork();
         $id = $artwork->id;
+        $text = 'Previously indexed searchable text';
+        ArtworkColbertExpectation::create([
+            'artwork_id' => $id, 'state' => ArtworkColbertExpectation::INDEXED,
+            'revision_hash' => $artwork->aiMetadata()->sole()->content_hash, 'dense_attempt' => 1,
+            'searchable_text' => $text, 'text_sha256' => hash('sha256', $text),
+        ]);
         [$hash, $version] = [str_repeat('a', 64), str_repeat('b', 32)];
         Http::fake([
             "ai.test/api/v1/artworks/$id/index" => Http::response(['status' => 'deleted']),
@@ -71,6 +78,15 @@ class ArtworkColbertDeletionTest extends TestCase
             'author' => $artwork->user->block(),
             'disabled' => $artwork->forceFill(['ai_indexing_enabled' => false])->save(),
         };
+        $deletedExpectation = ArtworkColbertExpectation::findOrFail($id);
+        $this->assertSame(ArtworkColbertExpectation::DELETED, $deletedExpectation->state);
+        $this->assertSame(1, $deletedExpectation->dense_attempt);
+        $this->assertNull($deletedExpectation->getRawOriginal('searchable_text'));
+        $this->assertNull($deletedExpectation->text_sha256);
+        if ($restriction === 'deleted') {
+            $this->assertDatabaseMissing('artworks', ['id' => $id]);
+            $this->assertNull(AiProcessingRun::sole()->artwork_id);
+        }
 
         $dense = Queue::pushed(DeleteArtworkIndexJob::class)->sole();
         DB::transaction(function () use ($dense) {
@@ -122,15 +138,51 @@ class ArtworkColbertDeletionTest extends TestCase
 
     public function test_enqueue_failure_is_reported_without_failing_dense_cleanup(): void
     {
+        Queue::fake();
+        $artwork = $this->indexedArtwork();
+        app(DeleteArtwork::class)->handle($artwork);
+        $dense = Queue::pushed(DeleteArtworkIndexJob::class)->sole();
         Log::spy();
         Queue::shouldReceive('connection')->once()->andThrow(new RuntimeException('Sensitive queue details.'));
         Http::fake(['ai.test/*' => Http::response(['status' => 'deleted'])]);
-        $this->runJob(new DeleteArtworkIndexJob(42));
+        $this->runJob($dense);
         $run = AiProcessingRun::sole();
         $this->assertSame('success', $run->status);
+        $this->assertSame(ArtworkColbertExpectation::DELETED, ArtworkColbertExpectation::findOrFail($artwork->id)->state);
         Log::shouldHaveReceived('error')->once()->with('Could not enqueue ColBERT document deletion after Dense cleanup.', [
-            'artwork_id' => 42, 'request_id' => $run->request_id, 'exception_type' => RuntimeException::class,
+            'artwork_id' => $artwork->id, 'request_id' => $run->request_id, 'exception_type' => RuntimeException::class,
         ]);
+    }
+
+    public function test_deletion_expectation_survives_failure_to_enqueue_dense_cleanup(): void
+    {
+        $artwork = $this->indexedArtwork();
+        Queue::shouldReceive('connection')->once()->andThrow(new RuntimeException('Queue unavailable.'));
+        app(DeleteArtwork::class)->handle($artwork);
+
+        $this->assertDatabaseMissing('artworks', ['id' => $artwork->id]);
+        $this->assertSame('pending', AiProcessingRun::sole()->status);
+        $this->assertSame(ArtworkColbertExpectation::DELETED, ArtworkColbertExpectation::findOrFail($artwork->id)->state);
+    }
+
+    public function test_disabled_automation_and_rolled_back_deletion_do_not_leave_an_expectation(): void
+    {
+        Queue::fake();
+        $artwork = $this->indexedArtwork();
+        DB::beginTransaction();
+        try {
+            app(DeleteArtwork::class)->handle($artwork);
+            $this->assertDatabaseCount('artwork_colbert_expectations', 1);
+        } finally {
+            DB::rollBack();
+        }
+        Queue::assertNothingPushed();
+        $this->assertDatabaseCount('artwork_colbert_expectations', 0);
+
+        config(['ai.colbert_sync.auto_enabled' => false]);
+        app(DeleteArtwork::class)->handle($artwork);
+        Queue::assertPushed(DeleteArtworkIndexJob::class);
+        $this->assertDatabaseCount('artwork_colbert_expectations', 0);
     }
 
     #[DataProvider('disabledFlags')]

@@ -6,6 +6,7 @@ use App\Jobs\DeleteArtworkIndexJob;
 use App\Models\AiProcessingRun;
 use App\Models\Artwork;
 use App\Models\ArtworkAiMetadata;
+use App\Models\ArtworkColbertExpectation;
 use App\Models\User;
 use Illuminate\Queue\NullQueue;
 use Illuminate\Queue\SyncQueue;
@@ -96,6 +97,15 @@ class ArtworkIndexVisibility
             'parameters' => ['deleted_artwork_id' => $artwork->id, 'stage' => 'publication_cleanup'],
             'started_at' => now(),
         ]);
+        if (config('ai.colbert_sync.auto_enabled')) {
+            ArtworkColbertExpectation::updateOrCreate(['artwork_id' => $artwork->id], [
+                'state' => ArtworkColbertExpectation::DELETED,
+                'revision_hash' => $this->indexing->contentHash($artwork),
+                'dense_attempt' => $artwork->aiMetadata()->value('attempts'),
+                'searchable_text' => null,
+                'text_sha256' => null,
+            ]);
+        }
         $artwork->getConnection()->afterCommit(function () use ($intent, $artwork) {
             try {
                 $this->enqueueRemoval($artwork->id, $intent->id);

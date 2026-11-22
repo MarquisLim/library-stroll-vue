@@ -7,6 +7,7 @@ use App\Jobs\Middleware\ArtworkAiJobLock;
 use App\Models\AiProcessingRun;
 use App\Models\Artwork;
 use App\Models\ArtworkAiMetadata;
+use App\Models\ArtworkColbertExpectation;
 use App\Services\AiService\ArtworkIndexingService;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -19,6 +20,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
+use SensitiveParameter;
 use Throwable;
 
 class AnalyzeAndIndexArtworkJob implements ShouldBeUnique, ShouldQueue
@@ -183,7 +185,7 @@ class AnalyzeAndIndexArtworkJob implements ShouldBeUnique, ShouldQueue
                 'last_error' => null,
                 'processed_at' => now(),
                 'indexed_at' => now(),
-            ]);
+            ], $searchableText);
             if ($outcome === 'ineligible') {
                 $aiClient->deleteArtworkIndex($this->artworkId);
                 $this->recordRun($requestId, 'analyze_and_index', 'skipped', $startedAt, parameters: ['reason' => 'artwork_unpublished_or_deleted']);
@@ -281,9 +283,14 @@ class AnalyzeAndIndexArtworkJob implements ShouldBeUnique, ShouldQueue
         });
     }
 
-    private function saveCurrentRevision(ArtworkIndexingService $indexing, ArtworkAiMetadata $metadata, string $hash, array $fields): array
-    {
-        return DB::transaction(function () use ($indexing, $metadata, $hash, $fields) {
+    private function saveCurrentRevision(
+        ArtworkIndexingService $indexing,
+        ArtworkAiMetadata $metadata,
+        string $hash,
+        array $fields,
+        #[SensitiveParameter] ?string $searchableText = null,
+    ): array {
+        return DB::transaction(function () use ($indexing, $metadata, $hash, $fields, $searchableText) {
             $latest = Artwork::withoutGlobalScopes()->lockForUpdate()->find($this->artworkId);
             $current = $this->processingMetadata($metadata)->lockForUpdate()->first();
             if (! $indexing->canIndex($latest)) {
@@ -298,6 +305,15 @@ class AnalyzeAndIndexArtworkJob implements ShouldBeUnique, ShouldQueue
             }
 
             $current->update($fields);
+            if ($searchableText !== null && config('ai.colbert_sync.auto_enabled')) {
+                ArtworkColbertExpectation::updateOrCreate(['artwork_id' => $this->artworkId], [
+                    'state' => ArtworkColbertExpectation::INDEXED,
+                    'revision_hash' => $hash,
+                    'dense_attempt' => $current->attempts,
+                    'searchable_text' => $searchableText,
+                    'text_sha256' => hash('sha256', $searchableText),
+                ]);
+            }
 
             return ['current', $latest];
         });

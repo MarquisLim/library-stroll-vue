@@ -16,7 +16,7 @@ class ArtworkIndexInspectionService
         private readonly ArtworkIndexingService $indexing,
     ) {}
 
-    public function inspect(int $artworkId): array
+    public function inspect(int $artworkId, bool $inspectMissingArtwork = false): array
     {
         $artwork = Artwork::withoutGlobalScopes()->with('aiMetadata')->find($artworkId);
         $metadata = $artwork?->aiMetadata;
@@ -29,12 +29,12 @@ class ArtworkIndexInspectionService
             'fingerprint' => 'unknown',
         ];
 
-        if ($artwork === null) {
+        if ($artwork === null && ! $inspectMissingArtwork) {
             return [...$report, 'group' => 'E', 'reason' => 'artwork does not exist'];
         }
 
-        $eligible = $this->isEligible($artwork);
-        $hash = $this->indexing->contentHash($artwork);
+        $eligible = $artwork !== null && $this->isEligible($artwork);
+        $hash = $artwork === null ? null : $this->indexing->contentHash($artwork);
         $savedId = $metadata?->qdrant_point_id;
         try {
             $inspection = $this->client->inspectArtworkIndex($artworkId, $savedId);

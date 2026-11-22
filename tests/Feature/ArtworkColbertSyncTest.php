@@ -9,6 +9,7 @@ use App\Jobs\SyncArtworkColbertJob;
 use App\Models\AiProcessingRun;
 use App\Models\Artwork;
 use App\Models\ArtworkAiMetadata;
+use App\Models\ArtworkColbertExpectation;
 use App\Services\AiService\ArtworkIndexingService;
 use App\Services\AiService\ColbertDocumentException;
 use Illuminate\Contracts\Cache\Repository as Cache;
@@ -71,10 +72,19 @@ class ArtworkColbertSyncTest extends TestCase
 
         DB::transaction(function () use ($artwork) {
             $this->runDense($artwork);
+            $this->assertSame(ArtworkColbertExpectation::INDEXED, ArtworkColbertExpectation::findOrFail($artwork->id)->state);
             Queue::assertNothingPushed();
             Http::assertSentCount(2);
         });
         $this->assertDenseSucceeded($artwork);
+        $expected = ArtworkColbertExpectation::findOrFail($artwork->id);
+        $metadata = $artwork->aiMetadata()->sole();
+        $this->assertSame($denseText, $expected->searchable_text);
+        $this->assertNotSame($denseText, $expected->getRawOriginal('searchable_text'));
+        $this->assertArrayNotHasKey('searchable_text', $expected->toArray());
+        $this->assertSame(hash('sha256', $denseText), $expected->text_sha256);
+        $this->assertSame($metadata->content_hash, $expected->revision_hash);
+        $this->assertSame($metadata->attempts, $expected->dense_attempt);
         Queue::assertPushedOn('ai', SyncArtworkColbertJob::class);
         Queue::assertPushed(SyncArtworkColbertJob::class, 1);
         $queued = Queue::pushed(SyncArtworkColbertJob::class)->sole();
@@ -96,6 +106,7 @@ class ArtworkColbertSyncTest extends TestCase
         }
         Queue::assertNothingPushed();
         $this->assertNull($artwork->aiMetadata()->first());
+        $this->assertDatabaseCount('artwork_colbert_expectations', 0);
     }
 
     public function test_dense_failure_does_not_queue_colbert(): void
@@ -112,6 +123,7 @@ class ArtworkColbertSyncTest extends TestCase
 
         Queue::assertNothingPushed();
         $this->assertSame('failed', $artwork->aiMetadata()->firstOrFail()->status);
+        $this->assertDatabaseCount('artwork_colbert_expectations', 0);
     }
 
     public function test_revision_changed_during_dense_indexing_does_not_queue_colbert(): void
@@ -127,6 +139,7 @@ class ArtworkColbertSyncTest extends TestCase
         Queue::assertNotPushed(SyncArtworkColbertJob::class);
         Queue::assertPushed(AnalyzeAndIndexArtworkJob::class);
         $this->assertSame('skipped', AiProcessingRun::sole()->status);
+        $this->assertDatabaseCount('artwork_colbert_expectations', 0);
     }
 
     public function test_enqueue_error_is_reported_without_failing_dense(): void
@@ -138,6 +151,8 @@ class ArtworkColbertSyncTest extends TestCase
         $this->runDense($artwork);
 
         $this->assertDenseSucceeded($artwork);
+        $expected = ArtworkColbertExpectation::findOrFail($artwork->id);
+        $this->assertSame(hash('sha256', $expected->searchable_text), $expected->text_sha256);
         Log::shouldHaveReceived('error')->once()->with('Could not enqueue ColBERT document sync after Dense indexing.', [
             'artwork_id' => $artwork->id,
             'request_id' => AiProcessingRun::sole()->request_id,
@@ -156,6 +171,7 @@ class ArtworkColbertSyncTest extends TestCase
         $this->runDense($artwork);
         $this->assertDenseSucceeded($artwork);
         Queue::assertNothingPushed();
+        $this->assertDatabaseCount('artwork_colbert_expectations', $key === 'ai.colbert_sync.auto_enabled' ? 0 : 1);
         app()->call([$this->job($artwork), 'handle']);
         Http::assertSentCount(2);
     }
