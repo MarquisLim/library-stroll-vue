@@ -7,6 +7,7 @@ services:
       AI_COLBERT_SYNC_ENABLED: 'true'
       AI_COLBERT_SYNC_URL: http://colbert:8001
       AI_COLBERT_SYNC_API_KEY_FILE: /run/secrets/colbert_sync_key
+      AI_COLBERT_AUTO_SYNC_ENABLED: ${AI_COLBERT_AUTO_SYNC_ENABLED:-false}
     secrets: [colbert_sync_key]
 
   worker-ai:
