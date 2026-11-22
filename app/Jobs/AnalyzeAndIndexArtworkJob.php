@@ -12,9 +12,12 @@ use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\NullQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Queue\SyncQueue;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -211,6 +214,29 @@ class AnalyzeAndIndexArtworkJob implements ShouldBeUnique, ShouldQueue
             $this->recordRun($requestId, 'analyze_and_index', 'failed', $startedAt, error: $e->getMessage());
 
             throw $e;
+        }
+
+        if (config('ai.colbert_sync.auto_enabled') && config('ai.colbert_sync.enabled')) {
+            DB::afterCommit(function () use ($contentHash, $searchableText, $metadata, $requestId) {
+                try {
+                    $queue = Queue::connection();
+                    if ($queue instanceof SyncQueue || $queue instanceof NullQueue) {
+                        throw new \LogicException('ColBERT synchronization requires an asynchronous queue.');
+                    }
+
+                    $job = new SyncArtworkColbertJob(
+                        $this->artworkId, $contentHash, $searchableText, $metadata->id, $metadata->attempts,
+                    );
+                    $queue->push($job, queue: $job->queue);
+                } catch (Throwable $error) {
+                    Log::error('Could not enqueue ColBERT document sync after Dense indexing.', [
+                        'artwork_id' => $this->artworkId,
+                        'request_id' => $requestId,
+                        'content_hash' => $contentHash,
+                        'exception_type' => $error::class,
+                    ]);
+                }
+            });
         }
     }
 

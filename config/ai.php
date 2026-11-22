@@ -31,6 +31,7 @@ return [
     'colbert_timeout' => (float) env('AI_COLBERT_TIMEOUT', 0.5),
     'colbert_sync' => [
         'enabled' => (bool) env('AI_COLBERT_SYNC_ENABLED', false),
+        'auto_enabled' => (bool) env('AI_COLBERT_AUTO_SYNC_ENABLED', false),
         'url' => env('AI_COLBERT_SYNC_URL'),
         'api_key' => env('AI_COLBERT_SYNC_API_KEY'),
         'api_key_file' => env('AI_COLBERT_SYNC_API_KEY_FILE'),
