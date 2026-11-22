@@ -10,10 +10,14 @@ use App\Services\AiService\ArtworkIndexingService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\NullQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Queue\SyncQueue;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
+use LogicException;
 use Throwable;
 
 class DeleteArtworkIndexJob implements ShouldQueue
@@ -89,6 +93,26 @@ class DeleteArtworkIndexJob implements ShouldQueue
             ]);
 
             throw $e;
+        }
+
+        if (config('ai.colbert_sync.auto_enabled') && config('ai.colbert_sync.enabled')) {
+            DB::afterCommit(function () use ($requestId) {
+                try {
+                    $queue = Queue::connection();
+                    if ($queue instanceof SyncQueue || $queue instanceof NullQueue) {
+                        throw new LogicException('ColBERT deletion requires an asynchronous queue.');
+                    }
+
+                    $job = new DeleteArtworkColbertJob($this->artworkId, $requestId);
+                    $queue->push($job, queue: $job->queue);
+                } catch (Throwable $error) {
+                    Log::error('Could not enqueue ColBERT document deletion after Dense cleanup.', [
+                        'artwork_id' => $this->artworkId,
+                        'request_id' => $requestId,
+                        'exception_type' => $error::class,
+                    ]);
+                }
+            });
         }
     }
 
