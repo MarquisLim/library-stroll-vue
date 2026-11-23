@@ -132,8 +132,7 @@ class HybridSearchService
             return $result->artworkIds();
         } catch (\Throwable $e) {
             Log::warning('Semantic search failed, using lexical only.', [
-                'query' => $query,
-                'error' => $e->getMessage(),
+                'exception_type' => $e::class,
             ]);
 
             return [];

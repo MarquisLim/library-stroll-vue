@@ -3,6 +3,7 @@
 return [
 
     'enabled' => (bool) env('AI_SERVICE_ENABLED', false),
+    'assistant_enabled' => (bool) env('AI_ASSISTANT_ENABLED', false),
 
     'service_url' => env('AI_SERVICE_URL', 'http://127.0.0.1:8001'),
 

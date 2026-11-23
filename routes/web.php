@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\ArtworkController as AdminArtworkController;
 use App\Http\Controllers\Admin\AiMonitorController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\ArtworkController;
+use App\Http\Controllers\AssistantSearchController;
 use App\Http\Controllers\CollectionController;
 use App\Http\Controllers\CommentController;
 use App\Http\Controllers\ComplaintController;
@@ -24,6 +25,7 @@ use App\Http\Controllers\SearchController;
 use App\Http\Controllers\StudioController;
 use App\Http\Controllers\User\BlockController;
 use App\Http\Controllers\User\UserController;
+use App\Http\Middleware\AuthorizeAssistantSearch;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -51,6 +53,10 @@ Route::get('/privacy', function () {
 
 Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified'])
     ->group(function () {
+
+        Route::post('/assistant/search', AssistantSearchController::class)
+            ->middleware(['auth:web', AuthorizeAssistantSearch::class])
+            ->name('assistant.search');
 
         Route::get('storage/attachments/{path}', [AttachmentController::class, 'legacy'])
             ->where('path', '.*');

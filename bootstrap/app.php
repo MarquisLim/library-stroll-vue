@@ -21,6 +21,8 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        $middleware->prepend(\App\Http\Middleware\PrepareAssistantSearchRequest::class);
+
         $middleware->web(append: [
             \App\Http\Middleware\UseRequestStorageUrl::class,
             \App\Http\Middleware\HandleInertiaRequests::class,
