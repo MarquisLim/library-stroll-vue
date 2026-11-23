@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\ArtworkController as AdminArtworkController;
 use App\Http\Controllers\Admin\AiMonitorController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\ArtworkController;
+use App\Http\Controllers\AssistantAnswerController;
 use App\Http\Controllers\AssistantSearchController;
 use App\Http\Controllers\CollectionController;
 use App\Http\Controllers\CommentController;
@@ -57,6 +58,9 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
         Route::post('/assistant/search', AssistantSearchController::class)
             ->middleware(['auth:web', AuthorizeAssistantSearch::class])
             ->name('assistant.search');
+        Route::post('/assistant/answer', AssistantAnswerController::class)
+            ->middleware(['auth:web', AuthorizeAssistantSearch::class])
+            ->name('assistant.answer');
 
         Route::get('storage/attachments/{path}', [AttachmentController::class, 'legacy'])
             ->where('path', '.*');

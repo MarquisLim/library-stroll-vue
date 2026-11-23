@@ -23,13 +23,18 @@ class ArtworkIndexingService
             && $artwork->indexingEnabled() && $artwork->user()->where('is_blocked', false)->exists();
     }
 
-    public function contentHash(Artwork $artwork): string
+    public function contentHash(Artwork $artwork, bool $useWritePdo = false): string
     {
+        $tags = $artwork->tags()->orderBy('name');
+        if ($useWritePdo) {
+            $tags->useWritePdo();
+        }
+
         return hash('sha256', json_encode([
             'title' => $artwork->title,
             'description' => $artwork->description,
             'media' => $artwork->getFirstMedia('artworks')?->uuid,
-            'tags' => $artwork->tags()->orderBy('name')->pluck('name')->all(),
+            'tags' => $tags->pluck('name')->all(),
             'published' => (bool) $artwork->is_published,
             'private' => (bool) $artwork->is_private,
             'blocked' => (bool) $artwork->is_blocked,

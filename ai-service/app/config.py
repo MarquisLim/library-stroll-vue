@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     laravel_internal_url: str = ""
     ai_assistant_enabled: bool = False
     ai_assistant_llm_enabled: bool = False
+    ai_assistant_rag_enabled: bool = False
 
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_chat_model: str = "qwen3:8b"

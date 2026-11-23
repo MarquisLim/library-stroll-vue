@@ -9,7 +9,9 @@ from fastapi.responses import JSONResponse
 
 from app.api.dependencies import require_api_key, verify_api_key
 from app.clients.artwork_visibility import VisibilityUnavailable
+from app.clients.ollama import AssistantComposeBudgetError
 from app.config import settings
+from app.schemas.assistant import AssistantComposePlan, AssistantComposeRequest
 from app.schemas.requests import (
     AssistantNormalizeRequest,
     EmbeddingRequest,
@@ -64,6 +66,33 @@ async def normalize_assistant_query(
     except (httpx.HTTPError, ValueError) as exc:
         logger.warning("Assistant normalization failed (%s)", type(exc).__name__)
         raise HTTPException(status_code=502, detail="assistant_normalization_unavailable") from None
+
+
+@router.post(
+    "/api/v1/assistant/compose",
+    response_model=AssistantComposePlan,
+    dependencies=[Depends(require_api_key)],
+)
+async def compose_assistant_answer(
+    body: AssistantComposeRequest,
+    svc: Annotated[ArtworkService, Depends(get_artwork_service)],
+) -> AssistantComposePlan:
+    if not (settings.ai_assistant_enabled and settings.ai_assistant_rag_enabled):
+        raise HTTPException(status_code=404, detail="assistant_composition_disabled")
+    try:
+        plan = await svc.ollama.compose_assistant_answer(body)
+        allowed = {fact.pair() for fact in body.facts}
+        if any(selection.pair() not in allowed for selection in plan.selections):
+            raise ValueError("Unknown assistant fact")
+        return plan
+    except AssistantComposeBudgetError:
+        raise HTTPException(status_code=422, detail="assistant_context_too_large") from None
+    except (TimeoutError, httpx.TimeoutException):
+        logger.warning("Assistant composition timed out")
+        raise HTTPException(status_code=504, detail="assistant_composition_timeout") from None
+    except (httpx.HTTPError, ValueError) as exc:
+        logger.warning("Assistant composition failed (%s)", type(exc).__name__)
+        raise HTTPException(status_code=502, detail="assistant_composition_unavailable") from None
 
 
 @router.get("/api/v1/diagnostics", dependencies=[Depends(verify_api_key)])

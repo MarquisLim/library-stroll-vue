@@ -16,6 +16,9 @@ class AuthorizeAssistantSearch
         // User exposes hasVerifiedEmail() without implementing MustVerifyEmail.
         abort_unless($request->user()->hasVerifiedEmail(), 403, 'Your email address is not verified.');
         abort_unless(config('ai.assistant_enabled'), 404);
+        if ($request->routeIs('assistant.answer')) {
+            abort_unless(config('ai.assistant_rag_enabled'), 404);
+        }
 
         return $this->throttle->handle($request, $next, 10, 1, 'assistant-search:');
     }

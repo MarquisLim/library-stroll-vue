@@ -12,7 +12,7 @@ class PrepareAssistantSearchRequest
 
     public function handle(Request $request, Closure $next): Response
     {
-        if (! $request->isMethod('POST') || ! $request->is('assistant/search')) {
+        if (! $request->isMethod('POST') || ! $request->is('assistant/search', 'assistant/answer')) {
             return $next($request);
         }
 
