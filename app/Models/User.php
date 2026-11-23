@@ -8,6 +8,7 @@ use App\Services\AiService\ArtworkIndexVisibility;
 use App\Models\Models\Complaint\Complaint;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
@@ -95,6 +96,11 @@ class User extends Authenticatable
     public function artworks()
     {
         return $this->hasMany(Artwork::class);
+    }
+
+    public function assistantConversations(): HasMany
+    {
+        return $this->hasMany(AssistantConversation::class);
     }
 
     public function collections()

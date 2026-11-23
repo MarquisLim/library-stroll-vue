@@ -6,7 +6,15 @@ return [
     'assistant_enabled' => (bool) env('AI_ASSISTANT_ENABLED', false),
     'assistant_llm_enabled' => (bool) env('AI_ASSISTANT_LLM_ENABLED', false),
     'assistant_rag_enabled' => (bool) env('AI_ASSISTANT_RAG_ENABLED', false),
+    'assistant_history_enabled' => (bool) env('AI_ASSISTANT_HISTORY_ENABLED', false),
     'assistant_llm_timeout' => (float) env('AI_ASSISTANT_LLM_TIMEOUT', 15),
+    'assistant_history' => [
+        'max_conversations' => min(200, max(1, (int) env('AI_ASSISTANT_HISTORY_MAX_CONVERSATIONS', 20))),
+        'max_turns' => min(1000, max(1, (int) env('AI_ASSISTANT_HISTORY_MAX_TURNS', 100))),
+        'max_query_chars' => min(500, max(1, (int) env('AI_ASSISTANT_HISTORY_MAX_QUERY_CHARS', 500))),
+        'max_reference_bytes' => min(8192, max(2, (int) env('AI_ASSISTANT_HISTORY_MAX_REFERENCE_BYTES', 2048))),
+        'page_size' => min(50, max(1, (int) env('AI_ASSISTANT_HISTORY_PAGE_SIZE', 20))),
+    ],
 
     'service_url' => env('AI_SERVICE_URL', 'http://127.0.0.1:8001'),
 

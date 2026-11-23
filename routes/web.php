@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\AiMonitorController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\ArtworkController;
 use App\Http\Controllers\AssistantAnswerController;
+use App\Http\Controllers\AssistantConversationController;
 use App\Http\Controllers\AssistantSearchController;
 use App\Http\Controllers\CollectionController;
 use App\Http\Controllers\CommentController;
@@ -61,6 +62,16 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
         Route::post('/assistant/answer', AssistantAnswerController::class)
             ->middleware(['auth:web', AuthorizeAssistantSearch::class])
             ->name('assistant.answer');
+
+        Route::prefix('assistant/conversations')->name('assistant.conversations.')
+            ->middleware(['auth:web', AuthorizeAssistantSearch::class])
+            ->controller(AssistantConversationController::class)
+            ->group(function () {
+                Route::post('/', 'store')->name('store');
+                Route::get('/', 'index')->name('index');
+                Route::get('/{conversation}', 'show')->whereUuid('conversation')->name('show');
+                Route::delete('/{conversation}', 'destroy')->whereUuid('conversation')->name('destroy');
+            });
 
         Route::get('storage/attachments/{path}', [AttachmentController::class, 'legacy'])
             ->where('path', '.*');
