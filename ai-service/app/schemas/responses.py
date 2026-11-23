@@ -1,6 +1,26 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field, StrictBool, StrictInt, StrictStr
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr, model_validator
+
+from app.schemas.requests import AssistantQuery
+
+
+class AssistantNormalizeResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    action: Literal["search", "clarify"]
+    search_query: AssistantQuery | None
+    clarification_code: Literal["ambiguous_subject", "too_broad"] | None
+
+    @model_validator(mode="after")
+    def check_action_fields(self):
+        if self.action == "search":
+            valid = self.search_query is not None and self.clarification_code is None
+        else:
+            valid = self.search_query is None and self.clarification_code is not None
+        if not valid:
+            raise ValueError("Fields do not match assistant action")
+        return self
 
 
 class HealthServiceStatus(BaseModel):

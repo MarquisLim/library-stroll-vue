@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Artwork;
+use App\Services\AiService\AssistantQueryNormalizer;
 use App\Services\Search\HybridSearchService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,7 +18,7 @@ class AssistantSearchController extends Controller
 {
     private const CANDIDATE_LIMIT = 20;
 
-    public function __invoke(Request $request, HybridSearchService $search): JsonResponse
+    public function __invoke(Request $request, HybridSearchService $search, AssistantQueryNormalizer $normalizer): JsonResponse
     {
         $input = $request->isJson() ? json_decode($request->getContent()) : null;
         $payload = $input instanceof stdClass && $request->query() === [] ? (array) $input : null;
@@ -31,8 +32,18 @@ class AssistantSearchController extends Controller
             'payload.limit' => ['sometimes', 'required', 'integer:strict', 'between:1,20'],
         ])->validate()['payload'];
 
+        $normalization = config('ai.assistant_llm_enabled') ? $normalizer->normalize($data['query']) : null;
+        if (($normalization['action'] ?? null) === 'clarify') {
+            return response()->json([
+                'status' => 'clarification_required',
+                'clarification_code' => $normalization['clarification_code'],
+                'results' => [],
+            ]);
+        }
+
         try {
-            $candidates = $search->search($data['query'], ['type' => 'image'], page: 1, perPage: self::CANDIDATE_LIMIT);
+            $query = $normalization['search_query'] ?? $data['query'];
+            $candidates = $search->search($query, ['type' => 'image'], page: 1, perPage: self::CANDIDATE_LIMIT);
             $ids = $candidates['artworks']->take(self::CANDIDATE_LIMIT)->pluck('id')->unique()->values();
             $artworks = Artwork::publiclyVisible()
                 ->useWritePdo()

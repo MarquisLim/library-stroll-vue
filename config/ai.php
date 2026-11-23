@@ -4,6 +4,8 @@ return [
 
     'enabled' => (bool) env('AI_SERVICE_ENABLED', false),
     'assistant_enabled' => (bool) env('AI_ASSISTANT_ENABLED', false),
+    'assistant_llm_enabled' => (bool) env('AI_ASSISTANT_LLM_ENABLED', false),
+    'assistant_llm_timeout' => (float) env('AI_ASSISTANT_LLM_TIMEOUT', 15),
 
     'service_url' => env('AI_SERVICE_URL', 'http://127.0.0.1:8001'),
 

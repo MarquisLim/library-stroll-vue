@@ -1,3 +1,4 @@
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -12,6 +13,8 @@ class Settings(BaseSettings):
     ai_service_port: int = 8001
     ai_service_api_key: str = ""
     laravel_internal_url: str = ""
+    ai_assistant_enabled: bool = False
+    ai_assistant_llm_enabled: bool = False
 
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_chat_model: str = "qwen3:8b"
@@ -24,6 +27,7 @@ class Settings(BaseSettings):
     ollama_vision_num_predict: int = 3072
     ollama_vision_timeout: int = 45
     ollama_text_timeout: int = 100
+    ollama_assistant_timeout: float = Field(default=12, gt=0, le=30)
 
     qdrant_url: str = "http://127.0.0.1:6333"
     qdrant_api_key: str = ""

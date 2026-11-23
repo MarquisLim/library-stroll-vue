@@ -32,6 +32,7 @@ class AssistantSearchTest extends TestCase
 
         config([
             'ai.assistant_enabled' => true,
+            'ai.assistant_llm_enabled' => false,
             'ai.enabled' => true,
             'ai.rerank_enabled' => false,
             'ai.service_url' => 'http://ai.test',
@@ -332,6 +333,156 @@ class AssistantSearchTest extends TestCase
         $this->mockCandidates([], query: $query);
         $this->actingAs(User::factory()->create())->postJson(self::URL, ['query' => ' '.$query.' '])
             ->assertOk()->assertExactJson(['status' => 'no_results', 'results' => []]);
+    }
+
+    public function test_normalization_runs_once_before_hybrid_search_and_keeps_canonical_read_only_results(): void
+    {
+        $this->enableLlm();
+        $public = $this->image(['title' => 'Bird by water']);
+        $normalized = 'птиц у воды';
+        Http::fake([
+            'ai.test/api/v1/assistant/normalize' => Http::response([
+                'action' => 'search', 'search_query' => $normalized, 'clarification_code' => null,
+            ]),
+            'ai.test/api/v1/search' => Http::response([
+                'results' => [['artwork_id' => $public->id, 'score' => 0.9, 'rank' => 1]],
+            ]),
+        ]);
+
+        $this->actingAs(User::factory()->create())->postJson(self::URL, ['query' => self::QUERY])
+            ->assertOk()->assertExactJson(['status' => 'ok', 'results' => [$this->card($public)]]);
+
+        Http::assertSentCount(2);
+        [$normalization, $search] = Http::recorded()->map(fn (array $entry) => $entry[0])->all();
+        $this->assertSame('http://ai.test/api/v1/assistant/normalize', $normalization->url());
+        $this->assertSame(['query' => self::QUERY], $normalization->data());
+        $this->assertTrue($normalization->hasHeader('X-AI-Service-Key', 'assistant-test-key'));
+        $this->assertSame('http://ai.test/api/v1/search', $search->url());
+        $this->assertSame($normalized, $search['query']);
+        $this->assertDatabaseCount('artwork_ai_metadata', 0);
+        $this->assertDatabaseCount('ai_processing_runs', 0);
+        $this->assertDatabaseCount('artwork_colbert_expectations', 0);
+        Queue::assertNothingPushed();
+    }
+
+    public function test_normalized_search_still_rechecks_stale_private_and_blocked_candidates(): void
+    {
+        $this->enableLlm();
+        $hidden = $this->image();
+        $blocked = $this->image();
+        $allowed = $this->image();
+        DB::table('artworks')->where('id', $hidden->id)->update(['is_private' => true]);
+        DB::table('artworks')->where('id', $blocked->id)->update(['is_blocked' => true]);
+        DB::table('artworks')->where('id', $allowed->id)->update(['title' => 'Fresh bird image']);
+        Http::fake(['ai.test/api/v1/assistant/normalize' => Http::response([
+            'action' => 'search', 'search_query' => 'birds by water', 'clarification_code' => null,
+        ])]);
+        $this->mockCandidates([$hidden, $blocked, $allowed], query: 'birds by water');
+
+        $this->actingAs(User::factory()->create())->postJson(self::URL, ['query' => 'Show me images of birds by water', 'limit' => 1])
+            ->assertOk()->assertExactJson(['status' => 'ok', 'results' => [$this->card($allowed->fresh())]]);
+        Http::assertSentCount(1);
+    }
+
+    public function test_clarification_returns_only_the_approved_code_without_search(): void
+    {
+        $this->enableLlm();
+        Http::fake(['ai.test/api/v1/assistant/normalize' => Http::response([
+            'action' => 'clarify', 'search_query' => null, 'clarification_code' => 'ambiguous_subject',
+        ])]);
+        $this->mock(HybridSearchService::class)->shouldNotReceive('search');
+
+        $this->actingAs(User::factory()->create())->postJson(self::URL, ['query' => 'покажи это'])
+            ->assertOk()->assertExactJson([
+                'status' => 'clarification_required', 'clarification_code' => 'ambiguous_subject', 'results' => [],
+            ])->assertHeader('Cache-Control', 'no-store, private');
+        Http::assertSentCount(1);
+    }
+
+    #[DataProvider('invalidNormalizations')]
+    public function test_invalid_normalization_uses_one_search_with_the_original_phrase(int $status, array|string $body): void
+    {
+        $this->enableLlm();
+        Http::fake(['ai.test/api/v1/assistant/normalize' => Http::response($body, $status)]);
+        $this->mockCandidates([]);
+
+        $this->actingAs(User::factory()->create())->postJson(self::URL, ['query' => self::QUERY])
+            ->assertOk()->assertExactJson(['status' => 'no_results', 'results' => []]);
+        Http::assertSentCount(1);
+    }
+
+    public static function invalidNormalizations(): array
+    {
+        $search = ['action' => 'search', 'search_query' => 'птиц у воды', 'clarification_code' => null];
+        $clarify = ['action' => 'clarify', 'search_query' => null, 'clarification_code' => 'too_broad'];
+
+        return [
+            'http error' => [502, ['detail' => 'internal model response details']],
+            'upstream timeout' => [504, ['detail' => 'assistant_normalization_timeout']],
+            'malformed JSON' => [200, '{broken'],
+            'unknown clarification' => [200, ['clarification_code' => 'model_says_anything'] + $clarify],
+            'contradictory clarification' => [200, ['search_query' => 'птиц у воды'] + $clarify],
+            'extra field' => [200, $search + ['url' => 'http://redirect.test/']],
+            'missing field' => [200, ['action' => 'search', 'search_query' => 'птиц у воды']],
+            'non-string query' => [200, ['search_query' => 4] + $search],
+            'empty query' => [200, ['search_query' => '   '] + $search],
+            'query too long' => [200, ['search_query' => str_repeat('я', 501)] + $search],
+            'added author' => [200, ['search_query' => 'птиц у воды by Monet'] + $search],
+            'removed geographic constraint' => [200, ['search_query' => 'птиц'] + $search],
+        ];
+    }
+
+    public function test_normalization_connection_failure_preserves_search_and_only_logs_the_exception_type(): void
+    {
+        $this->enableLlm();
+        Http::fake(['ai.test/api/v1/assistant/normalize' => Http::failedConnection('Prompt and secret fixture')]);
+        Log::shouldReceive('warning')->once()->with(
+            'Assistant query normalization unavailable.', ['exception_type' => ConnectionException::class],
+        );
+        $this->mockCandidates([]);
+
+        $this->actingAs(User::factory()->create())->postJson(self::URL, ['query' => self::QUERY])
+            ->assertOk()->assertExactJson(['status' => 'no_results', 'results' => []]);
+    }
+
+    public function test_flags_and_missing_service_key_prevent_normalization_requests(): void
+    {
+        Http::fake();
+        $this->mockCandidates([], times: 2);
+        $this->actingAs(User::factory()->create());
+        $this->postJson(self::URL, ['query' => self::QUERY])->assertOk();
+        $this->enableLlm();
+        config(['ai.api_key' => ' ']);
+        $this->postJson(self::URL, ['query' => self::QUERY])->assertOk();
+        config(['ai.assistant_enabled' => false, 'ai.api_key' => 'assistant-test-key']);
+        $this->postJson(self::URL, ['query' => self::QUERY])->assertNotFound();
+        Http::assertNothingSent();
+    }
+
+    public function test_llm_is_not_called_before_authentication_validation_or_quota(): void
+    {
+        $this->enableLlm();
+        Http::fake(['ai.test/api/v1/assistant/normalize' => Http::response([
+            'action' => 'clarify', 'search_query' => null, 'clarification_code' => 'too_broad',
+        ])]);
+        $this->postJson(self::URL, ['query' => self::QUERY])->assertUnauthorized();
+        $this->actingAs(User::factory()->unverified()->create())->postJson(self::URL, ['query' => self::QUERY])
+            ->assertForbidden();
+        $this->actingAs(User::factory()->create())->postJson(self::URL, ['query' => str_repeat('x', 501)])
+            ->assertUnprocessable();
+        Http::assertNothingSent();
+
+        // The rejected body counts toward the verified user's existing request quota.
+        for ($count = 0; $count < 9; $count++) {
+            $this->postJson(self::URL, ['query' => self::QUERY])->assertOk();
+        }
+        $this->postJson(self::URL, ['query' => self::QUERY])->assertStatus(429);
+        Http::assertSentCount(9);
+    }
+
+    private function enableLlm(): void
+    {
+        config(['ai.assistant_llm_enabled' => true, 'ai.api_key' => 'assistant-test-key']);
     }
 
     private function image(array $attributes = []): Artwork

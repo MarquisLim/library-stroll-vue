@@ -3,6 +3,7 @@ import logging
 from typing import Annotated
 from uuid import UUID
 
+import httpx
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Path, UploadFile
 from fastapi.responses import JSONResponse
 
@@ -10,6 +11,7 @@ from app.api.dependencies import require_api_key, verify_api_key
 from app.clients.artwork_visibility import VisibilityUnavailable
 from app.config import settings
 from app.schemas.requests import (
+    AssistantNormalizeRequest,
     EmbeddingRequest,
     IndexRequest,
     RerankRequest,
@@ -19,6 +21,7 @@ from app.schemas.requests import (
 from app.schemas.responses import (
     AnalyzeResponse,
     ArtworkIndexInspection,
+    AssistantNormalizeResponse,
     DeleteIndexResponse,
     EmbeddingResponse,
     HealthResponse,
@@ -40,6 +43,27 @@ def get_artwork_service() -> ArtworkService:
     from app.main import get_service
 
     return get_service()
+
+
+@router.post(
+    "/api/v1/assistant/normalize",
+    response_model=AssistantNormalizeResponse,
+    dependencies=[Depends(require_api_key)],
+)
+async def normalize_assistant_query(
+    body: AssistantNormalizeRequest,
+    svc: Annotated[ArtworkService, Depends(get_artwork_service)],
+) -> AssistantNormalizeResponse:
+    if not (settings.ai_assistant_enabled and settings.ai_assistant_llm_enabled):
+        raise HTTPException(status_code=404, detail="assistant_normalization_disabled")
+    try:
+        return await svc.ollama.normalize_assistant_query(body.query)
+    except (TimeoutError, httpx.TimeoutException):
+        logger.warning("Assistant normalization timed out")
+        raise HTTPException(status_code=504, detail="assistant_normalization_timeout") from None
+    except (httpx.HTTPError, ValueError) as exc:
+        logger.warning("Assistant normalization failed (%s)", type(exc).__name__)
+        raise HTTPException(status_code=502, detail="assistant_normalization_unavailable") from None
 
 
 @router.get("/api/v1/diagnostics", dependencies=[Depends(verify_api_key)])

@@ -1,4 +1,22 @@
-from pydantic import BaseModel, Field
+from typing import Annotated
+
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints
+
+
+def trim_assistant_query(value: str) -> str:
+    value = value.strip()
+    if not value:
+        raise ValueError("Assistant query cannot be blank")
+    return value
+
+
+AssistantQuery = Annotated[str, StringConstraints(min_length=1, max_length=500), AfterValidator(trim_assistant_query)]
+
+
+class AssistantNormalizeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    query: AssistantQuery
 
 
 class EmbeddingRequest(BaseModel):
