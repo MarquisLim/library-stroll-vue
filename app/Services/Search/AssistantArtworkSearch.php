@@ -36,6 +36,7 @@ class AssistantArtworkSearch
             $query->with([
                 'aiMetadata' => fn ($query) => $query->useWritePdo(),
                 'provenance' => fn ($query) => $query->useWritePdo()->select('id', 'artwork_id', 'creator_name'),
+                'tags' => fn ($query) => $query->useWritePdo()->orderBy('name'),
             ]);
         }
 

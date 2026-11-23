@@ -4,11 +4,13 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_vali
 
 from app.schemas.requests import AssistantQuery
 
+AssistantSourceRef = Annotated[str, StringConstraints(pattern=r"^s[1-5]$", min_length=2, max_length=2)]
+
 
 class AssistantFactRef(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    source_ref: Annotated[str, StringConstraints(pattern=r"^s[1-5]$", min_length=2, max_length=2)]
+    source_ref: AssistantSourceRef
     fact_ref: Annotated[str, StringConstraints(pattern=r"^f[1-7]$", min_length=2, max_length=2)]
 
     def pair(self) -> tuple[str, str]:
@@ -52,4 +54,33 @@ class AssistantComposePlan(BaseModel):
             raise ValueError("Selections do not match action")
         if len({selection.pair() for selection in self.selections}) != len(self.selections):
             raise ValueError("Duplicate selections")
+        return self
+
+
+class AssistantFollowupRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    query: AssistantQuery
+    previous_queries: list[AssistantQuery] = Field(max_length=4)
+    facts: list[AssistantFact] = Field(max_length=35)
+
+    @model_validator(mode="after")
+    def check_unique_facts(self):
+        if len({fact.pair() for fact in self.facts}) != len(self.facts):
+            raise ValueError("Duplicate facts")
+        return self
+
+
+class AssistantFollowupPlan(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    action: Literal["new_search", "use_previous", "clarify"]
+    source_refs: list[AssistantSourceRef] = Field(max_length=5)
+
+    @model_validator(mode="after")
+    def check_sources(self):
+        if bool(self.source_refs) != (self.action == "use_previous"):
+            raise ValueError("Source references do not match action")
+        if len(set(self.source_refs)) != len(self.source_refs):
+            raise ValueError("Duplicate source references")
         return self

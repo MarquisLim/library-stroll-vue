@@ -5,11 +5,15 @@ namespace App\Http\Controllers;
 use App\Models\AssistantConversation;
 use App\Models\AssistantTurn;
 use App\Services\Search\AssistantConversationHistory;
+use App\Services\Search\AssistantSavedSources;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\Paginator;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\HttpFoundation\Response;
+use Throwable;
 
 class AssistantConversationController extends Controller
 {
@@ -35,27 +39,37 @@ class AssistantConversationController extends Controller
         ]);
     }
 
-    public function show(Request $request, string $conversation): JsonResponse
+    public function show(Request $request, string $conversation, AssistantSavedSources $sources): JsonResponse
     {
-        $owned = $this->history->findOwned($request->user(), $conversation);
-        [$page, $size] = $this->pagination($request);
-        $turns = $owned->turns()->useWritePdo()->orderByDesc('sequence')->simplePaginate($size, [
-            'id', 'sequence', 'user_query', 'result_status', 'requested_limit', 'created_at', 'updated_at',
-        ], 'page', $page);
+        try {
+            $owned = $this->history->findOwned($request->user(), $conversation);
+            [$page, $size] = $this->pagination($request);
+            $turns = $owned->turns()->useWritePdo()->orderByDesc('sequence')->simplePaginate($size, [
+                'id', 'sequence', 'user_query', 'result_status', 'requested_limit', 'source_references', 'created_at', 'updated_at',
+            ], 'page', $page);
+            $resolved = $sources->resolve($turns->getCollection()->flatMap(fn (AssistantTurn $turn) => $turn->citations())->all(), $request->user());
 
-        return response()->json([
-            'conversation' => $this->conversationData($owned),
-            'turns' => $turns->getCollection()->map(fn (AssistantTurn $turn) => [
-                'id' => $turn->id,
-                'sequence' => $turn->sequence,
-                'user_query' => $turn->user_query,
-                'result_status' => $turn->result_status,
-                'requested_limit' => $turn->requested_limit,
-                'created_at' => $turn->created_at->toISOString(),
-                'updated_at' => $turn->updated_at->toISOString(),
-            ])->all(),
-            'pagination' => $this->paginationData($turns),
-        ]);
+            return response()->json([
+                'conversation' => $this->conversationData($owned),
+                'turns' => $turns->getCollection()->map(fn (AssistantTurn $turn) => [
+                    'id' => $turn->id,
+                    'sequence' => $turn->sequence,
+                    'user_query' => $turn->user_query,
+                    'result_status' => $turn->result_status,
+                    'requested_limit' => $turn->requested_limit,
+                    'created_at' => $turn->created_at->toISOString(),
+                    'updated_at' => $turn->updated_at->toISOString(),
+                    ...$sources->restore($turn->citations(), $resolved),
+                ])->all(),
+                'pagination' => $this->paginationData($turns),
+            ]);
+        } catch (HttpExceptionInterface|ValidationException $error) {
+            throw $error;
+        } catch (Throwable $error) {
+            Log::warning('Assistant history could not be read.', ['exception_type' => $error::class]);
+
+            return response()->json(['message' => 'Assistant history could not be verified.'], 503);
+        }
     }
 
     public function destroy(Request $request, string $conversation): Response

@@ -179,7 +179,7 @@ class AssistantConversationHistoryTest extends TestCase
         $private = Artwork::factory()->create(['title' => 'Revoked private title', 'description' => 'Revoked private description']);
         $blocked = Artwork::factory()->create(['title' => 'Blocked title', 'description' => 'Blocked description']);
         $public = Artwork::factory()->create(['title' => 'Other source title']);
-        AssistantTurn::factory()->for($conversation, 'conversation')->create(['user_query' => self::QUERY, 'source_references' => [
+        AssistantTurn::factory()->for($conversation, 'conversation')->create(['user_query' => self::QUERY, 'result_status' => 'ok', 'source_references' => [
             self::reference($private->id), self::reference($blocked->id), self::reference($public->id),
         ]]);
         DB::table('artworks')->where('id', $private->id)->update(['is_private' => true]);
@@ -195,11 +195,13 @@ class AssistantConversationHistoryTest extends TestCase
 
         $response->assertOk()->assertJsonPath('turns.0.user_query', self::QUERY)->assertExactJsonStructure([
             'conversation' => ['id', 'created_at', 'updated_at'],
-            'turns' => [['id', 'sequence', 'user_query', 'result_status', 'requested_limit', 'created_at', 'updated_at']],
+            'turns' => [['id', 'sequence', 'user_query', 'result_status', 'requested_limit', 'created_at', 'updated_at', 'answer', 'sources', 'source_status']],
             'pagination' => ['page', 'per_page', 'has_more'],
-        ])->assertDontSee('Revoked private')->assertDontSee('Blocked title')->assertDontSee('Other source title');
+        ])->assertJsonPath('turns.0.source_status', 'unavailable')->assertJsonPath('turns.0.sources', [])
+            ->assertDontSee('Revoked private')->assertDontSee('Blocked title')->assertDontSee('Other source title');
+        $this->assertCount(1, array_filter($queries, fn ($query) => str_contains($query['query'], 'from "artworks"')));
         foreach ($queries as $query) {
-            $this->assertDoesNotMatchRegularExpression('/\b(?:artworks|source_references)\b/i', $query['query']);
+            $this->assertMatchesRegularExpression('/^select\s/i', $query['query']);
         }
     }
 

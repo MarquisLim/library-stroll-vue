@@ -24,11 +24,16 @@ class AssistantRagContext
     public function prepare(string $query, Collection $artworks): array
     {
         $snapshots = [];
-        $facts = [];
         foreach ($artworks->take(self::SOURCE_LIMIT) as $index => $artwork) {
             $snapshots['s'.($index + 1)] = $this->snapshot($artwork);
         }
 
+        return [$this->packFacts($query, $snapshots), $snapshots];
+    }
+
+    public function packFacts(string $query, array $snapshots): array
+    {
+        $facts = [];
         // Offer a fact from each source before adding more detail from one work.
         foreach ([...self::PUBLIC_FACTS, ...self::AI_FACTS] as $ref) {
             foreach ($snapshots as $source => $snapshot) {
@@ -45,12 +50,13 @@ class AssistantRagContext
             }
         }
 
-        return [$facts, $snapshots];
+        return $facts;
     }
 
     public function snapshot(Artwork $artwork): array
     {
-        $revision = $this->indexing->contentHash($artwork, useWritePdo: true);
+        $revision = $this->indexing->contentHash($artwork, useWritePdo: true,
+            sortedTagNames: $artwork->relationLoaded('tags') ? $artwork->tags->pluck('name')->all() : null);
         $metadata = $artwork->aiMetadata;
         $mediaUuid = $artwork->getFirstMedia('artworks')?->uuid;
         $aiCurrent = $metadata?->isIndexed() && $metadata->content_hash === $revision

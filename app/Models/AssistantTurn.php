@@ -37,4 +37,11 @@ class AssistantTurn extends Model
     {
         return $this->belongsTo(AssistantConversation::class);
     }
+
+    public function citations(): array
+    {
+        return $this->result_status === 'ok' && is_array($this->source_references)
+            ? array_slice($this->source_references, 0, 5)
+            : [];
+    }
 }

@@ -11,7 +11,12 @@ from app.api.dependencies import require_api_key, verify_api_key
 from app.clients.artwork_visibility import VisibilityUnavailable
 from app.clients.ollama import AssistantComposeBudgetError
 from app.config import settings
-from app.schemas.assistant import AssistantComposePlan, AssistantComposeRequest
+from app.schemas.assistant import (
+    AssistantComposePlan,
+    AssistantComposeRequest,
+    AssistantFollowupPlan,
+    AssistantFollowupRequest,
+)
 from app.schemas.requests import (
     AssistantNormalizeRequest,
     EmbeddingRequest,
@@ -93,6 +98,35 @@ async def compose_assistant_answer(
     except (httpx.HTTPError, ValueError) as exc:
         logger.warning("Assistant composition failed (%s)", type(exc).__name__)
         raise HTTPException(status_code=502, detail="assistant_composition_unavailable") from None
+
+
+@router.post(
+    "/api/v1/assistant/resolve-followup",
+    response_model=AssistantFollowupPlan,
+    dependencies=[Depends(require_api_key)],
+)
+async def resolve_assistant_followup(
+    body: AssistantFollowupRequest,
+    svc: Annotated[ArtworkService, Depends(get_artwork_service)],
+) -> AssistantFollowupPlan:
+    if not (settings.ai_assistant_enabled and settings.ai_assistant_rag_enabled and settings.ai_assistant_context_enabled):
+        raise HTTPException(status_code=404, detail="assistant_followup_disabled")
+    if not body.previous_queries and not body.facts:
+        return AssistantFollowupPlan(action="clarify", source_refs=[])
+    try:
+        plan = await svc.ollama.resolve_assistant_followup(body)
+        allowed = {fact.source_ref for fact in body.facts}
+        if not set(plan.source_refs).issubset(allowed):
+            raise ValueError("Unknown follow-up source")
+        return plan
+    except AssistantComposeBudgetError:
+        raise HTTPException(status_code=422, detail="assistant_context_too_large") from None
+    except (TimeoutError, httpx.TimeoutException):
+        logger.warning("Assistant follow-up resolution timed out")
+        raise HTTPException(status_code=504, detail="assistant_followup_timeout") from None
+    except (httpx.HTTPError, ValueError) as exc:
+        logger.warning("Assistant follow-up resolution failed (%s)", type(exc).__name__)
+        raise HTTPException(status_code=502, detail="assistant_followup_unavailable") from None
 
 
 @router.get("/api/v1/diagnostics", dependencies=[Depends(verify_api_key)])

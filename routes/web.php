@@ -7,6 +7,7 @@ use App\Http\Controllers\ArtworkController;
 use App\Http\Controllers\AssistantAnswerController;
 use App\Http\Controllers\AssistantConversationController;
 use App\Http\Controllers\AssistantSearchController;
+use App\Http\Controllers\AssistantTurnController;
 use App\Http\Controllers\CollectionController;
 use App\Http\Controllers\CommentController;
 use App\Http\Controllers\ComplaintController;
@@ -71,6 +72,8 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
                 Route::get('/', 'index')->name('index');
                 Route::get('/{conversation}', 'show')->whereUuid('conversation')->name('show');
                 Route::delete('/{conversation}', 'destroy')->whereUuid('conversation')->name('destroy');
+                Route::post('/{conversation}/turns', AssistantTurnController::class)
+                    ->whereUuid('conversation')->name('turns.store');
             });
 
         Route::get('storage/attachments/{path}', [AttachmentController::class, 'legacy'])

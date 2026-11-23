@@ -5,6 +5,8 @@ namespace App\Services\Search;
 use App\Models\AssistantConversation;
 use App\Models\AssistantTurn;
 use App\Models\User;
+use Closure;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -29,8 +31,20 @@ class AssistantConversationHistory
         return $owner->assistantConversations()->useWritePdo()->find($id) ?? abort(404);
     }
 
+    /** @return Collection<int, AssistantTurn> */
+    public function recentForTurn(User $owner, string $id): Collection
+    {
+        return DB::transaction(function () use ($owner, $id) {
+            $conversation = $owner->assistantConversations()->lockForUpdate()->find($id) ?? abort(404);
+            $turns = $conversation->turns();
+            $this->checkTurnLimit($turns->count());
+
+            return $turns->orderByDesc('sequence')->limit(4)->get();
+        }, attempts: 3);
+    }
+
     /**
-     * Record one completed turn from trusted server code. History has no public write route for turns yet.
+     * $verify rechecks the response from the database without calling inference or search.
      *
      * @param list<array{artwork_id: int, fact_ref: string, revision_hash: string, fact_sha256: string}> $references
      */
@@ -41,20 +55,30 @@ class AssistantConversationHistory
         string $status,
         int $requestedLimit,
         array $references,
+        ?int $expectedSequence = null,
+        ?Closure $verify = null,
     ): AssistantTurn {
         abort_unless(config('ai.assistant_enabled') && config('ai.assistant_history_enabled'), 404);
 
-        return DB::transaction(function () use ($owner, $id, $query, $status, $requestedLimit, $references) {
+        return DB::transaction(function () use ($owner, $id, $query, $status, $requestedLimit, $references, $expectedSequence, $verify) {
             $conversation = $owner->assistantConversations()->lockForUpdate()->find($id) ?? abort(404);
             $data = $this->validatedTurn($query, $status, $requestedLimit, $references);
             $turns = $conversation->turns();
-            abort_if($turns->count() >= config('ai.assistant_history.max_turns'), 409, 'Conversation turn limit reached.');
+            $last = (int) (clone $turns)->orderByDesc('sequence')->lockForUpdate()->value('sequence');
+            abort_if($expectedSequence !== null && $last !== $expectedSequence, 409, 'Conversation has changed. Reload it before retrying.');
+            $verify?->__invoke();
+            $this->checkTurnLimit($turns->count());
 
-            $turn = $turns->create(['sequence' => (int) $turns->max('sequence') + 1, ...$data]);
+            $turn = $turns->create(['sequence' => $last + 1, ...$data]);
             $conversation->touch();
 
             return $turn;
         }, attempts: 3);
+    }
+
+    private function checkTurnLimit(int $count): void
+    {
+        abort_if($count >= config('ai.assistant_history.max_turns'), 409, 'Conversation turn limit reached.');
     }
 
     private function validatedTurn(string $query, string $status, int $requestedLimit, array $references): array
