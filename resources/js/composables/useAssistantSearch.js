@@ -1,23 +1,8 @@
 import axios from 'axios'
 import { computed, onScopeDispose, ref } from 'vue'
+import { assistantError, assistantQueryLimit, clarification, isArtworkCard } from './assistantReplies.js'
 
-export const assistantQueryLimit = 500
-
-const errors = {
-    401: 'Войдите в аккаунт, чтобы продолжить поиск.',
-    403: 'Для доступа к ассистенту подтвердите адрес электронной почты.',
-    404: 'AI-ассистент сейчас недоступен.',
-    413: 'Запрос слишком большой. Сократите его и попробуйте ещё раз.',
-    419: 'Сессия устарела. Обновите страницу или войдите снова.',
-    422: 'Проверьте запрос. Допустимо от 1 до 500 символов.',
-    429: 'Достигнут лимит запросов. Попробуйте чуть позже.',
-    503: 'Поиск временно недоступен. Попробуйте чуть позже.',
-}
-
-const clarifications = {
-    ambiguous_subject: 'Уточните, что должно быть изображено. Например, назовите объект или место.',
-    too_broad: 'Сузьте запрос. Например, добавьте тему, место или визуальную деталь.',
-}
+export { assistantQueryLimit } from './assistantReplies.js'
 
 async function requestSearch(query, signal) {
     const { data } = await axios.post('/assistant/search', { query, limit: 10 }, { signal })
@@ -27,17 +12,10 @@ async function requestSearch(query, signal) {
 function searchResult(data) {
     if (data?.status === 'no_results') return { status: 'empty' }
     if (data?.status === 'clarification_required') {
-        const code = data.clarification_code
-        return {
-            status: 'clarify',
-            message: Object.hasOwn(clarifications, code) ? clarifications[code] : 'Попробуйте уточнить запрос, добавив конкретную деталь.',
-        }
+        return { status: 'clarify', message: clarification(data.clarification_code) }
     }
     if (data?.status === 'ok' && Array.isArray(data.results)) {
-        const results = data.results.filter(result => Number.isSafeInteger(result?.artwork_id)
-            && result.artwork_id > 0
-            && typeof result.title === 'string'
-            && result.url === `/artworks/${result.artwork_id}`)
+        const results = data.results.filter(isArtworkCard)
         if (results.length) return { status: 'success', results }
     }
 
@@ -68,8 +46,7 @@ export function useAssistantSearch(search = requestSearch) {
             if (active.value?.requestId === requestId) {
                 turn.reply = {
                     status: 'error',
-                    message: errors[error?.response?.status]
-                        ?? 'Не удалось связаться с поиском. Проверьте подключение и попробуйте ещё раз.',
+                    message: assistantError(error),
                 }
             }
         } finally {

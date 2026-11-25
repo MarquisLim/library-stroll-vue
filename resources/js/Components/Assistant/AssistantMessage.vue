@@ -1,5 +1,6 @@
 <script setup>
 import { ArrowPathIcon, SparklesIcon } from '@heroicons/vue/24/outline'
+import { Link } from '@inertiajs/vue3'
 import { computed } from 'vue'
 import AssistantArtworkCard from './AssistantArtworkCard.vue'
 
@@ -14,8 +15,14 @@ const summary = computed(() => {
             const count = reply.results.length
             return `${plural.select(count) === 'one' ? 'Найдена' : 'Найдено'} ${count} ${noun[plural.select(count)]} по вашему запросу.`
         }
-        case 'pending': return 'Ищем подходящие работы…'
+        case 'pending': return reply.message ?? 'Ищем подходящие работы…'
+        case 'no_results':
         case 'empty': return 'Подходящих работ не найдено. Попробуйте другие слова или более общий запрос.'
+        case 'search_fallback': return reply.sourceStatus === 'none'
+            ? 'Этот ход завершился поиском. Карточки поисковой выдачи в истории не сохраняются.'
+            : 'Не удалось подготовить ответ. Вот доступные результаты поиска.'
+        case 'insufficient_evidence': return 'Недостаточно подтверждённых сведений для ответа.'
+        case 'ok': return reply.fragments.length ? '' : 'Подтверждённых фрагментов сейчас нет.'
         case 'cancelled': return 'Ожидание отменено.'
         default: return reply.message
     }
@@ -28,12 +35,24 @@ const summary = computed(() => {
             <SparklesIcon class="h-4 w-4 sm:h-5 sm:w-5" />
         </span>
         <div class="min-w-0 flex-1 pt-1 sm:pt-2">
-            <div role="status" class="flex items-center gap-2 text-sm font-semibold leading-relaxed sm:text-base">
+            <div v-if="summary" role="status" class="flex items-center gap-2 text-sm font-semibold leading-relaxed sm:text-base">
                 <span v-if="reply.status === 'pending'" class="loading loading-spinner loading-xs shrink-0 text-primary" aria-hidden="true"></span>
                 <p>{{ summary }}</p>
             </div>
-            <ul v-if="reply.status === 'success'" class="mt-3 grid gap-2.5 sm:grid-cols-2" aria-label="Найденные работы">
-                <li v-for="artwork in reply.results" :key="artwork.artwork_id" class="min-w-0">
+            <p v-if="reply.sourceStatus === 'partial' || reply.sourceStatus === 'unavailable'" class="mb-2 text-xs font-semibold text-base-content/70">
+                {{ reply.sourceStatus === 'partial' ? 'Часть прежних источников больше недоступна.' : 'Прежние источники больше нельзя подтвердить.' }}
+            </p>
+            <ul v-if="reply.fragments?.length" class="space-y-2.5 text-sm leading-relaxed sm:text-base" aria-label="Подтверждённые фрагменты">
+                <li v-for="(fragment, index) in reply.fragments" :key="index" class="whitespace-pre-wrap [overflow-wrap:anywhere]">
+                    {{ fragment.text }}
+                    <Link :href="fragment.source.url" :aria-label="`Источник ${fragment.source.number}: ${fragment.source.title || 'Без названия'}`"
+                          class="ml-1 inline-flex rounded-md bg-primary/10 px-1.5 py-0.5 align-baseline text-xs font-bold text-primary hover:bg-primary/20">
+                        [{{ fragment.source.number }}]
+                    </Link>
+                </li>
+            </ul>
+            <ul v-if="reply.results?.length" class="mt-3 grid gap-2.5 sm:grid-cols-2" :class="{ 'xl:grid-cols-3': reply.results[0].number }" aria-label="Найденные работы">
+                <li v-for="artwork in reply.results" :key="`${artwork.artwork_id}-${artwork.number ?? ''}`" class="min-w-0">
                     <AssistantArtworkCard :artwork="artwork" />
                 </li>
             </ul>

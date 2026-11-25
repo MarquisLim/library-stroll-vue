@@ -29,7 +29,7 @@ class AuthorizeAssistantSearch
         }
 
         abort_unless(config('ai.assistant_enabled'), 404);
-        if ($request->routeIs('assistant.index')) {
+        if ($request->routeIs('assistant.index', 'assistant.artworks.preview')) {
             return $next($request);
         }
 

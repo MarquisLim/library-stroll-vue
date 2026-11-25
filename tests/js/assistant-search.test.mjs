@@ -27,7 +27,7 @@ test('sends once, trims the query and preserves the order of canonical artwork l
     assert.equal(chat.draft.value, '')
     assert.deepEqual(calls.map(call => call.query), ['птицы у воды'])
 
-    const results = [artwork(8), artwork(5)]
+    const results = [artwork(8), { ...artwork(5), title: null }]
     calls[0].resolve({ status: 'ok', results: [results[0], artwork(3, '//example.test/artworks/3'), artwork(4, '/artworks/9'), artwork(7, '/artworks/7?x=1'), results[1]] })
     await request
     assert.deepEqual(chat.turns.value[0].reply, { status: 'success', results })

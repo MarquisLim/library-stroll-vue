@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\AiMonitorController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\ArtworkController;
 use App\Http\Controllers\AssistantAnswerController;
+use App\Http\Controllers\AssistantArtworkPreviewController;
 use App\Http\Controllers\AssistantConversationController;
 use App\Http\Controllers\AssistantSearchController;
 use App\Http\Controllers\AssistantTurnController;
@@ -57,9 +58,17 @@ Route::get('/privacy', function () {
 Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified'])
     ->group(function () {
 
-        Route::inertia('/assistant', 'Assistant/Index')
+        Route::get('/assistant', fn () => Inertia::render('Assistant/Index', [
+            'historyEnabled' => config('ai.assistant_history_enabled'),
+            'dialogueEnabled' => config('ai.assistant_history_enabled') && config('ai.assistant_rag_enabled'),
+            'contextEnabled' => config('ai.assistant_history_enabled') && config('ai.assistant_rag_enabled') && config('ai.assistant_context_enabled'),
+        ]))
             ->middleware(['auth:web', AuthorizeAssistantSearch::class])
             ->name('assistant.index');
+        Route::get('/assistant/artworks/{artwork}/preview', AssistantArtworkPreviewController::class)
+            ->whereNumber('artwork')
+            ->middleware(['auth:web', AuthorizeAssistantSearch::class])
+            ->name('assistant.artworks.preview');
         Route::post('/assistant/search', AssistantSearchController::class)
             ->middleware(['auth:web', AuthorizeAssistantSearch::class])
             ->name('assistant.search');
