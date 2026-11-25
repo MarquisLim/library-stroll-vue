@@ -29,6 +29,10 @@ class AuthorizeAssistantSearch
         }
 
         abort_unless(config('ai.assistant_enabled'), 404);
+        if ($request->routeIs('assistant.index')) {
+            return $next($request);
+        }
+
         if ($request->routeIs('assistant.answer')) {
             abort_unless(config('ai.assistant_rag_enabled'), 404);
         }

@@ -15,16 +15,17 @@ import {
     UserIcon,
     Cog6ToothIcon,
     ArrowRightOnRectangleIcon,
-    PhotoIcon
+    PhotoIcon, SparklesIcon
 } from '@heroicons/vue/24/outline'
 import { useArtworkActions } from '@/stores/useArtworkActions'
 import { useTheme } from '@/composables/useTheme'
 
-const props         = defineProps({ title: String })
+defineProps({ title: String, workspace: Boolean })
 const page          = usePage()
 const searchModal = ref(null)
 const actions       = useArtworkActions()
 const isAuth        = computed(() => !!page.props.auth.user)
+const canUseAssistant = computed(() => page.props.canUseAssistant === true)
 const user          = computed(() => page.props.auth.user || {})
 const myId          = page.props.auth.user?.id
 const { isDark, toggleTheme } = useTheme()
@@ -110,9 +111,9 @@ function logout() {
 </script>
 
 <template>
-    <div class="ui-app-shell min-h-screen flex flex-col">
+    <div class="ui-app-shell flex flex-col" :class="workspace ? 'ui-app-workspace' : 'min-h-screen'">
         <Head :title="title"/>
-        <nav aria-label="Основная навигация" class="ui-site-header sticky top-0 z-40 pt-safe-t">
+        <nav aria-label="Основная навигация" class="ui-site-header sticky top-0 z-40 shrink-0 pt-safe-t">
             <div class="relative mx-auto flex h-16 w-full max-w-screen-2xl items-center gap-2 px-4 sm:gap-4 sm:px-8 lg:px-10">
                 <!-- Left -->
                 <div class="flex shrink-0 items-center gap-4">
@@ -130,6 +131,9 @@ function logout() {
                         </Link>
                         <Link v-if="isAuth" :href="route('studio.index')" class="ui-nav-link" :aria-current="route().current('studio.*') ? 'page' : undefined">
                             <PlusCircleIcon class="w-5 h-5" /> Студия
+                        </Link>
+                        <Link v-if="canUseAssistant" :href="route('assistant.index')" class="ui-nav-link whitespace-nowrap" :aria-current="route().current('assistant.index') ? 'page' : undefined">
+                            <SparklesIcon class="h-5 w-5" /> AI-ассистент
                         </Link>
                     </div>
                 </div>
@@ -229,10 +233,10 @@ function logout() {
         >
             <span class="loading loading-bars loading-lg text-primary"></span>
         </div>
-        <main class="flex-1">
+        <main class="flex-1" :class="{ 'min-h-0': workspace }">
             <slot/>
         </main>
-        <Footer />
+        <Footer v-if="!workspace" />
         <GlobalModals/>
         <AuthModal :show="actions.showAuthModal" @close="actions.showAuthModal = false" />
 
@@ -278,7 +282,7 @@ function logout() {
             </div>
         </div>
         <!-- Dock для мобильных -->
-        <div class="dock fixed bottom-0 w-full bg-base-100 border-t border-base-300 z-40 lg:hidden">
+        <nav aria-label="Мобильная навигация" class="dock w-full bg-base-100 border-t border-base-300 z-40 lg:hidden" :class="workspace ? 'static shrink-0' : 'fixed bottom-0'">
             <Link :href="route('home')" class="flex flex-col items-center px-2"
                   :class="{ 'dock-active': route().current('home') }">
                 <HomeIcon class="w-6 h-6" />
@@ -297,6 +301,12 @@ function logout() {
                 <span class="dock-label text-xs">Студия</span>
             </Link>
 
+            <Link v-if="canUseAssistant" :href="route('assistant.index')" class="flex flex-col items-center px-1" aria-label="AI-ассистент"
+                  :class="{ 'dock-active': route().current('assistant.index') }" :aria-current="route().current('assistant.index') ? 'page' : undefined">
+                <SparklesIcon class="h-6 w-6" />
+                <span class="dock-label whitespace-nowrap text-[11px]">Ассистент</span>
+            </Link>
+
             <button @click="actions.showAuthModal = true" v-if="!isAuth"
                     class="flex flex-col items-center px-2">
                 <ArrowRightOnRectangleIcon class="w-6 h-6" />
@@ -310,7 +320,7 @@ function logout() {
                 <UserAvatar :src="user.profile_photo_url" :name="user.name" :size="24" />
                 <span class="dock-label text-xs">Меню</span>
             </label>
-        </div>
+        </nav>
 
     </div>
 </template>

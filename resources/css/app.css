@@ -162,6 +162,13 @@
     .ui-app-shell { padding-bottom: calc(4rem + env(safe-area-inset-bottom)); }
     .ui-hero-art { min-height: 0; min-width: 0; width: 100%; }
 }
+.ui-app-shell.ui-app-workspace {
+    position: fixed;
+    inset: 0 0 auto;
+    height: var(--workspace-viewport-height, 100dvh);
+    overflow: clip;
+    padding-bottom: 0;
+}
 @media (prefers-reduced-motion: reduce) {
     html { scroll-behavior: auto; }
     *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }

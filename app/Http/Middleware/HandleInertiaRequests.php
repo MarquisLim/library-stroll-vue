@@ -37,6 +37,7 @@ class HandleInertiaRequests extends Middleware
     public function share(Request $request): array
     {
         return array_merge(parent::share($request), [
+            'canUseAssistant' => fn () => config('ai.assistant_enabled') && $request->user()?->hasVerifiedEmail(),
             'auth' => [
                 'user' => function () use ($request) {
                     if (! $user = $request->user()) {

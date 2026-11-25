@@ -57,6 +57,9 @@ Route::get('/privacy', function () {
 Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified'])
     ->group(function () {
 
+        Route::inertia('/assistant', 'Assistant/Index')
+            ->middleware(['auth:web', AuthorizeAssistantSearch::class])
+            ->name('assistant.index');
         Route::post('/assistant/search', AssistantSearchController::class)
             ->middleware(['auth:web', AuthorizeAssistantSearch::class])
             ->name('assistant.search');
