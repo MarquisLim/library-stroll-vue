@@ -126,6 +126,24 @@ class AssistantConversationHistoryTest extends TestCase
         $this->getJson(self::URL.'/invalid-uuid')->assertNotFound();
     }
 
+    public function test_list_uses_first_encrypted_query_for_owned_label(): void
+    {
+        $owner = User::factory()->create();
+        $conversation = AssistantConversation::factory()->for($owner)->create();
+        $turn = $conversation->turns()->create([
+            'sequence' => 1, 'user_query' => 'Птицы у воды', 'result_status' => 'no_results',
+            'requested_limit' => 10, 'source_references' => [],
+        ]);
+        $other = AssistantConversation::factory()->create();
+        $other->turns()->create([
+            'sequence' => 1, 'user_query' => 'Чужой запрос', 'result_status' => 'no_results',
+            'requested_limit' => 10, 'source_references' => [],
+        ]);
+        $this->assertNotSame('Птицы у воды', $turn->getRawOriginal('user_query'));
+        $this->actingAs($owner)->getJson(self::URL)->assertOk()->assertJsonPath('conversations.0.label', 'Птицы у воды')
+            ->assertJsonMissing(['label' => 'Чужой запрос']);
+    }
+
     public function test_conversation_quota_is_per_owner_and_deletion_frees_a_slot(): void
     {
         config(['ai.assistant_history.max_conversations' => 1]);

@@ -26,7 +26,7 @@ function historyTurn(turn) {
     return { id: turn.id, sequence: turn.sequence, query: turn.user_query, reply: ragReply(turn, true) }
 }
 
-export function useAssistantConversation(client = api) {
+export function useAssistantConversation(client = api, queryLimit = assistantQueryLimit) {
     const draft = ref('')
     const activeId = ref(null)
     const rows = ref([])
@@ -50,7 +50,7 @@ export function useAssistantConversation(client = api) {
     }] : rows.value)
     const canSend = computed(() => !pending.value && !historyRequest.value && !deletion.value
         && (!activeId.value || historyPage.value > 0 || rows.value.length > 0) && !notice.value?.refreshRequired
-        && draft.value.trim().length > 0 && Array.from(draft.value.trim()).length <= assistantQueryLimit)
+        && draft.value.trim().length > 0 && Array.from(draft.value.trim()).length <= queryLimit)
 
     async function loadList(more = false) {
         if (more && (!listMore.value || listRequest.value)) return false
@@ -95,7 +95,7 @@ export function useAssistantConversation(client = api) {
             if (data.conversation.id !== id) throw new Error('Unexpected conversation')
             const incoming = data.turns.filter(turn => validId(turn.id) && Number.isSafeInteger(turn.sequence)).map(historyTurn)
             // Overlapping older pages can include a turn already refreshed or received from POST.
-            rows.value = sortTurns(mergeById(incoming, more ? rows.value : []))
+            rows.value = sortTurns(mergeById(more ? rows.value : [], incoming))
             historyPage.value = page
             historyMore.value = data.pagination.has_more
             const recovery = recoveries.value.get(id)

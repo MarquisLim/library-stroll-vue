@@ -9,9 +9,9 @@ import AssistantWelcome from '@/Components/Assistant/AssistantWelcome.vue'
 import { useAssistantConversation } from '@/composables/useAssistantConversation.js'
 import { useAssistantSearch } from '@/composables/useAssistantSearch.js'
 
-const props = defineProps({ historyEnabled: Boolean, dialogueEnabled: Boolean, contextEnabled: Boolean })
+const props = defineProps({ historyEnabled: Boolean, dialogueEnabled: Boolean, contextEnabled: Boolean, dialogueQueryLimit: { type: Number, default: 500 } })
 const local = reactive(useAssistantSearch())
-const history = reactive(useAssistantConversation())
+const history = reactive(useAssistantConversation(undefined, props.dialogueQueryLimit))
 const chat = computed(() => props.dialogueEnabled ? history : local)
 const readOnly = computed(() => !!history.activeId && !props.dialogueEnabled)
 const turns = computed(() => readOnly.value ? history.turns : chat.value.turns)
@@ -88,10 +88,19 @@ async function scrollBottom() {
     if (scroller) scroller.scrollTop = scroller.scrollHeight
 }
 
+async function revealLatestTurn() {
+    await nextTick()
+    const scroller = conversation.value
+    const latest = scroller?.querySelector('ol > li:last-child')
+    if (latest) {
+        scroller.scrollTop = Math.max(0, scroller.scrollTop + latest.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 16)
+    }
+}
+
 function send() {
     if (!chat.value.canSend) return
     void chat.value.send()
-    void scrollBottom()
+    void revealLatestTurn()
 }
 
 async function openConversation(id) {
@@ -195,13 +204,13 @@ const sidebarProps = computed(() => ({
                 <div class="shrink-0 bg-base-200">
                     <div class="mx-auto w-full max-w-[66rem] px-4 pb-2 pt-2 sm:px-7 sm:pb-4">
                         <div v-if="dialogueEnabled && history.notice" class="mb-2 rounded-xl border border-base-300 bg-base-100 px-3 py-2 text-xs sm:text-sm">
-                            <p role="status">{{ history.notice.saved ? 'Этот запрос найден в обновлённой истории.' : history.notice.message }}</p>
+                            <p role="status">{{ history.notice.saved ? 'В истории найден похожий запрос. Проверьте его перед повторной отправкой.' : history.notice.message }}</p>
                             <div v-if="!history.notice.saved" class="mt-1 flex flex-wrap gap-x-2">
                                 <button type="button" class="btn btn-ghost min-h-10 px-2 text-xs text-primary" :disabled="!!history.historyRequest || !!history.listRequest" @click="refreshHistory">{{ history.activeId ? 'Обновить историю' : 'Обновить список' }}</button>
                                 <button v-if="!history.notice.refreshRequired" type="button" class="btn btn-ghost min-h-10 px-2 text-xs text-primary" @click="history.restoreDraft(); composer?.focus()">Вернуть запрос в поле</button>
                             </div>
                         </div>
-                        <AssistantComposer v-if="!readOnly" ref="composer" v-model="draft" :pending="chat.pending" :can-send="chat.canSend" @send="send" @cancel="cancelWait" />
+                        <AssistantComposer v-if="!readOnly" ref="composer" v-model="draft" :limit="dialogueEnabled ? dialogueQueryLimit : 500" :pending="chat.pending" :can-send="chat.canSend" @send="send" @cancel="cancelWait" />
                         <p v-if="!dialogueEnabled || !contextEnabled" class="mt-2 text-center text-[11px] leading-snug text-base-content/65 sm:text-xs">
                             {{ readOnly ? 'Новые сообщения в этом режиме доступны через независимый поиск.' : dialogueEnabled ? 'Контекстное уточнение отключено.' : 'Каждый запрос обрабатывается отдельно.' }}
                         </p>

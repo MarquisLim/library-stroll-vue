@@ -10,6 +10,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\HttpFoundation\Response;
@@ -29,7 +31,9 @@ class AssistantConversationController extends Controller
     public function index(Request $request): JsonResponse
     {
         [$page, $size] = $this->pagination($request);
-        $conversations = $request->user()->assistantConversations()->useWritePdo()
+        $conversations = $request->user()->assistantConversations()->useWritePdo()->select(['id', 'created_at', 'updated_at'])
+            ->addSelect(['first_query' => AssistantTurn::query()->select('user_query')
+                ->whereColumn('conversation_id', 'assistant_conversations.id')->orderBy('sequence')->limit(1)])
             ->orderByDesc('updated_at')->orderByDesc('id')
             ->simplePaginate($size, ['id', 'created_at', 'updated_at'], 'page', $page);
 
@@ -82,11 +86,18 @@ class AssistantConversationController extends Controller
 
     private function conversationData(AssistantConversation $conversation): array
     {
-        return [
+        $data = [
             'id' => $conversation->id,
             'created_at' => $conversation->created_at->toISOString(),
             'updated_at' => $conversation->updated_at->toISOString(),
         ];
+        if (array_key_exists('first_query', $conversation->getAttributes())) {
+            $encrypted = $conversation->getRawOriginal('first_query');
+            $label = $encrypted ? Str::limit(trim(preg_replace('/\s+/u', ' ', Crypt::decryptString($encrypted)) ?? ''), 60) : 'Новый диалог';
+            $data['label'] = $label ?: 'Новый диалог';
+        }
+
+        return $data;
     }
 
     /** @throws ValidationException */

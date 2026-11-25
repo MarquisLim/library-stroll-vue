@@ -51,7 +51,7 @@ const summary = computed(() => {
                     </Link>
                 </li>
             </ul>
-            <ul v-if="reply.results?.length" class="mt-3 grid gap-2.5 sm:grid-cols-2" :class="{ 'xl:grid-cols-3': reply.results[0].number }" aria-label="Найденные работы">
+            <ul v-if="reply.results?.length" class="mt-4 grid gap-3 border-t border-base-300/70 pt-4 sm:grid-cols-2" :class="{ 'xl:grid-cols-3': reply.results[0].number }" aria-label="Найденные работы">
                 <li v-for="artwork in reply.results" :key="`${artwork.artwork_id}-${artwork.number ?? ''}`" class="min-w-0">
                     <AssistantArtworkCard :artwork="artwork" />
                 </li>

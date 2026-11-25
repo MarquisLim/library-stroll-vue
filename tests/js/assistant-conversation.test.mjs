@@ -17,7 +17,7 @@ const historyPage = (conversation, turns = [], has_more = false) => ({ conversat
 const list = (items, has_more = false) => ({ conversations: items.map(id => ({ id })), pagination: { has_more } })
 const http = status => ({ response: { status } })
 
-function fixture(t, overrides = {}) {
+function fixture(t, overrides = {}, queryLimit) {
     const calls = []
     const client = {
         list: async page => { calls.push(['list', page]); return list([first, second]) },
@@ -28,10 +28,23 @@ function fixture(t, overrides = {}) {
         ...overrides,
     }
     const scope = effectScope()
-    const chat = scope.run(() => useAssistantConversation(client))
+    const chat = scope.run(() => useAssistantConversation(client, queryLimit))
     t.after(() => scope.stop())
     return { chat, calls, scope }
 }
+
+test('the configured Unicode limit blocks a dialogue POST before creating a conversation', async t => {
+    const { chat, calls } = fixture(t, {}, 3)
+    chat.draft.value = '🌊пти'
+    assert.equal(chat.canSend.value, false)
+    await chat.send()
+    assert.deepEqual(calls, [])
+
+    chat.draft.value = ' 🌊пт '
+    assert.equal(chat.canSend.value, true)
+    await chat.send()
+    assert.deepEqual(calls.filter(([action]) => action === 'send'), [['send', first, '🌊пт']])
+})
 
 test('creates on first send, filters double clicks and keeps the same server UUID for a follow-up', async t => {
     let finish
@@ -73,6 +86,38 @@ test('restores chronological history and deduplicates older and repeated pages',
     await chat.loadHistory(true)
     assert.deepEqual(chat.turns.value.map(turn => turn.sequence), [1, 2, 3, 4])
     assert.equal(chat.turns.value[0].reply.fragments.length, 1)
+})
+
+test('overlapping history uses the newest server version after access is revoked', async t => {
+    const { chat } = fixture(t, {
+        show: async (id, page) => page === 1
+            ? historyPage(id, [saved(2)], true)
+            : historyPage(id, [saved(2, 'Запрос 2', 'unavailable'), saved(1)]),
+    })
+    await chat.open(first)
+    assert.equal(chat.turns.value[0].reply.fragments.length, 1)
+    await chat.loadHistory(true)
+    assert.deepEqual(chat.turns.value.map(turn => turn.sequence), [1, 2])
+    assert.equal(chat.turns.value[1].reply.sourceStatus, 'unavailable')
+    assert.deepEqual(chat.turns.value[1].reply.fragments, [])
+    assert.deepEqual(chat.turns.value[1].reply.results, [])
+})
+
+test('overlapping partial page replaces stale sources after a new turn shifts pagination', async t => {
+    const partial = { ...saved(2, 'Запрос 2', 'partial'), answer: [fact(1)], sources: [source(1)] }
+    const complete = { ...saved(2), answer: [fact(1), fact(2)], sources: [source(1), source(2)] }
+    const { chat } = fixture(t, {
+        show: async (id, page) => page === 1 ? historyPage(id, [complete], true) : historyPage(id, [partial, saved(1)]),
+        send: async () => response(3),
+    })
+    await chat.open(first)
+    chat.draft.value = 'новый вопрос'
+    await chat.send()
+    await chat.loadHistory(true)
+    await chat.loadHistory(true)
+    assert.deepEqual(chat.turns.value.map(turn => turn.sequence), [1, 2, 3])
+    assert.equal(chat.turns.value[1].reply.sourceStatus, 'partial')
+    assert.equal(chat.turns.value[1].reply.results.length, 1)
 })
 
 test('a late GET after switching or refreshing cannot overwrite current history', async t => {

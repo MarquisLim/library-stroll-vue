@@ -4,7 +4,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { assistantQueryLimit } from '../../composables/useAssistantSearch.js'
 
 const draft = defineModel({ type: String, required: true })
-defineProps({ pending: Boolean, canSend: Boolean })
+const props = defineProps({ pending: Boolean, canSend: Boolean, limit: { type: Number, default: assistantQueryLimit } })
 const emit = defineEmits(['send', 'cancel'])
 const input = ref(null)
 const length = computed(() => Array.from(draft.value).length)
@@ -19,7 +19,7 @@ function resize() {
 function update(event) {
     if (event.isComposing) return
     const value = event.target.value
-    const limited = Array.from(value).slice(0, assistantQueryLimit).join('')
+    const limited = Array.from(value).slice(0, props.limit).join('')
     if (limited !== value) event.target.value = limited
     draft.value = limited
 }
@@ -62,8 +62,8 @@ watch(draft, resize, { flush: 'post' })
             @keydown.enter="handleEnter"
         ></textarea>
         <div class="flex items-center justify-between gap-2 px-1 pt-1 sm:px-1.5">
-            <span id="assistant-query-hint" class="text-xs tabular-nums text-base-content/65">
-                <span>{{ length }} / {{ assistantQueryLimit }}</span>
+            <span id="assistant-query-hint" class="text-xs tabular-nums text-base-content/50">
+                <span>{{ length }} / {{ limit }}</span>
                 <span class="sr-only">символов.</span>
                 <span class="ml-3 hidden sm:inline">Enter — отправить · Shift+Enter — новая строка</span>
             </span>

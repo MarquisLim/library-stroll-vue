@@ -54,9 +54,10 @@ class AssistantPageTest extends TestCase
         $this->actingAs(User::factory()->create())->get(route('assistant.index'))->assertOk()
             ->assertInertia(fn (Assert $page) => $page->where('historyEnabled', true)->where('dialogueEnabled', false)->where('contextEnabled', false));
 
-        config(['ai.assistant_rag_enabled' => true]);
+        config(['ai.assistant_rag_enabled' => true, 'ai.assistant_history.max_query_chars' => 120]);
         $this->get(route('assistant.index'))->assertOk()
-            ->assertInertia(fn (Assert $page) => $page->where('historyEnabled', true)->where('dialogueEnabled', true)->where('contextEnabled', true));
+            ->assertInertia(fn (Assert $page) => $page->where('historyEnabled', true)->where('dialogueEnabled', true)
+                ->where('contextEnabled', true)->where('dialogueQueryLimit', 120));
     }
 
     public function test_unverified_user_cannot_open_page_or_see_navigation_link(): void

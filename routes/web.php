@@ -62,6 +62,7 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
             'historyEnabled' => config('ai.assistant_history_enabled'),
             'dialogueEnabled' => config('ai.assistant_history_enabled') && config('ai.assistant_rag_enabled'),
             'contextEnabled' => config('ai.assistant_history_enabled') && config('ai.assistant_rag_enabled') && config('ai.assistant_context_enabled'),
+            'dialogueQueryLimit' => config('ai.assistant_history.max_query_chars'),
         ]))
             ->middleware(['auth:web', AuthorizeAssistantSearch::class])
             ->name('assistant.index');

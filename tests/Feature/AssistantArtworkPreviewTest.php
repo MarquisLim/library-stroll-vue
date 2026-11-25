@@ -77,9 +77,10 @@ class AssistantArtworkPreviewTest extends TestCase
     public function test_access_is_checked_again_and_missing_or_unsafe_files_do_not_fall_back_to_original(): void
     {
         [$url, $work, $media] = $this->work();
-        $this->actingAs(User::factory()->create())->get($url)->assertOk();
+        $this->actingAs(User::factory()->create())->get($url.'?v=first')->assertOk()
+            ->assertHeader('Cache-Control', 'no-store, private');
         $work->updateQuietly(['is_private' => true]);
-        $this->get($url)->assertNotFound();
+        $this->get($url.'?v=second')->assertNotFound();
         $work->updateQuietly(['is_private' => false]);
 
         $disk = Storage::disk('public');
