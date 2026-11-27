@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import json
+import time
 from typing import TypeVar
 
 import httpx
@@ -33,6 +34,20 @@ METADATA_JSON_SCHEMA = {
         "summary", "objects", "themes", "styles",
         "mood", "colors", "tags_ru", "tags_en", "confidence",
     ],
+}
+
+# On retry, constrain the output to what the metadata layer actually keeps.
+# The primary request and the persisted metadata contract stay compatible.
+VISION_RETRY_JSON_SCHEMA = {
+    **METADATA_JSON_SCHEMA,
+    "properties": {
+        key: (
+            {**value, "maxItems": 15, "items": {"type": "string", "maxLength": 160}}
+            if value["type"] == "array"
+            else {**value, "maxLength": 1000} if key == "summary" else value
+        )
+        for key, value in METADATA_JSON_SCHEMA["properties"].items()
+    },
 }
 
 ANALYSIS_SYSTEM_PROMPT = (
@@ -89,6 +104,12 @@ AssistantPlan = TypeVar("AssistantPlan", bound=BaseModel)
 
 class AssistantComposeBudgetError(ValueError):
     pass
+
+
+class VisionOutputError(ValueError):
+    def __init__(self, reason: str):
+        self.reason = reason
+        super().__init__(reason)
 
 
 def _within_reported_budget(result: dict, key: str, limit: int) -> bool:
@@ -233,6 +254,7 @@ class OllamaClient:
         title: str = "",
         description: str = "",
         existing_tags: list[str] | None = None,
+        attempts: list[dict] | None = None,
     ) -> ArtworkMetadata:
         context_parts = []
         if title:
@@ -248,12 +270,76 @@ class OllamaClient:
 
         image_b64 = base64.b64encode(image_bytes).decode("ascii")
 
-        return await self._chat_structured(
-            model=settings.ollama_vision_model,
-            system=ANALYSIS_SYSTEM_PROMPT,
-            user=user_prompt,
-            images=[image_b64],
-        )
+        attempts = [] if attempts is None else attempts
+        try:
+            return await self._vision_request(user_prompt, image_b64, attempts)
+        except VisionOutputError as exc:
+            return await self._vision_request(user_prompt, image_b64, attempts, retry_reason=exc.reason)
+
+    async def _vision_request(
+        self, prompt: str, image: str, attempts: list[dict], retry_reason: str | None = None,
+    ) -> ArtworkMetadata:
+        is_retry = retry_reason is not None
+        timeout = settings.ollama_vision_retry_timeout if is_retry else settings.ollama_vision_timeout
+        options = {
+            "num_predict": settings.ollama_vision_retry_num_predict if is_retry else settings.ollama_vision_num_predict,
+            "temperature": settings.ollama_vision_retry_temperature if is_retry else 0.1,
+        }
+        if is_retry:
+            options["num_ctx"] = settings.ollama_vision_retry_num_ctx
+        stats = {"attempt": len(attempts) + 1, "retry_reason": retry_reason}
+        attempts.append(stats)
+        started = time.monotonic()
+        try:
+            async with asyncio.timeout(timeout):
+                response = await self._client.post("/api/chat", json={
+                    "model": settings.ollama_vision_model,
+                    "messages": [
+                        {"role": "system", "content": ANALYSIS_SYSTEM_PROMPT},
+                        {"role": "user", "content": prompt, "images": [image]},
+                    ],
+                    "stream": False,
+                    "think": False,
+                    "format": VISION_RETRY_JSON_SCHEMA if is_retry else METADATA_JSON_SCHEMA,
+                    "keep_alive": settings.ollama_keep_alive,
+                    "options": options,
+                }, timeout=timeout)
+                response.raise_for_status()
+                try:
+                    data = response.json()
+                except ValueError:
+                    raise httpx.RemoteProtocolError("Invalid Ollama chat response") from None
+                if not isinstance(data, dict):
+                    raise httpx.RemoteProtocolError("Invalid Ollama chat response")
+                reason = data.get("done_reason")
+                stats["done_reason"] = reason if reason in ("stop", "length") else None
+                for key in ("eval_count", "prompt_eval_count", "eval_duration", "total_duration"):
+                    value = data.get(key)
+                    stats[key] = value if type(value) is int and value >= 0 else None
+                if reason == "length":
+                    raise VisionOutputError("generation_limit")
+                if data.get("done") is not True:
+                    raise VisionOutputError("incomplete_response")
+                message = data.get("message")
+                try:
+                    content = json.loads(message["content"])
+                    if not isinstance(content, dict) or not set(METADATA_JSON_SCHEMA["required"]).issubset(content):
+                        raise VisionOutputError("missing_required_fields")
+                    result = ArtworkMetadata.model_validate(content, strict=True).deduplicated()
+                except (TypeError, KeyError, ValueError) as exc:
+                    if isinstance(exc, VisionOutputError):
+                        raise
+                    raise VisionOutputError("invalid_structured_metadata") from None
+                stats["outcome"] = "vision"
+                return result
+        except VisionOutputError as exc:
+            stats["outcome"] = exc.reason
+            raise
+        except (TimeoutError, httpx.HTTPError) as exc:
+            stats["outcome"] = type(exc).__name__
+            raise
+        finally:
+            stats["elapsed_ms"] = int((time.monotonic() - started) * 1000)
 
     async def analyze_text(
         self,
@@ -288,18 +374,12 @@ class OllamaClient:
         model: str,
         system: str,
         user: str,
-        images: list[str] | None = None,
     ) -> ArtworkMetadata:
         messages = [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ]
-        if images:
-            messages[-1]["images"] = images
-
-        # The qwen3-vl:4b thinking model can spend part of this budget before message.content begins.
-        num_predict = settings.ollama_vision_num_predict if images else settings.ollama_num_predict
-        timeout = settings.ollama_vision_timeout if images else settings.ollama_text_timeout
+        timeout = settings.ollama_text_timeout
         payload: dict = {
             "model": model,
             "messages": messages,
@@ -309,7 +389,7 @@ class OllamaClient:
             "keep_alive": settings.ollama_keep_alive,
             "options": {
                 "temperature": 0.1,
-                "num_predict": num_predict,
+                "num_predict": settings.ollama_num_predict,
             },
         }
 

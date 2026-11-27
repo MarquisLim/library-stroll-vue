@@ -39,8 +39,21 @@ class EmbeddingResponse(BaseModel):
     embedding: list[float]
 
 
+class VisionAttempt(BaseModel):
+    attempt: int
+    retry_reason: str | None = None
+    done_reason: str | None = None
+    eval_count: int | None = None
+    prompt_eval_count: int | None = None
+    eval_duration: int | None = None
+    total_duration: int | None = None
+    elapsed_ms: int
+    outcome: str
+
+
 class AnalyzeResponse(BaseModel):
     artwork_id: int
+    vision_attempts: list[VisionAttempt] = Field(default_factory=list)
     summary: str = ""
     objects: list[str] = Field(default_factory=list)
     themes: list[str] = Field(default_factory=list)

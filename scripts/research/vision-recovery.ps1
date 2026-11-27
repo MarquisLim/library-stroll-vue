@@ -8,6 +8,7 @@ param(
     [switch] $AuditCatalog,
     [switch] $RetryFailed,
     [switch] $RetryFallback,
+    [switch] $DeferVisionFallback,
     [switch] $RetryStale
 )
 
@@ -62,6 +63,17 @@ function Inspect([string] $Action, [long[]] $Id = @(), [bool] $Verify = $false) 
     $rows = @($lines | ForEach-Object { $_ | ConvertFrom-Json -Depth 45 })
     if ($Action -in @('inspect','enable') -and
         ($rows.Count -ne $Id.Count -or ($rows.id -join ',') -ne ($Id -join ','))) { throw 'Unexpected inspection IDs' }
+    if ($Action -eq 'inspect') {
+        foreach ($row in $rows) {
+            $deferred = $deferrals[[long]$row.id]
+            if ($deferred -and $row.classification -eq 'text_fallback' -and
+                $row.latest_run.id -eq $deferred.latest_run.id -and $row.content_hash -eq $deferred.content_hash) {
+                if ($Verify -and !$row.qdrant_revision_matches) { throw "Deferred point no longer matches for $($row.id)" }
+                $row.classification = 'vision_deferred'
+                $row.reason = $deferred.reason
+            }
+        }
+    }
     $rows
 }
 function Health {
@@ -96,6 +108,19 @@ function Outcome($Row) {
     if ($Row.classification -eq 'revision_mismatch') { return 'revision_mismatch' }
     'incomplete'
 }
+function CanDefer($Row) {
+    if (!$DeferVisionFallback -or $Row.classification -ne 'text_fallback' -or
+        $Row.latest_run.status -ne 'success' -or !$Row.qdrant_revision_matches) { return $false }
+    $attempts = @($Row.latest_run.vision_attempts)
+    $errors = @('generation_limit','invalid_structured_metadata','missing_required_fields','incomplete_response')
+    $attempts.Count -eq 2 -and $attempts[0].outcome -in $errors -and
+        $attempts[1].retry_reason -eq $attempts[0].outcome -and $attempts[1].outcome -in $errors
+}
+function MarkDeferred($Row) {
+    $Row.classification = 'vision_deferred'
+    $Row.reason = $Row.latest_run.vision_attempts[-1].outcome
+    $deferrals[[long]$Row.id] = $Row
+}
 function Report([long[]] $Selected, [string] $Mode) {
     $counts = [ordered]@{ completed = 0; remaining = 0; failed = 0; fallback = 0; deferred = 0; ineligible = 0 }
     foreach ($id in $ids) {
@@ -104,7 +129,7 @@ function Report([long[]] $Selected, [string] $Mode) {
             'failed' { 'failed' }
             'text_fallback' { 'fallback' }
             'ineligible' { 'ineligible' }
-            { $_ -in @('approval_required','in_progress','provenance_unknown','revision_mismatch') } { 'deferred' }
+                { $_ -in @('approval_required','in_progress','provenance_unknown','revision_mismatch','vision_deferred') } { 'deferred' }
             default { 'remaining' }
         }
         $counts[$bucket]++
@@ -167,6 +192,13 @@ try {
     $blockers = @()
     if (!$environment.indexing_config_ok) { $blockers += 'laravel_indexing_config' }
     if ($health.status -ne 'ok') { $blockers += 'ollama_config_or_digest' }
+    # Analyze makes one request; index is idempotent and may use all configured HTTP attempts.
+    $indexBudget = $environment.http_timeout * [Math]::Max(1, $environment.http_retry_times) +
+        [Math]::Max(0, $environment.http_retry_times - 1) * $environment.http_retry_sleep_ms / 1000
+    if ($health.analysis_timeout + 5 -ge $environment.http_timeout -or
+        $environment.http_timeout + $indexBudget + 10 -ge 600 -or $environment.queue_retry_after -le 600) {
+        $blockers += 'analysis_http_queue_budget'
+    }
     if (!(EmptyQueue $environment)) { $blockers += 'ai_queue_not_empty' }
     if ($running -contains 'worker-ai' -or $running -contains 'scheduler') { $blockers += 'background_ai_worker_or_scheduler' }
     if ($AuditCatalog) {
@@ -184,6 +216,7 @@ try {
         schema_version = $environment.schema_version; prompt_version = $environment.prompt_version
     }
     $states = @{}
+    $deferrals = @{}
     $inspected = [Collections.Generic.List[long]]::new()
     $pending = @{}
     $unsealed = @{}
@@ -210,9 +243,10 @@ try {
                     $id = [long]$entry.id
                     $pending.Remove($id)
                     $states[$id] = $entry.after.classification
-                    if ($entry.outcome -eq 'vision_success') { $unsealed[$id] = $true }
+                    if ($entry.outcome -eq 'vision_deferred') { $deferrals[$id] = $entry.after }
+                    if ($entry.outcome -in @('vision_success','vision_deferred')) { $unsealed[$id] = $true }
                 }
-                { $_ -in @('batch_verified','checkpoint_recovered','manifest_reconciled') } {
+                { $_ -in @('batch_verified','batch_checked_with_deferrals','checkpoint_recovered','manifest_reconciled') } {
                     foreach ($row in $entry.results) {
                         $id = [long]$row.id
                         $unsealed.Remove($id)
@@ -241,9 +275,13 @@ try {
             if ($journal) { Log @{ event = 'dispatch_unresolved'; batch = $intent.batch; id = $id; current = $row } }
             throw "Uncertain dispatch for $id. Inspect the queue and job history before continuing."
         }
+        if ($outcome -eq 'text_fallback' -and (CanDefer $row)) {
+            MarkDeferred $row
+            $outcome = 'vision_deferred'
+        }
         if ($journal) { Log @{ event = 'result'; batch = $intent.batch; id = $id; outcome = $outcome; after = $row; recovered = $true } }
         $states[$id] = $row.classification
-        if ($outcome -ne 'vision_success') { throw "Recovered terminal result for $id ($outcome). Review before retrying." }
+        if ($outcome -notin @('vision_success','vision_deferred')) { throw "Recovered terminal result for $id ($outcome). Review before retrying." }
         $unsealed[$id] = $true
     }
     if ($unsealed.Count) {
@@ -308,8 +346,12 @@ try {
                 Log @{ event = 'dispatch_unresolved'; batch = $batch; id = $id; current = $after; worker_exit = $workerExit }
                 throw "Uncertain dispatch result for $id"
             }
+            if ($workerExit -eq 0 -and $outcome -eq 'text_fallback' -and (CanDefer $after)) {
+                MarkDeferred $after
+                $outcome = 'vision_deferred'
+            }
             Log @{ event = 'result'; batch = $batch; id = $id; outcome = $outcome; worker_exit = $workerExit; after = $after }
-            if ($workerExit -ne 0 -or $outcome -ne 'vision_success') {
+            if ($workerExit -ne 0 -or $outcome -notin @('vision_success','vision_deferred')) {
                 $null = Health
                 throw "Stopped at $id with $outcome. Review the saved result before resuming."
             }
@@ -317,14 +359,15 @@ try {
         $verified = @()
         try {
             $verified = @(Inspect 'inspect' $selected $true)
-            if (@($verified | Where-Object { $_.classification -ne 'vision_success' -or !(EmptyQueue $_) }).Count) {
+            if (@($verified | Where-Object { $_.classification -notin @('vision_success','vision_deferred') -or !(EmptyQueue $_) }).Count) {
                 throw 'Batch did not pass live MySQL and Qdrant verification'
             }
         } catch {
             Log @{ event = 'batch_verification_failed'; batch = $batch; results = $verified; error = $_.Exception.Message }
             throw
         }
-        Log @{ event = 'batch_verified'; batch = $batch; results = $verified }
+        $event = if ($verified.classification -contains 'vision_deferred') { 'batch_checked_with_deferrals' } else { 'batch_verified' }
+        Log @{ event = $event; batch = $batch; results = $verified }
         foreach ($row in $verified) { $states[[long]$row.id] = $row.classification }
     }
     if (!$reconciled -and !@($ids | Where-Object { !$states.ContainsKey([long]$_) -or (CanProcess $states[[long]$_]) }).Count) {

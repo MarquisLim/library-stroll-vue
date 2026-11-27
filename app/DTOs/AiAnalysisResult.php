@@ -21,6 +21,7 @@ readonly class AiAnalysisResult
         public int $latencyMs,
         public string $analysisSource = '',
         public array $warnings = [],
+        public array $visionAttempts = [],
     ) {}
 
     public static function fromResponse(array $data): self
@@ -42,6 +43,7 @@ readonly class AiAnalysisResult
             latencyMs: (int) ($data['latency_ms'] ?? 0),
             analysisSource: $data['analysis_source'] ?? '',
             warnings: $data['warnings'] ?? [],
+            visionAttempts: $data['vision_attempts'] ?? [],
         );
     }
 

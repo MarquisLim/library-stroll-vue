@@ -63,6 +63,9 @@ $environment = [
     'redis_connection' => $redisConnection, 'redis_database' => (int) $redis['database'],
     'redis_prefix' => config('database.redis.options.prefix'), 'api' => config('ai.service_url'),
     'schema_version' => config('ai.schema_version'), 'prompt_version' => config('ai.prompt_version'),
+    'http_timeout' => config('ai.timeout'), 'http_retry_times' => config('ai.retry_times'),
+    'http_retry_sleep_ms' => config('ai.retry_sleep'),
+    'queue_retry_after' => config('queue.connections.redis.retry_after'),
     'indexing_config_ok' => $configOk,
 ];
 function output(array $value): void
@@ -244,6 +247,7 @@ function inspectArtwork($artwork, int $id, bool $demoAllowed, bool $verify, stri
             'stage' => $latest->parameters['stage'] ?? null,
             'analysis_source' => $latest->parameters['analysis_source'] ?? null,
             'warnings' => $latest->parameters['warnings'] ?? [],
+            'vision_attempts' => $latest->parameters['vision_attempts'] ?? [],
             'reason' => $latest->parameters['reason'] ?? null, 'content_hash' => $latest->parameters['content_hash'] ?? null,
             'error_present' => filled($latest->error),
         ] : null,

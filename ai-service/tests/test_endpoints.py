@@ -165,12 +165,10 @@ def test_valid_vision_output_is_not_replaced_with_text(test_app, mock_ollama):
     mock_ollama.analyze_text.assert_not_awaited()
 
 
-@pytest.mark.parametrize("error", [
-    httpx.ReadTimeout("Vision slow"),
-    ValueError("Ollama reached the generation limit before returning valid metadata"),
-])
-def test_vision_errors_use_explicit_text_fallback(test_app, mock_ollama, error):
-    mock_ollama.analyze_image.side_effect = error
+def test_vision_output_errors_use_explicit_text_fallback(test_app, mock_ollama):
+    from app.clients.ollama import VisionOutputError
+
+    mock_ollama.analyze_image.side_effect = VisionOutputError("generation_limit")
     mock_ollama.analyze_text.return_value = ArtworkMetadata(summary="Museum description", tags_en=["cat"])
     with patch("app.api.dependencies.settings") as ms:
         ms.auth_enabled = False
@@ -183,3 +181,13 @@ def test_vision_errors_use_explicit_text_fallback(test_app, mock_ollama, error):
     assert body["warnings"]
     assert body["summary"] == "Museum description"
     mock_ollama.analyze_text.assert_awaited_once()
+
+
+def test_vision_transport_error_returns_http_failure(test_app, mock_ollama):
+    mock_ollama.analyze_image.side_effect = httpx.ReadTimeout("Ollama unavailable")
+    with patch("app.api.dependencies.settings") as ms:
+        ms.auth_enabled = False
+        response = test_app.post("/api/v1/artworks/analyze", data={"artwork_id": 1, "title": "Museum cat"},
+                                 files={"image": ("test.jpg", b"image", "image/jpeg")})
+    assert response.status_code == 502
+    mock_ollama.analyze_text.assert_not_awaited()

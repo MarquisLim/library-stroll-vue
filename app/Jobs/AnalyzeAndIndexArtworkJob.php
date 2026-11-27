@@ -150,7 +150,8 @@ class AnalyzeAndIndexArtworkJob implements ShouldBeUnique, ShouldQueue
 
             $run = AiProcessingRun::where('request_id', $requestId)->firstOrFail();
             $run->update(['model' => $analysis->chatModel, 'parameters' => [...$run->parameters, 'stage' => 'embedding_and_indexing',
-                'analysis_source' => $analysis->analysisSource, 'warnings' => $analysis->warnings]]);
+                'analysis_source' => $analysis->analysisSource, 'warnings' => $analysis->warnings,
+                'vision_attempts' => $analysis->visionAttempts]]);
 
             $indexResult = $aiClient->indexArtwork(
                 artworkId: $artwork->id,

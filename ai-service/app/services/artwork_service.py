@@ -1,10 +1,11 @@
+import asyncio
 import logging
 import time
 
 import httpx
 
 from app.clients.artwork_visibility import ArtworkVisibilityClient, is_artwork_id
-from app.clients.ollama import OllamaClient
+from app.clients.ollama import OllamaClient, VisionOutputError
 from app.clients.qdrant import QdrantService
 from app.config import settings
 
@@ -31,33 +32,34 @@ class ArtworkService:
     ) -> dict:
         start = time.monotonic()
         warnings = []
+        vision_attempts: list[dict] = []
         analysis_source = "text"
+        vision_model = ""
+        try:
+            async with asyncio.timeout(settings.artwork_analysis_timeout):
+                if image_bytes:
+                    try:
+                        metadata = await self.ollama.analyze_image(
+                            image_bytes=image_bytes, title=title, description=description,
+                            existing_tags=existing_tags, attempts=vision_attempts,
+                        )
+                    except VisionOutputError as exc:
+                        if not (title or description or existing_tags):
+                            raise
+                        warnings.append(f"Vision output rejected ({exc.reason}); analyzed text metadata instead")
+                        metadata = await self.ollama.analyze_text(title=title, description=description, existing_tags=existing_tags)
+                        analysis_source = "text_fallback"
+                    else:
+                        vision_model = settings.ollama_vision_model
+                        analysis_source = "vision"
+                else:
+                    metadata = await self.ollama.analyze_text(title=title, description=description, existing_tags=existing_tags)
+        except (TimeoutError, httpx.HTTPError, VisionOutputError):
+            logger.warning("Artwork %d analysis failed; Vision attempts: %s", artwork_id, vision_attempts)
+            raise
 
-        if image_bytes:
-            try:
-                metadata = await self.ollama.analyze_image(
-                    image_bytes=image_bytes,
-                    title=title,
-                    description=description,
-                    existing_tags=existing_tags,
-                )
-                vision_model = settings.ollama_vision_model
-                analysis_source = "vision"
-            except (httpx.HTTPError, ValueError) as exc:
-                if not (title or description or existing_tags):
-                    raise
-                warnings.append(f"Vision unavailable ({type(exc).__name__}); analyzed text metadata instead")
-                logger.warning(warnings[-1])
-                metadata = await self.ollama.analyze_text(title=title, description=description, existing_tags=existing_tags)
-                vision_model = ""
-                analysis_source = "text_fallback"
-        else:
-            metadata = await self.ollama.analyze_text(
-                title=title,
-                description=description,
-                existing_tags=existing_tags,
-            )
-            vision_model = ""
+        if analysis_source == "text_fallback" or len(vision_attempts) > 1:
+            logger.info("Artwork %d analysis source %s; Vision attempts: %s", artwork_id, analysis_source, vision_attempts)
 
         latency_ms = int((time.monotonic() - start) * 1000)
 
@@ -71,6 +73,7 @@ class ArtworkService:
             "embedding_model": settings.ollama_embedding_model,
             "latency_ms": latency_ms,
             "analysis_source": analysis_source,
+            "vision_attempts": vision_attempts,
             "warnings": warnings,
         }
 

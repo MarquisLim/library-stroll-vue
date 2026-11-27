@@ -34,7 +34,12 @@ try:
     report = {"collection": settings.qdrant_collection, "qdrant_url": settings.qdrant_url,
               "qdrant_points": collection["points_count"], "vectors": vectors,
               "schema_version": settings.metadata_schema_version, "prompt_version": settings.prompt_version,
-              "vision_model": settings.ollama_vision_model}
+              "vision_model": settings.ollama_vision_model,
+              "analysis_timeout": settings.artwork_analysis_timeout,
+              "vision_retry": {"num_predict": settings.ollama_vision_retry_num_predict,
+                               "timeout": settings.ollama_vision_retry_timeout,
+                               "temperature": settings.ollama_vision_retry_temperature,
+                               "num_ctx": settings.ollama_vision_retry_num_ctx}}
     stage = "models"
     with httpx.Client(base_url=settings.ollama_base_url, timeout=8, trust_env=False) as client:
         version = client.get("/api/version").raise_for_status().json()["version"]
@@ -46,6 +51,11 @@ try:
         and settings.ollama_embedding_model == "qwen3-embedding:0.6b"
         and settings.ollama_vision_timeout == 45
         and settings.ollama_vision_num_predict == 3072
+        and settings.ollama_vision_retry_num_predict == 4096
+        and settings.ollama_vision_retry_timeout == 75
+        and settings.ollama_vision_retry_temperature == 0
+        and settings.ollama_vision_retry_num_ctx == 8192
+        and settings.artwork_analysis_timeout == 165
         and settings.ollama_think is False
     )
     stage = "ready"

@@ -26,8 +26,13 @@ class Settings(BaseSettings):
     ollama_keep_alive: str = "5m"
     ollama_think: bool = False
     ollama_num_predict: int = 768
-    ollama_vision_num_predict: int = 3072
-    ollama_vision_timeout: int = 45
+    ollama_vision_num_predict: int = Field(default=3072, gt=0)
+    ollama_vision_timeout: float = Field(default=45, gt=0, le=45)
+    ollama_vision_retry_num_predict: int = Field(default=4096, gt=0, le=4096)
+    ollama_vision_retry_timeout: float = Field(default=75, gt=0, le=75)
+    ollama_vision_retry_temperature: float = Field(default=0, ge=0, le=1)
+    ollama_vision_retry_num_ctx: int = Field(default=8192, ge=4096)
+    artwork_analysis_timeout: float = Field(default=165, gt=0, le=165)
     ollama_text_timeout: int = 100
     ollama_assistant_timeout: float = Field(default=12, gt=0, le=30)
 
