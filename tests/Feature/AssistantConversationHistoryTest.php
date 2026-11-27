@@ -47,9 +47,9 @@ class AssistantConversationHistoryTest extends TestCase
         }
     }
 
-    public function test_verified_owner_creates_an_empty_conversation_with_a_uuid(): void
+    public function test_owner_without_verified_email_creates_and_reads_an_empty_conversation(): void
     {
-        $owner = User::factory()->create();
+        $owner = User::factory()->unverified()->create();
         $other = User::factory()->create();
         $response = $this->actingAs($owner)->postJson(self::URL, ['user_id' => $other->id])
             ->assertCreated()->assertHeader('Cache-Control', 'no-store, private')
@@ -62,12 +62,10 @@ class AssistantConversationHistoryTest extends TestCase
         $this->getJson(self::URL.'/'.$id)->assertOk()->assertJsonPath('turns', []);
     }
 
-    public function test_guest_and_unverified_user_cannot_use_any_history_route(): void
+    public function test_guest_cannot_use_any_history_route(): void
     {
         $conversation = AssistantConversation::factory()->create();
         $this->assertHistoryStatus($conversation, 401);
-        $this->actingAs(User::factory()->unverified()->create());
-        $this->assertHistoryStatus($conversation, 403);
     }
 
     public function test_bearer_token_does_not_replace_the_web_session(): void

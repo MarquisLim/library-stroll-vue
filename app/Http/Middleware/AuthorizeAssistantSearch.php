@@ -13,8 +13,6 @@ class AuthorizeAssistantSearch
 
     public function handle(Request $request, Closure $next): Response
     {
-        // User exposes hasVerifiedEmail() without implementing MustVerifyEmail.
-        abort_unless($request->user()->hasVerifiedEmail(), 403, 'Your email address is not verified.');
         if ($request->routeIs('assistant.conversations.*')) {
             abort_unless(config('ai.assistant_history_enabled'), 404);
             abort_if($request->isMethod('POST') && ! config('ai.assistant_enabled'), 404);

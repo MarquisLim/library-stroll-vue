@@ -292,7 +292,7 @@ class AssistantAnswerTest extends TestCase
         $search->shouldReceive('search')->once()->with(self::QUERY, ['type' => 'image'], 1, 20)
             ->andReturn(['artworks' => collect(), 'total' => 0]);
 
-        $this->actingAs(User::factory()->create())->postJson(self::URL, ['query' => $query])->assertOk()
+        $this->actingAs(User::factory()->unverified()->create())->postJson(self::URL, ['query' => $query])->assertOk()
             ->assertExactJson(['status' => 'insufficient_evidence', 'answer' => [], 'sources' => [$this->card($work, 's1')]]);
         $this->postJson(self::URL, ['query' => self::QUERY])->assertOk()
             ->assertExactJson(['status' => 'no_results', 'answer' => [], 'sources' => []]);
@@ -302,8 +302,6 @@ class AssistantAnswerTest extends TestCase
     public function test_protects_answer_and_shares_the_search_quota(): void
     {
         $this->postJson(self::URL, ['query' => self::QUERY])->assertUnauthorized();
-        $this->actingAs(User::factory()->unverified()->create())->postJson(self::URL, ['query' => self::QUERY])->assertForbidden();
-
         $this->actingAs(User::factory()->create());
         config(['ai.assistant_rag_enabled' => false, 'ai.assistant_llm_enabled' => false]);
         $this->postJson(self::URL, ['query' => self::QUERY])->assertNotFound();

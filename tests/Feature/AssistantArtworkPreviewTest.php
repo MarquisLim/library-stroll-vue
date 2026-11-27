@@ -44,13 +44,13 @@ class AssistantArtworkPreviewTest extends TestCase
         Http::assertNothingSent();
     }
 
-    public function test_guest_unverified_user_and_disabled_feature_cannot_access_preview(): void
+    public function test_preview_requires_a_session_and_enabled_assistant(): void
     {
         [$url] = $this->work();
         $this->getJson($url)->assertUnauthorized();
-        $this->actingAs(User::factory()->unverified()->create())->getJson($url)->assertForbidden();
+        $this->actingAs(User::factory()->unverified()->create())->getJson($url)->assertOk();
         config(['ai.assistant_enabled' => false]);
-        $this->actingAs(User::factory()->create())->getJson($url)->assertNotFound();
+        $this->getJson($url)->assertNotFound();
     }
 
     #[DataProvider('ineligibleWorks')]

@@ -60,12 +60,12 @@ class AssistantPageTest extends TestCase
                 ->where('contextEnabled', true)->where('dialogueQueryLimit', 120));
     }
 
-    public function test_unverified_user_cannot_open_page_or_see_navigation_link(): void
+    public function test_unverified_user_can_open_page_and_see_navigation_link(): void
     {
         $this->actingAs(User::factory()->unverified()->create())
             ->get(route('assistant.index'))
-            ->assertForbidden()
-            ->assertInertia(fn (Assert $page) => $page->where('canUseAssistant', false));
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page->component('Assistant/Index')->where('canUseAssistant', true));
     }
 
     public function test_flag_off_blocks_page_and_hides_navigation_link(): void

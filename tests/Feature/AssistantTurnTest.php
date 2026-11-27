@@ -47,7 +47,7 @@ class AssistantTurnTest extends TestCase
             'ai.assistant_llm_enabled' => false, 'ai.rerank_enabled' => false,
             'ai.service_url' => 'http://ai.test', 'ai.api_key' => 'test-secret',
         ]);
-        $this->owner = User::factory()->create();
+        $this->owner = User::factory()->unverified()->create();
         $this->conversation = AssistantConversation::factory()->for($this->owner)->create();
         Storage::fake('public');
         Queue::fake();

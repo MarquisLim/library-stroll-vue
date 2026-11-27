@@ -212,13 +212,11 @@ class AssistantSearchTest extends TestCase
         $this->withToken($token)->postJson(self::URL, ['query' => self::QUERY])->assertUnauthorized();
     }
 
-    public function test_unverified_user_is_rejected_before_feature_flag_and_quota(): void
+    public function test_unverified_user_can_search_when_assistant_is_enabled(): void
     {
-        config(['ai.assistant_enabled' => false]);
-        $user = User::factory()->unverified()->create();
-
-        $this->actingAs($user)->postJson(self::URL, ['query' => self::QUERY])
-            ->assertForbidden()->assertJson(['message' => 'Your email address is not verified.']);
+        $this->mockCandidates([]);
+        $this->actingAs(User::factory()->unverified()->create())->postJson(self::URL, ['query' => self::QUERY])
+            ->assertOk()->assertExactJson(['status' => 'no_results', 'results' => []]);
     }
 
     public function test_stale_session_is_rejected_before_feature_flag(): void
@@ -466,13 +464,11 @@ class AssistantSearchTest extends TestCase
             'action' => 'clarify', 'search_query' => null, 'clarification_code' => 'too_broad',
         ])]);
         $this->postJson(self::URL, ['query' => self::QUERY])->assertUnauthorized();
-        $this->actingAs(User::factory()->unverified()->create())->postJson(self::URL, ['query' => self::QUERY])
-            ->assertForbidden();
-        $this->actingAs(User::factory()->create())->postJson(self::URL, ['query' => str_repeat('x', 501)])
+        $this->actingAs(User::factory()->unverified()->create())->postJson(self::URL, ['query' => str_repeat('x', 501)])
             ->assertUnprocessable();
         Http::assertNothingSent();
 
-        // The rejected body counts toward the verified user's existing request quota.
+        // The rejected body counts toward the signed-in user's request quota.
         for ($count = 0; $count < 9; $count++) {
             $this->postJson(self::URL, ['query' => self::QUERY])->assertOk();
         }

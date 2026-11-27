@@ -55,7 +55,7 @@ Route::get('/privacy', function () {
 })->name('privacy');
 
 
-Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified'])
+Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'auth:web', AuthorizeAssistantSearch::class])
     ->group(function () {
 
         Route::get('/assistant', fn () => Inertia::render('Assistant/Index', [
@@ -64,21 +64,16 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
             'contextEnabled' => config('ai.assistant_history_enabled') && config('ai.assistant_rag_enabled') && config('ai.assistant_context_enabled'),
             'dialogueQueryLimit' => config('ai.assistant_history.max_query_chars'),
         ]))
-            ->middleware(['auth:web', AuthorizeAssistantSearch::class])
             ->name('assistant.index');
         Route::get('/assistant/artworks/{artwork}/preview', AssistantArtworkPreviewController::class)
             ->whereNumber('artwork')
-            ->middleware(['auth:web', AuthorizeAssistantSearch::class])
             ->name('assistant.artworks.preview');
         Route::post('/assistant/search', AssistantSearchController::class)
-            ->middleware(['auth:web', AuthorizeAssistantSearch::class])
             ->name('assistant.search');
         Route::post('/assistant/answer', AssistantAnswerController::class)
-            ->middleware(['auth:web', AuthorizeAssistantSearch::class])
             ->name('assistant.answer');
 
         Route::prefix('assistant/conversations')->name('assistant.conversations.')
-            ->middleware(['auth:web', AuthorizeAssistantSearch::class])
             ->controller(AssistantConversationController::class)
             ->group(function () {
                 Route::post('/', 'store')->name('store');
@@ -88,7 +83,10 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
                 Route::post('/{conversation}/turns', AssistantTurnController::class)
                     ->whereUuid('conversation')->name('turns.store');
             });
+    });
 
+Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified'])
+    ->group(function () {
         Route::get('storage/attachments/{path}', [AttachmentController::class, 'legacy'])
             ->where('path', '.*');
 

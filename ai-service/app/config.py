@@ -1,4 +1,4 @@
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,7 +20,7 @@ class Settings(BaseSettings):
 
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_chat_model: str = "qwen3:8b"
-    ollama_vision_model: str = "qwen3-vl:4b"
+    ollama_vision_model: str = "qwen3-vl:4b-instruct"
     ollama_embedding_model: str = "qwen3-embedding:0.6b"
     ollama_timeout: int = 180
     ollama_keep_alive: str = "5m"
@@ -41,8 +41,12 @@ class Settings(BaseSettings):
     qdrant_collection: str = "librarystroll_artworks"
     qdrant_timeout: int = 30
 
-    metadata_schema_version: int = 1
-    prompt_version: int = 1
+    metadata_schema_version: int = Field(
+        default=1, validation_alias=AliasChoices("AI_METADATA_SCHEMA_VERSION", "metadata_schema_version")
+    )
+    prompt_version: int = Field(
+        default=1, validation_alias=AliasChoices("AI_PROMPT_VERSION", "prompt_version")
+    )
 
     @property
     def auth_enabled(self) -> bool:
