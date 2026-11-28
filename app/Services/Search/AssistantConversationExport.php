@@ -132,7 +132,24 @@ final class AssistantConversationExport
 
     private function json(mixed $value): string
     {
-        return json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR);
+        return json_encode($this->redact($value), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR);
+    }
+
+    private function redact(mixed $value): mixed
+    {
+        if (is_array($value)) {
+            return array_map($this->redact(...), $value);
+        }
+        if (! is_string($value)) {
+            return $value;
+        }
+        foreach ([config('app.key'), config('ai.api_key'), config('database.connections.mysql.password')] as $secret) {
+            if (is_string($secret) && $secret !== '') {
+                $value = str_replace($secret, '[скрыто]', $value);
+            }
+        }
+
+        return AssistantSearchDiagnostics::redactSecrets($value);
     }
 
     private function indent(mixed $value, int $spaces, bool $first = true): string

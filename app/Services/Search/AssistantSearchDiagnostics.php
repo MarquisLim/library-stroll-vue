@@ -57,8 +57,7 @@ final class AssistantSearchDiagnostics
 
     public static function allowed(?User $user): bool
     {
-        return $user !== null && config('ai.assistant_debug_enabled') && app()->environment('local')
-            && in_array((string) $user->getKey(), array_map('trim', explode(',', config('ai.assistant_debug_user_ids', ''))), true);
+        return $user !== null && config('ai.assistant_debug_enabled') && app()->environment('local');
     }
 
     public static function requested(Request $request): bool

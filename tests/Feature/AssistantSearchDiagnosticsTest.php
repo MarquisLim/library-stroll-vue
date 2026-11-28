@@ -21,6 +21,20 @@ class AssistantSearchDiagnosticsTest extends TestCase
 
     private User $owner;
 
+    public function test_export_redacts_secrets_recursively_including_conversation_label(): void
+    {
+        config(['ai.api_key' => 'unique-service-secret', 'app.key' => 'unique-app-secret']);
+        $export = app(\App\Services\Search\AssistantConversationExport::class);
+        $method = new \ReflectionMethod($export, 'json');
+        $encoded = $method->invoke($export, [
+            'conversation' => ['label' => 'password=hunter2 unique-service-secret'],
+            'diagnostics' => ['query' => ['original' => 'Bearer abcdefghijkl unique-app-secret']],
+        ]);
+        foreach (['hunter2', 'unique-service-secret', 'abcdefghijkl', 'unique-app-secret'] as $secret) {
+            $this->assertStringNotContainsString($secret, $encoded);
+        }
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -34,7 +48,7 @@ class AssistantSearchDiagnosticsTest extends TestCase
             'ai.enabled' => true, 'ai.assistant_enabled' => true, 'ai.assistant_rag_enabled' => true,
             'ai.assistant_history_enabled' => true, 'ai.assistant_context_enabled' => false,
             'ai.auto_analyze_on_publish' => false, 'ai.auto_reindex_on_update' => false,
-            'ai.assistant_debug_enabled' => true, 'ai.assistant_debug_user_ids' => (string) $this->owner->id,
+            'ai.assistant_debug_enabled' => true,
             'ai.service_url' => 'http://ai.test', 'ai.api_key' => 'test-never-export',
         ]);
     }
@@ -135,7 +149,7 @@ class AssistantSearchDiagnosticsTest extends TestCase
         $this->assertArrayNotHasKey('diagnostics', $basic);
         $this->assertSame([$available->id], array_column($basic['sources'][$last], 'artwork_id'));
         $this->app->instance('env', 'local');
-        config(['ai.assistant_debug_user_ids' => '']);
+        config(['ai.assistant_debug_enabled' => false]);
         $this->get($url.'/export?debug=1')->assertForbidden();
         $this->actingAs(User::factory()->create())->get($url.'/export')->assertNotFound();
         $this->get($url.'/export?debug=1')->assertNotFound();

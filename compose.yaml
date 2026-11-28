@@ -12,7 +12,7 @@ x-php: &php
       VITE_REVERB_HOST: ${VITE_REVERB_HOST:-localhost}
       VITE_REVERB_PORT: ${REVERB_PORT:-8081}
       VITE_REVERB_SCHEME: ${VITE_REVERB_SCHEME:-http}
-  # This also supplies the local assistant diagnostics flag and its account allowlist.
+  # This also supplies the local assistant diagnostics flag.
   env_file: docker/.env
   environment: &php-env
     DB_CONNECTION: mysql

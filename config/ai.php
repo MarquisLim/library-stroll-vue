@@ -9,7 +9,6 @@ return [
     'assistant_history_enabled' => (bool) env('AI_ASSISTANT_HISTORY_ENABLED', false),
     'assistant_context_enabled' => (bool) env('AI_ASSISTANT_CONTEXT_ENABLED', false),
     'assistant_debug_enabled' => (bool) env('AI_ASSISTANT_DEBUG_ENABLED', false),
-    'assistant_debug_user_ids' => (string) env('AI_ASSISTANT_DEBUG_USER_IDS', ''),
     'assistant_llm_timeout' => (float) env('AI_ASSISTANT_LLM_TIMEOUT', 15),
     'assistant_history' => [
         'max_conversations' => min(200, max(1, (int) env('AI_ASSISTANT_HISTORY_MAX_CONVERSATIONS', 20))),
