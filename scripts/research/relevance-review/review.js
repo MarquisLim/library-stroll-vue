@@ -6,6 +6,8 @@ const switchReviewer = element('switch-reviewer');
 const previous = element('previous');
 const next = element('next');
 const grades = [...document.querySelectorAll('[data-value]')];
+const kinds = [...document.querySelectorAll('[data-queue]')];
+const priorities = [...document.querySelectorAll('[data-priority]')];
 const image = element('image');
 const imageTrigger = element('image-trigger');
 const imageStatus = element('image-status');
@@ -21,6 +23,10 @@ let state;
 let busy = false;
 let imageReady = false;
 let scale = 1;
+let unified = false;
+
+const reviewLabels = { 2: 'Полное совпадение', 1: 'Частичное совпадение', 0: 'Нерелевантное изображение', unsure: 'Не уверен' };
+const conditionLabels = { 2: 'Условие выполнено', 0: 'Условие не выполнено', unsure: 'Невозможно определить' };
 
 function displayError(message) {
     const error = element('error');
@@ -46,6 +52,8 @@ function updateControls() {
     next.disabled = busy || !state || state.position >= state.total - 1;
     imageTrigger.disabled = busy || !imageReady;
     for (const grade of grades) grade.disabled = busy || !imageReady;
+    for (const button of kinds) button.disabled = busy;
+    for (const button of priorities) button.disabled = busy || !state?.progress?.[button.dataset.priority]?.total;
 }
 
 function showImage(ready, message) {
@@ -65,7 +73,7 @@ function render(data) {
     switchReviewer.hidden = false;
     switchReviewer.textContent = data.reviewer_id + ' · Сменить';
     element('position').textContent = `Пара ${data.position + 1} из ${data.total}`;
-    element('count').textContent = `Оценено ${data.assessed} · Не уверен ${data.unsure}`;
+    element('count').textContent = `Оценено ${data.assessed} · Неопределённых ${data.unsure} · Осталось ${data.remaining}`;
     element('progress').max = data.total;
     element('progress').value = data.assessed + data.unsure;
     element('query').textContent = data.pair.text;
@@ -73,26 +81,55 @@ function render(data) {
     element('language').textContent = data.pair.lang.toUpperCase();
     element('criterion').textContent = data.pair.criterion ?? '';
     element('criterion').hidden = !data.pair.criterion;
-    element('download').href = '/api/export?reviewer=' + encodeURIComponent(data.reviewer_id);
+    const conditions = data.kind === 'conditions';
+    element('query-type').textContent = conditions ? 'Условие' : 'Запрос';
+    element('grade-title').textContent = conditions ? 'Выполнено ли условие?' : 'Насколько подходит изображение?';
+    element('grades').setAttribute('aria-label', conditions ? 'Выполнение условия' : 'Релевантность');
+    element('group-position').textContent = data.group ? `Изображение ${data.group.position} из ${data.group.total}` : '';
+    element('review-switch').hidden = !data.kind;
+    element('priorities').hidden = !data.progress;
+    for (const button of kinds) button.setAttribute('aria-pressed', String(button.dataset.queue === data.kind));
+    for (const button of priorities) {
+        const priority = button.dataset.priority;
+        const progress = data.progress?.[priority];
+        button.setAttribute('aria-pressed', String(priority === data.priority));
+        button.textContent = progress ? `${priority} · осталось ${progress.remaining}/${progress.total}` : priority;
+    }
+    element('download').href = sessionUrl('/api/export', data.reviewer_id, data.kind);
     if (image.getAttribute('src') !== data.pair.image_url) {
         showImage(false, 'Загрузка изображения…');
         image.src = data.pair.image_url;
     }
-    for (const grade of grades) grade.setAttribute('aria-pressed', String(grade.dataset.value === String(data.rating)));
+    for (const grade of grades) {
+        const value = grade.dataset.value;
+        grade.setAttribute('aria-pressed', String(value === String(data.rating)));
+        const label = (conditions ? conditionLabels : reviewLabels)[value];
+        grade.hidden = label === undefined;
+        grade.lastElementChild.textContent = label ?? '';
+    }
     updateControls();
 }
 
 image.addEventListener('load', () => showImage(true, ''));
 image.addEventListener('error', () => showImage(false, 'Изображение недоступно. Попробуйте обновить страницу.'));
 
-async function openSession(id) {
+function sessionUrl(path, id, kind) {
+    const params = new URLSearchParams({ reviewer: id });
+    if (kind) params.set('queue', kind);
+    return path + '?' + params;
+}
+
+async function openSession(id, kind) {
     if (busy) return;
     busy = true;
     updateControls();
     displayError();
     try {
-        render(await request('/api/session?reviewer=' + encodeURIComponent(id)));
-        try { localStorage.setItem(storageKey, state.reviewer_id); } catch { /* The server still stores progress. */ }
+        render(await request(sessionUrl('/api/session', id, kind)));
+        try {
+            localStorage.setItem(storageKey, state.reviewer_id);
+            if (state.kind) localStorage.setItem(storageKey + '-kind', state.kind);
+        } catch { /* The server still stores progress. */ }
         element('save-status').textContent = 'Ответы сохраняются автоматически';
     } catch (error) {
         displayError(error.message || 'Не удалось открыть сессию.');
@@ -102,14 +139,14 @@ async function openSession(id) {
     }
 }
 
-async function save(position, answer) {
-    if (busy || !state || position < 0 || position >= state.total) return;
+async function save(changes) {
+    if (busy || !state || (changes.position !== undefined && (changes.position < 0 || changes.position >= state.total))) return;
     busy = true;
     updateControls();
     displayError();
     element('save-status').textContent = 'Сохранение…';
     try {
-        render(await request('/api/session', { reviewer_id: state.reviewer_id, position, answer }));
+        render(await request('/api/session', { reviewer_id: state.reviewer_id, queue: state.kind, ...changes }));
         element('save-status').textContent = state.assessed + state.unsure === state.total ? 'Все пары просмотрены' : 'Сохранено';
     } catch (error) {
         element('save-status').textContent = 'Изменение не сохранено';
@@ -121,14 +158,14 @@ async function save(position, answer) {
 }
 
 function grade(value) {
-    if (!imageReady || !state || busy) return;
+    if (!imageReady || !state || busy || (state.kind === 'conditions' && value === 1)) return;
     const position = state.rating === null ? Math.min(state.position + 1, state.total - 1) : state.position;
-    save(position, { position: state.position, value });
+    save({ position, answer: { position: state.position, value } });
 }
 
 login.addEventListener('submit', event => {
     event.preventDefault();
-    openSession(reviewer.value.trim().toLowerCase());
+    openSession(reviewer.value.trim().toLowerCase(), unified ? 'relevance' : undefined);
 });
 switchReviewer.addEventListener('click', () => {
     reviewer.value = state.reviewer_id;
@@ -140,8 +177,14 @@ switchReviewer.addEventListener('click', () => {
     displayError();
     reviewer.focus();
 });
-previous.addEventListener('click', () => save(state.position - 1));
-next.addEventListener('click', () => save(state.position + 1));
+previous.addEventListener('click', () => save({ position: state.position - 1 }));
+next.addEventListener('click', () => save({ position: state.position + 1 }));
+for (const button of kinds) {
+    button.addEventListener('click', () => {
+        if (state && state.kind !== button.dataset.queue) openSession(state.reviewer_id, button.dataset.queue);
+    });
+}
+for (const button of priorities) button.addEventListener('click', () => save({ priority: button.dataset.priority }));
 for (const button of grades) {
     button.addEventListener('click', () => grade(button.dataset.value === 'unsure' ? 'unsure' : Number(button.dataset.value)));
 }
@@ -167,21 +210,36 @@ element('zoom-out').addEventListener('click', () => resizeZoom(scale / 1.35));
 element('zoom-fit').addEventListener('click', fitZoom);
 element('zoom-in').addEventListener('click', () => resizeZoom(Math.min(scale * 1.35, 3)));
 window.addEventListener('keydown', event => {
-    if (!state || zoom.open || busy || event.altKey || event.ctrlKey || event.metaKey || event.repeat) return;
+    if (!state || busy || event.altKey || event.ctrlKey || event.metaKey || event.repeat
+        || event.target?.matches?.('input, textarea, [contenteditable]')) return;
+    if (zoom.open) {
+        if (event.key === '+' || event.key === '=') element('zoom-in').click();
+        else if (event.key === '-') element('zoom-out').click();
+        else return;
+        event.preventDefault();
+        return;
+    }
     if (/^[012]$/.test(event.key)) grade(Number(event.key));
-    else if (event.key === '?' || event.key === 'н') grade('unsure');
-    else if (event.key === 'ArrowLeft') save(state.position - 1);
-    else if (event.key === 'ArrowRight') save(state.position + 1);
+    else if (event.key === '?' || ['n', 'н'].includes(event.key.toLowerCase())) grade('unsure');
+    else if (event.key === 'ArrowLeft') save({ position: state.position - 1 });
+    else if (event.key === 'ArrowRight') save({ position: state.position + 1 });
+    else if (['z', 'я'].includes(event.key.toLowerCase())) imageTrigger.click();
     else return;
     event.preventDefault();
 });
 
 request('/api/info').then(info => {
     element('test-notice').hidden = !info.test_mode;
+    unified = Array.isArray(info.queues);
     let last;
-    try { last = localStorage.getItem(storageKey); } catch { /* Browser storage is optional. */ }
+    let kind;
+    try {
+        last = localStorage.getItem(storageKey);
+        const saved = localStorage.getItem(storageKey + '-kind');
+        if (info.queues?.includes(saved)) kind = saved;
+    } catch { /* Browser storage is optional. */ }
     if (last) {
         reviewer.value = last;
-        openSession(last);
+        openSession(last, kind);
     }
 }).catch(error => displayError(error.message));

@@ -4,6 +4,7 @@ import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadUnified, priorities, unifiedDirectory } from './unified-data.mjs';
 
 const repo = fileURLToPath(new URL('../../../', import.meta.url));
 const stage = join(repo, 'storage/app/ai-stage-04-08');
@@ -137,26 +138,56 @@ async function body(request) {
     throw new RequestError(400, 'Некорректный JSON.');
 }
 
-export function reviewServer({ queue, stateDir, testMode = false }) {
-    const { pairs, fingerprint } = queue;
-    const sessionFile = id => join(stateDir, `reviewer-${id}.json`);
+export function reviewServer({ queue, queues, stateDir, testMode = false }) {
     const source = testMode ? 'synthetic_test' : 'manual_ui';
-    const isPosition = position => Number.isInteger(position) && position >= 0 && position < pairs.length;
     const positionError = () => new RequestError(400, 'Пара вне очереди.');
+    const unified = queues !== undefined;
+    const available = queues ?? { relevance: queue };
+    const sections = new Map();
+    if (unified) {
+        for (const [kind, input] of Object.entries(available)) {
+            const groups = new Map();
+            const groupKey = pair => (pair.priority ?? '') + ':' + pair.group_id;
+            for (const [index, pair] of input.pairs.entries()) {
+                const key = groupKey(pair);
+                if (!groups.has(key)) groups.set(key, []);
+                groups.get(key).push(index);
+            }
+            const indexInfo = new Map();
+            for (const group of groups.values()) {
+                group.forEach((position, index) => indexInfo.set(position, { position: index + 1, total: group.length }));
+            }
+            sections.set(kind, indexInfo);
+        }
+    }
 
-    function load(id) {
-        const file = sessionFile(id);
-        if (!existsSync(file)) return { schema_version: 1, reviewer_id: id, source, queue_sha256: fingerprint, position: 0, ratings: {} };
+    function queueKind(value) {
+        const kind = value ?? 'relevance';
+        if (typeof kind !== 'string' || !Object.hasOwn(available, kind)) {
+            throw new RequestError(400, 'Неизвестная очередь.');
+        }
+        return kind;
+    }
+
+    const statePath = (kind, id) => join(unified ? join(stateDir, kind) : stateDir, `reviewer-${id}.json`);
+    const isPosition = (kind, position) => Number.isInteger(position) && position >= 0 && position < available[kind].pairs.length;
+
+    function load(kind, id) {
+        const { fingerprint } = available[kind];
+        const file = statePath(kind, id);
+        if (!existsSync(file)) return { schema_version: unified ? 2 : 1, reviewer_id: id, source,
+            ...(unified ? { kind } : {}), queue_sha256: fingerprint, position: 0, ratings: {} };
         const state = readJson(file);
-        if (state.queue_sha256 !== fingerprint || state.reviewer_id !== id || state.source !== source || !isPosition(state.position)) {
+        if (state.queue_sha256 !== fingerprint || state.reviewer_id !== id || state.source !== source
+            || (unified && (state.schema_version !== 2 || state.kind !== kind)) || !isPosition(kind, state.position)) {
             throw new RequestError(409, 'Сохранённая сессия относится к другой очереди или режиму.');
         }
         return state;
     }
 
-    function save(state) {
-        mkdirSync(stateDir, { recursive: true });
-        const path = sessionFile(state.reviewer_id);
+    function save(kind, state) {
+        mkdirSync(unified ? join(stateDir, kind) : stateDir, { recursive: true });
+        const path = statePath(kind, state.reviewer_id);
         const scratch = `${path}.${randomUUID()}.tmp`;
         try {
             writeFileSync(scratch, JSON.stringify(state, null, 2) + '\n', { flag: 'wx' });
@@ -166,14 +197,25 @@ export function reviewServer({ queue, stateDir, testMode = false }) {
         }
     }
 
-    function current(state) {
+    function current(kind, state) {
+        const { pairs } = available[kind];
         const values = Object.values(state.ratings);
         const { position } = state;
+        const pair = pairs[position];
+        const progress = unified && kind === 'relevance' ? Object.fromEntries(priorities.map(priority => {
+            const positions = pairs.flatMap((item, index) => item.priority === priority ? [index] : []);
+            return [priority, { total: positions.length,
+                remaining: positions.filter(index => !Object.hasOwn(state.ratings, index)).length }];
+        })) : null;
         return {
             reviewer_id: state.reviewer_id, test_mode: testMode, position, total: pairs.length,
             assessed: values.filter(row => row.status === 'rated').length,
             unsure: values.filter(row => row.status === 'unsure').length,
-            pair: { ...pairs[position].query, image_url: `/image/${position}` },
+            remaining: pairs.length - values.length,
+            ...(unified ? { kind, progress, priority: pair.priority ?? null, group: sections.get(kind).get(position) } : {}),
+            pair: { text: pair.query.text, lang: pair.query.lang,
+                ...(pair.query.criterion !== undefined ? { criterion: pair.query.criterion } : {}),
+                image_url: `/image/${position}${unified ? '?queue=' + kind : ''}` },
             rating: state.ratings[position]?.value ?? null,
         };
     }
@@ -200,35 +242,54 @@ export function reviewServer({ queue, stateDir, testMode = false }) {
                 response.end(readFileSync(new URL(file, import.meta.url)));
             } else if (request.method === 'GET' && /^\/image\/\d+$/.test(path)) {
                 const index = Number(path.slice('/image/'.length));
-                if (!isPosition(index)) throw new RequestError(404, 'Изображение вне очереди.');
-                const stream = createReadStream(pairs[index].path);
+                const kind = queueKind(url.searchParams.get('queue'));
+                if (!isPosition(kind, index)) throw new RequestError(404, 'Изображение вне очереди.');
+                const stream = createReadStream(available[kind].pairs[index].path);
                 stream.once('error', () => response.destroy());
                 response.on('close', () => stream.destroy());
                 response.writeHead(200, { 'Content-Type': 'image/jpeg' });
                 stream.pipe(response);
             } else if (request.method === 'GET' && path === '/api/info') {
-                json({ test_mode: testMode, total: pairs.length });
+                json({ test_mode: testMode, total: available.relevance.pairs.length,
+                    ...(unified ? { queues: Object.keys(available) } : {}) });
             } else if (request.method === 'GET' && path === '/api/session') {
-                json(current(load(reviewer(url.searchParams.get('reviewer')))));
+                const kind = queueKind(url.searchParams.get('queue'));
+                json(current(kind, load(kind, reviewer(url.searchParams.get('reviewer')))));
             } else if (request.method === 'PUT' && path === '/api/session') {
                 const data = await body(request);
-                const state = load(reviewer(data.reviewer_id));
-                if (!isPosition(data.position)) throw positionError();
+                const kind = queueKind(data.queue);
+                const state = load(kind, reviewer(data.reviewer_id));
+                const { pairs } = available[kind];
+                let target = data.position;
+                if (data.priority !== undefined) {
+                    if (!unified || kind !== 'relevance' || !priorities.includes(data.priority) || data.answer !== undefined) {
+                        throw new RequestError(400, 'Неизвестный приоритет.');
+                    }
+                    target = pairs.findIndex((pair, index) => pair.priority === data.priority && !Object.hasOwn(state.ratings, index));
+                    if (target < 0) target = pairs.findIndex(pair => pair.priority === data.priority);
+                }
+                if (!isPosition(kind, target)) throw positionError();
                 if (data.answer !== undefined) {
                     const { position, value } = data.answer ?? {};
-                    if (!isPosition(position) || !isRating(value)) throw new RequestError(400, 'Некорректная оценка.');
-                    const { query_id, artwork_id } = pairs[position];
-                    state.ratings[position] = { query_id, artwork_id, value, status: value === 'unsure' ? 'unsure' : 'rated',
-                        relevance: value === 'unsure' ? null : value, reviewer_id: state.reviewer_id, rated_at: new Date().toISOString() };
+                    if (!isPosition(kind, position) || !isRating(value) || (kind === 'conditions' && value === 1)) {
+                        throw new RequestError(400, 'Некорректная оценка.');
+                    }
+                    const { pair_id, query_id, artwork_id } = pairs[position];
+                    const verdict = value === 'unsure' ? null : value;
+                    state.ratings[position] = { ...(unified ? { pair_id, rating: verdict } : { query_id, artwork_id, relevance: verdict }),
+                        value, status: value === 'unsure' ? 'unsure' : 'rated', reviewer_id: state.reviewer_id,
+                        rated_at: new Date().toISOString() };
                 }
-                state.position = data.position;
-                save(state);
-                json(current(state));
+                state.position = target;
+                save(kind, state);
+                json(current(kind, state));
             } else if (request.method === 'GET' && path === '/api/export') {
-                const state = load(reviewer(url.searchParams.get('reviewer')));
+                const kind = queueKind(url.searchParams.get('queue'));
+                const state = load(kind, reviewer(url.searchParams.get('reviewer')));
                 const { ratings, position, ...metadata } = state;
                 const rows = Object.values(ratings).map(({ value, ...row }) => row);
-                response.setHeader('Content-Disposition', `attachment; filename="${testMode ? 'test' : 'human'}-review-${state.reviewer_id}.json"`);
+                const suffix = unified ? kind + '-' : '';
+                response.setHeader('Content-Disposition', `attachment; filename="${testMode ? 'test' : 'human'}-review-${suffix}${state.reviewer_id}.json"`);
                 json({ ...metadata, exported_at: new Date().toISOString(), ratings: rows });
             } else {
                 throw new RequestError(404, 'Страница не найдена.');
@@ -245,24 +306,29 @@ export function reviewServer({ queue, stateDir, testMode = false }) {
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
     const options = process.argv.slice(2);
     const testMode = options.includes('--test');
+    const unified = options.includes('--unified');
     const catalog = options.includes('--assistant-colbert');
     const constraints = options.includes('--assistant-constraints');
     const selections = options.filter(option => ['--regression', '--regression-1c', '--regression-1d1'].includes(option));
     const split = selections[0]?.slice(2) ?? 'evaluation';
     const ports = constraints ? { evaluation: 48089, 'regression-1c': 48091, 'regression-1d1': 48093 }
         : { evaluation: 48085, regression: 48087 };
-    if ((catalog && constraints) || selections.length > 1 || (selections.length > 0 && !(catalog || constraints))
-        || !ports[split] || options.some(option => !['--test', '--assistant-colbert', '--assistant-constraints', ...selections].includes(option))) {
-        throw new Error('Использование: node server.mjs [--test] [--assistant-colbert [--regression] | --assistant-constraints [--regression-1c | --regression-1d1]]');
+    if (Number(catalog) + Number(constraints) + Number(unified) > 1 || selections.length > 1
+        || (selections.length > 0 && !(catalog || constraints)) || !ports[split]
+        || options.some(option => !['--test', '--unified', '--assistant-colbert', '--assistant-constraints', ...selections].includes(option))) {
+        throw new Error('Использование: node server.mjs [--test] [--unified | --assistant-colbert [--regression] | --assistant-constraints [--regression-1c | --regression-1d1]]');
     }
     const newQueue = catalog || constraints;
     const catalogDir = join(repo, 'storage/app/ai-stage-05-04', constraints ? '5.4-1d-2' : '5.4-1d-1');
-    const queue = newQueue ? loadCatalogQueue(catalogDir, split) : loadQueue();
-    const stateDir = testMode ? mkdtempSync(join(tmpdir(), 'library-stroll-review-test-'))
+    const inputs = unified ? { queues: loadUnified().queues } : { queue: newQueue ? loadCatalogQueue(catalogDir, split) : loadQueue() };
+    const stateDir = unified ? join(unifiedDirectory, testMode ? 'synthetic-review' : 'human-review')
+        : testMode ? mkdtempSync(join(tmpdir(), 'library-stroll-review-test-'))
         : (newQueue ? join(catalogDir, 'human-review', split) : workspace);
-    const port = (newQueue ? ports[split] : 48083) + Number(testMode);
-    reviewServer({ queue, stateDir, testMode }).listen(port, '127.0.0.1', () => {
-        console.log(`${testMode ? 'Тестовый режим. ' : ''}Ручная оценка, ${queue.pairs.length} пар. http://127.0.0.1:${port}/`);
+    const port = (unified ? 48095 : newQueue ? ports[split] : 48083) + Number(testMode);
+    reviewServer({ ...inputs, stateDir, testMode }).listen(port, '127.0.0.1', () => {
+        const counts = unified ? `${inputs.queues.relevance.pairs.length} пар и ${inputs.queues.conditions.pairs.length} условий`
+            : `${inputs.queue.pairs.length} пар`;
+        console.log(`${testMode ? 'Тестовый режим. ' : ''}Ручная оценка, ${counts}. http://127.0.0.1:${port}/`);
     }).on('error', error => {
         console.error(error.message);
         process.exitCode = 1;

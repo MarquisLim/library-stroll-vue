@@ -27,16 +27,26 @@
             <button class="button primary" type="submit">Открыть проверку</button>
         </form>
         <p class="error" id="error" role="alert" hidden></p>
-        <section id="workspace" aria-label="Проверка релевантности" hidden>
+        <section id="workspace" aria-label="Ручная проверка" hidden>
+            <nav class="review-switch" id="review-switch" aria-label="Очереди" hidden>
+                <button class="button" type="button" data-queue="relevance" aria-pressed="true">Релевантность</button>
+                <button class="button" type="button" data-queue="conditions" aria-pressed="false">Отдельные условия</button>
+            </nav>
             <div class="progress-row">
                 <strong id="position">Пара</strong>
                 <progress id="progress" value="0" aria-label="Проверено пар"></progress>
                 <span id="count"></span>
             </div>
+            <nav class="review-switch" id="priorities" aria-label="Приоритеты проверки" hidden>
+                <button class="button" type="button" data-priority="P1"></button>
+                <button class="button" type="button" data-priority="P2"></button>
+                <button class="button" type="button" data-priority="P3"></button>
+                <button class="button" type="button" data-priority="P4"></button>
+            </nav>
             <div class="review-grid">
                 <section class="card artwork">
                     <header class="query">
-                        <div class="query-label">Запрос <span id="language" class="language"></span></div>
+                        <div class="query-label"><span id="query-type">Запрос</span> <span id="language" class="language"></span><span id="group-position"></span></div>
                         <h2 id="query"></h2>
                         <p id="criterion" hidden></p>
                     </header>
@@ -47,13 +57,14 @@
                     </button>
                 </section>
                 <aside class="card controls" aria-label="Оценка и навигация">
-                    <h2>Насколько подходит изображение?</h2>
+                    <h2 id="grade-title">Насколько подходит изображение?</h2>
                     <div id="grades" class="grades" role="group" aria-label="Релевантность">
-                        <button type="button" data-value="0" aria-pressed="false"><span class="number">0</span><span>Не соответствует запросу</span></button>
-                        <button type="button" data-value="1" aria-pressed="false"><span class="number">1</span><span>Соответствует частично</span></button>
-                        <button type="button" data-value="2" aria-pressed="false"><span class="number">2</span><span>Хорошо соответствует</span></button>
+                        <button type="button" data-value="2" aria-pressed="false"><span class="number">2</span><span>Полное совпадение</span></button>
+                        <button type="button" data-value="1" aria-pressed="false"><span class="number">1</span><span>Частичное совпадение</span></button>
+                        <button type="button" data-value="0" aria-pressed="false"><span class="number">0</span><span>Нерелевантное изображение</span></button>
                         <button type="button" data-value="unsure" aria-pressed="false"><span class="number">?</span><span>Не уверен</span></button>
                     </div>
+                    <p class="keyboard-help">← и → — соседние пары. Z — увеличить. Esc — закрыть.</p>
                     <p id="save-status" class="save-status" role="status">Ответы сохраняются автоматически</p>
                     <nav class="navigation" aria-label="Соседние пары">
                         <button class="button" id="previous" type="button">← Назад</button>
