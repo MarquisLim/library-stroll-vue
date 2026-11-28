@@ -104,6 +104,10 @@ final class AssistantConversationExport
             return $row;
         }
         $trace = AssistantSearchDiagnostics::restrict($trace, $visible->keys()->all());
+        $finalRanks = collect($trace['candidates'])->where('final', true)->pluck('final_rank', 'artwork_id');
+        $row['sources'] = collect($row['sources'])->sortBy(
+            fn ($source) => $finalRanks->get($source['artwork_id']) ?? PHP_INT_MAX,
+        )->values()->all();
         foreach (['rag', 'performance', 'configuration', 'errors'] as $section) {
             $row[$section] = $trace[$section];
             unset($trace[$section]);

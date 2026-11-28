@@ -143,6 +143,35 @@ class AssistantSearchDiagnosticsTest extends TestCase
         Queue::assertNothingPushed();
     }
 
+    public function test_research_export_preserves_card_order_when_composer_cites_sources_in_reverse(): void
+    {
+        $first = $this->image('First card');
+        $second = $this->image('Second card');
+        $url = $this->conversation();
+        Http::fake([
+            'http://ai.test/api/v1/search' => Http::response(['results' => [
+                ['artwork_id' => $first->id, 'rank' => 1, 'score' => 0.7],
+                ['artwork_id' => $second->id, 'rank' => 2, 'score' => 0.6],
+            ]]),
+            'http://ai.test/api/v1/assistant/compose' => Http::response(['action' => 'compose', 'selections' => [
+                ['source_ref' => 's2', 'fact_ref' => 'f1'],
+                ['source_ref' => 's1', 'fact_ref' => 'f1'],
+            ]]),
+        ]);
+
+        $this->actingAs($this->owner);
+        $turn = $this->postJson($url.'/turns', ['query' => 'Find something'], ['X-Assistant-Debug' => '1'])
+            ->assertCreated()->assertJsonPath('status', 'ok')->json();
+        $export = json_decode($this->get($url.'/export?debug=1')->assertOk()->streamedContent(), true, flags: JSON_THROW_ON_ERROR);
+        $sources = $export['sources'][$turn['turn_id']];
+        $this->assertSame([$first->id, $second->id], array_column($sources, 'artwork_id'));
+        $idsByReference = array_column($sources, 'artwork_id', 'source_ref');
+        $this->assertSame([$second->id, $first->id], array_map(
+            fn ($fact) => $idsByReference[$fact['source_ref']], $export['messages'][1]['answer'],
+        ));
+        Http::assertSentCount(2);
+    }
+
     private function conversation(): string
     {
         return '/assistant/conversations/'.AssistantConversation::factory()->for($this->owner)->create()->id;
