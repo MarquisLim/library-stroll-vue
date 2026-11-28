@@ -11,6 +11,7 @@ const stages = {
     rag_recheck: 'Проверка источников', final: 'Итоговые карточки',
 }
 const actions = { new_search: 'Новый поиск', use_previous: 'Источники предыдущих ответов', clarify: 'Уточнение' }
+const packing = { legacy: 'Стандартная', visual_priority: 'Приоритет визуальных фактов' }
 const number = value => Number.isFinite(value) ? value.toLocaleString('ru-RU', { maximumFractionDigits: 3 }) : '—'
 const executed = computed(() => Object.entries(trace?.stages ?? {}).filter(([, details]) => details != null))
 </script>
@@ -27,6 +28,11 @@ const executed = computed(() => Object.entries(trace?.stages ?? {}).filter(([, d
                 <dt>Фильтры</dt><dd>{{ trace.filters ? JSON.stringify(trace.filters) : '—' }}</dd>
                 <dt>Время запроса</dt><dd>{{ number(trace.performance.total_ms) }} мс</dd>
                 <dt>Запись диагностики</dt><dd>{{ number(trace.performance.capture_ms) }} мс</dd>
+                <template v-if="trace.rag?.strategy">
+                    <dt>Упаковка RAG</dt><dd>{{ packing[trace.rag.strategy] ?? trace.rag.strategy }}</dd>
+                    <dt>Контекст RAG</dt><dd>{{ number(trace.rag.context_bytes) }} / {{ number(trace.rag.context_limit_bytes) }} байт</dd>
+                    <dt>Токены composer</dt><dd>{{ number(trace.rag.composer_usage?.prompt_tokens) }} вход, {{ number(trace.rag.composer_usage?.output_tokens) }} выход</dd>
+                </template>
             </dl>
             <div v-if="executed.length" class="overflow-x-auto">
                 <table class="table table-xs w-full">

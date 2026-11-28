@@ -58,6 +58,10 @@ def record_assistant_model(request: Request, response: Response) -> None:
         response.headers["X-Assistant-Model"] = settings.ollama_chat_model
 
 
+def assistant_usage_headers(usage: dict[str, int] | None) -> dict[str, str]:
+    return {f"X-Assistant-{metric.replace('_', '-').title()}": str(value) for metric, value in (usage or {}).items()}
+
+
 @router.post(
     "/api/v1/assistant/normalize",
     response_model=AssistantNormalizeResponse,
@@ -96,21 +100,25 @@ async def compose_assistant_answer(
 ) -> AssistantComposePlan:
     if not (settings.ai_assistant_enabled and settings.ai_assistant_rag_enabled):
         raise HTTPException(status_code=404, detail="assistant_composition_disabled")
+    usage = {} if request.headers.get("X-Assistant-Debug") == "1" else None
     try:
-        plan = await svc.ollama.compose_assistant_answer(body)
+        plan = await svc.ollama.compose_assistant_answer(body, usage)
         allowed = {fact.pair() for fact in body.facts}
         if any(selection.pair() not in allowed for selection in plan.selections):
             raise ValueError("Unknown assistant fact")
         record_assistant_model(request, response)
+        response.headers.update(assistant_usage_headers(usage))
         return plan
     except AssistantComposeBudgetError:
         raise HTTPException(status_code=422, detail="assistant_context_too_large") from None
     except (TimeoutError, httpx.TimeoutException):
         logger.warning("Assistant composition timed out")
-        raise HTTPException(status_code=504, detail="assistant_composition_timeout") from None
+        raise HTTPException(status_code=504, detail="assistant_composition_timeout",
+                            headers=assistant_usage_headers(usage)) from None
     except (httpx.HTTPError, ValueError) as exc:
         logger.warning("Assistant composition failed (%s)", type(exc).__name__)
-        raise HTTPException(status_code=502, detail="assistant_composition_unavailable") from None
+        raise HTTPException(status_code=502, detail="assistant_composition_unavailable",
+                            headers=assistant_usage_headers(usage)) from None
 
 
 @router.post(

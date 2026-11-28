@@ -125,7 +125,7 @@ class AssistantSavedSources
     private function key(mixed $ref): ?string
     {
         if (! is_array($ref) || ! is_int($ref['artwork_id'] ?? null) || $ref['artwork_id'] < 1
-            || ! is_string($ref['fact_ref'] ?? null) || ! preg_match('/\Af[1-7]\z/', $ref['fact_ref'])
+            || ! is_string($ref['fact_ref'] ?? null) || ! preg_match(AssistantRagContext::FACT_REF_PATTERN, $ref['fact_ref'])
             || ! is_string($ref['revision_hash'] ?? null) || ! preg_match('/\A[a-f0-9]{64}\z/', $ref['revision_hash'])
             || ! is_string($ref['fact_sha256'] ?? null) || ! preg_match('/\A[a-f0-9]{64}\z/', $ref['fact_sha256'])) {
             return null;

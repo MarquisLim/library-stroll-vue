@@ -195,19 +195,21 @@ class OllamaClient:
             content = message.get("content") if isinstance(message, dict) else None
             return AssistantNormalizeResponse.model_validate_json(content)
 
-    async def compose_assistant_answer(self, request: AssistantComposeRequest) -> AssistantComposePlan:
-        return await self._assistant_plan(request, ASSISTANT_COMPOSE_PROMPT, AssistantComposePlan)
+    async def compose_assistant_answer(
+        self, request: AssistantComposeRequest, usage: dict[str, int] | None = None,
+    ) -> AssistantComposePlan:
+        return await self._assistant_plan(request.prompt_data(), ASSISTANT_COMPOSE_PROMPT, AssistantComposePlan, usage)
 
     async def resolve_assistant_followup(self, request: AssistantFollowupRequest) -> AssistantFollowupPlan:
-        return await self._assistant_plan(request, ASSISTANT_FOLLOWUP_PROMPT, AssistantFollowupPlan)
+        return await self._assistant_plan(request.model_dump(), ASSISTANT_FOLLOWUP_PROMPT, AssistantFollowupPlan)
 
     async def _assistant_plan(
-        self, request: BaseModel, instruction: str, plan_type: type[AssistantPlan],
+        self, data: dict, instruction: str, plan_type: type[AssistantPlan], usage: dict[str, int] | None = None,
     ) -> AssistantPlan:
         # Raw rendering fixes the Qwen3 chat template and makes the byte budget cover all instructions.
         if settings.ollama_chat_model != "qwen3:8b":
             raise ValueError("Configured chat model has no verified RAG token budget")
-        data = json.dumps(request.model_dump(), ensure_ascii=False, separators=(",", ":"))
+        data = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
         data = data.replace("<", r"\u003c").replace(">", r"\u003e")
         prompt = (
             f"<|im_start|>system\n{instruction}<|im_end|>\n"
@@ -215,9 +217,12 @@ class OllamaClient:
             "<|im_start|>assistant\n<think>\n\n</think>\n\n"
         )
         # Qwen3 byte-level BPE cannot use more tokens than UTF-8 bytes here. Reserve two for BOS/EOS.
-        if (len(data.encode("utf-8")) > ASSISTANT_COMPOSE_INPUT_BYTES
-                or len(prompt.encode("utf-8")) + 2 > ASSISTANT_COMPOSE_INPUT_TOKENS):
+        context_bytes = len(data.encode("utf-8"))
+        prompt_bytes = len(prompt.encode("utf-8"))
+        if context_bytes > ASSISTANT_COMPOSE_INPUT_BYTES or prompt_bytes + 2 > ASSISTANT_COMPOSE_INPUT_TOKENS:
             raise AssistantComposeBudgetError()
+        if usage is not None:
+            usage.update(context_bytes=context_bytes, prompt_bytes=prompt_bytes)
 
         timeout = settings.ollama_assistant_timeout
         async with asyncio.timeout(timeout):
@@ -241,6 +246,13 @@ class OllamaClient:
             )
             response.raise_for_status()
             result = response.json()
+            if usage is not None and isinstance(result, dict):
+                for field, metric, bound in (
+                    ("prompt_eval_count", "prompt_tokens", ASSISTANT_COMPOSE_INPUT_TOKENS),
+                    ("eval_count", "output_tokens", ASSISTANT_COMPOSE_OUTPUT_TOKENS),
+                ):
+                    if field in result and result[field] is not None and _within_reported_budget(result, field, bound):
+                        usage[metric] = result[field]
             if (not isinstance(result, dict) or result.get("done") is not True
                     or result.get("done_reason") == "length"
                     or not _within_reported_budget(result, "prompt_eval_count", ASSISTANT_COMPOSE_INPUT_TOKENS)

@@ -7,7 +7,9 @@ use App\Models\AssistantConversation;
 use App\Models\AssistantTurn;
 use App\Models\User;
 use App\Services\AiService\AssistantRagContext;
+use App\Services\AiService\ArtworkIndexingService;
 use App\Services\Search\AssistantConversationHistory;
+use App\Services\Search\AssistantRagAnswer;
 use App\Services\Search\AssistantSavedSources;
 use App\Services\Search\HybridSearchService;
 use Illuminate\Database\QueryException;
@@ -122,6 +124,29 @@ class AssistantTurnTest extends TestCase
             ->assertJsonCount(1, 'sources')->assertJsonPath('sources.0.artwork_id', $current->id);
         $this->assertSame([$this->reference($current, 'f2')], $this->conversation->turns()->where('sequence', 2)->firstOrFail()->source_references);
         Http::assertSentCount(2);
+    }
+
+    public function test_visual_citation_restores_in_standard_history_and_expires_on_metadata_change(): void
+    {
+        $this->app->when(AssistantRagAnswer::class)->needs('$packing')->give(AssistantRagContext::VISUAL);
+        $work = $this->image('Birds');
+        $work->aiMetadata()->create([
+            'status' => 'indexed', 'content_hash' => app(ArtworkIndexingService::class)->contentHash($work),
+            'source_media_uuid' => $work->getFirstMedia('artworks')->uuid, 'vision_model' => 'test-vision', 'colors' => ['yellow'],
+        ]);
+        $this->search(self::FIRST, [$work]);
+        Http::fake([self::COMPOSE => Http::response($this->plan('s1', 'f8'))]);
+        $response = $this->actingAs($this->owner)->postJson($this->url(), ['query' => self::FIRST])
+            ->assertCreated()->assertJsonPath('answer.0.fact_ref', 'f8');
+        $this->assertSame([$this->reference($work, 'f8')], AssistantTurn::findOrFail($response->json('turn_id'))->source_references);
+
+        $this->app->when(AssistantRagAnswer::class)->needs('$packing')->give(AssistantRagContext::LEGACY);
+        $this->getJson($this->url(false))->assertOk()
+            ->assertJsonPath('turns.0.source_status', 'available')
+            ->assertJsonPath('turns.0.answer', $response->json('answer'));
+
+        $work->aiMetadata()->update(['colors' => ['blue']]);
+        $this->getJson($this->url(false))->assertOk()->assertJsonPath('turns.0.source_status', 'unavailable');
     }
 
     public function test_explicitly_independent_second_query_uses_the_unchanged_hybrid_search_once(): void

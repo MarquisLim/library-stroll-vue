@@ -4,14 +4,12 @@ namespace App\Services\Search;
 
 use App\Models\AssistantTurn;
 use App\Models\User;
+use App\Services\AiService\AssistantRagContext;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 class AssistantTurnContext
 {
-    // Matches the resolver's serialized JSON budget in FastAPI.
-    private const INPUT_BYTES = 1400;
-
     public function __construct(private AssistantSavedSources $saved) {}
 
     public function prepare(string $query, Collection $recent, User $owner): array
@@ -68,6 +66,6 @@ class AssistantTurnContext
 
     private function fits(array $payload): bool
     {
-        return strlen(json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_THROW_ON_ERROR)) <= self::INPUT_BYTES;
+        return strlen(AssistantRagContext::inputJson($payload)) <= AssistantRagContext::INPUT_BYTES;
     }
 }

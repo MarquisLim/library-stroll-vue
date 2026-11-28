@@ -58,7 +58,7 @@ export function ragReply(data, fromHistory = false) {
         for (const fragment of data.answer) {
             const source = references.get(fragment?.source_ref)
             if (!source || typeof fragment.text !== 'string' || !fragment.text.trim()
-                || typeof fragment.fact_ref !== 'string' || !/^f[1-7]$/.test(fragment.fact_ref)) continue
+                || typeof fragment.fact_ref !== 'string' || !/^f(?:[1-9]|1[01])$/.test(fragment.fact_ref)) continue
             fragments.push({ text: fragment.text, source })
         }
     }

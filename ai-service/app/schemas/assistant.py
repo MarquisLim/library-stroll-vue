@@ -11,7 +11,7 @@ class AssistantFactRef(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     source_ref: AssistantSourceRef
-    fact_ref: Annotated[str, StringConstraints(pattern=r"^f[1-7]$", min_length=2, max_length=2)]
+    fact_ref: Annotated[str, StringConstraints(pattern=r"^f(?:[1-9]|1[01])$", min_length=2, max_length=3)]
 
     def pair(self) -> tuple[str, str]:
         return self.source_ref, self.fact_ref
@@ -34,12 +34,24 @@ class AssistantComposeRequest(BaseModel):
 
     query: AssistantQuery
     facts: list[AssistantFact] = Field(min_length=1, max_length=35)
+    packing: Literal["legacy", "visual_priority"] = "legacy"
 
     @model_validator(mode="after")
     def check_unique_facts(self):
         if len({fact.pair() for fact in self.facts}) != len(self.facts):
             raise ValueError("Duplicate facts")
         return self
+
+    def prompt_data(self) -> dict:
+        if self.packing == "legacy":
+            return self.model_dump(exclude={"packing"})
+
+        # This compact layout must match AssistantRagContext::inputBytes in Laravel.
+        sources: dict[str, dict[str, str]] = {}
+        for fact in self.facts:
+            source = sources.setdefault(fact.source_ref, {"source_ref": fact.source_ref})
+            source[fact.fact_ref] = f"Palette colors: {fact.value}" if fact.fact_ref == "f8" else fact.value
+        return {"query": self.query, "facts": list(sources.values())}
 
 
 class AssistantComposePlan(BaseModel):

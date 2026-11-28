@@ -17,6 +17,7 @@ class AssistantRagAnswer
         private AssistantAnswerComposer $composer,
         private AssistantSavedSources $saved,
         private AssistantPreviousDates $dates,
+        private string $packing = AssistantRagContext::LEGACY,
     ) {}
 
     public function search(string $query, int $limit, User $user): array
@@ -58,25 +59,26 @@ class AssistantRagAnswer
     {
         $trace = AssistantSearchDiagnostics::current();
         $packing = $trace ? hrtime(true) : 0;
+        $strategy = $evidence === null ? $this->packing : AssistantRagContext::LEGACY;
         $initial = $candidates->mapWithKeys(fn (Artwork $artwork, int $index) => ['s'.($index + 1) => $artwork]);
         if ($evidence === null) {
-            [$facts, $snapshots] = $this->context->prepare($query, $candidates->take($limit));
+            [$facts, $snapshots] = $this->context->prepare($query, $candidates->take($limit), $strategy);
         } else {
             $snapshots = [];
-            foreach ($initial->take($limit) as $source => $artwork) {
+            foreach ($initial->take(min($limit, AssistantRagContext::SOURCE_LIMIT)) as $source => $artwork) {
                 $entries = $evidence->get($artwork->id, collect());
                 $snapshots[$source] = [
                     'revision' => $entries->first()['reference']['revision_hash'] ?? null,
                     'facts' => $entries->mapWithKeys(fn ($entry) => [$entry['reference']['fact_ref'] => $entry['fact']])->all(),
                 ];
             }
-            $facts = $this->context->packFacts($query, $snapshots);
+            $facts = $this->context->packFacts($query, $snapshots, savedFacts: true);
         }
         if ($trace) {
             $trace->retainMetadata($candidates);
             $refs = $initial->map(fn (Artwork $artwork) => $artwork->id);
             $sent = array_column($facts, 'source_ref');
-            $trace->facts($facts, $refs);
+            $trace->facts($facts, $refs, $snapshots, $strategy, AssistantRagContext::inputBytes($query, $facts, $strategy));
             $trace->stage('rag_pack', $packing, count(array_unique($sent)), [
                 'input_count' => $initial->count(), 'snapshot_count' => count($snapshots), 'fact_count' => count($facts),
                 'snapshot_fact_count' => array_sum(array_map(fn ($snapshot) => count($snapshot['facts']), $snapshots)),
@@ -95,7 +97,7 @@ class AssistantRagAnswer
         }
 
         $started = hrtime(true);
-        $plan = $this->composer->compose($query, $facts);
+        $plan = $this->composer->compose($query, $facts, $strategy);
         $trace?->stage('composer', $started, $plan === null ? null : count($plan['selections']));
         if ($trace) {
             $trace->plan($plan, $refs);
@@ -137,7 +139,7 @@ class AssistantRagAnswer
             $actual = $checked[$source] ??= $this->context->snapshot($artwork);
             $old = $snapshots[$source];
             $matches = $evidence === null
-                ? $actual === $old
+                ? $this->context->sameSnapshot($actual, $old, $strategy)
                 : ($actual['revision'] === $old['revision'] && ($actual['facts'][$ref] ?? null) === $old['facts'][$ref]);
             if (! $matches) {
                 $trace?->exclude($artwork->id, 'revision_or_fact_changed');

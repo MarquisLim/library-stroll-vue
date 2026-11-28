@@ -5,6 +5,7 @@ namespace App\Services\Search;
 use App\Models\AiProcessingRun;
 use App\Models\Artwork;
 use App\Models\User;
+use App\Services\AiService\AssistantRagContext;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\Client\Response;
 use Illuminate\Http\Request;
@@ -138,14 +139,34 @@ final class AssistantSearchDiagnostics
         $this->candidate($id, ['exclusions' => [...($this->candidates[$id]['exclusions'] ?? []), $reason]]);
     }
 
-    public function facts(array $facts, Collection $references): void
+    public function facts(array $facts, Collection $references, array $snapshots, string $strategy, int $bytes): void
     {
-        $this->data['rag'] = ['facts' => array_values(array_filter(array_map(
+        $available = [];
+        foreach ($snapshots as $source => $snapshot) {
+            $available[] = ['source_ref' => $source, 'artwork_id' => $references->get($source),
+                'fact_refs' => array_keys($snapshot['facts'])];
+        }
+
+        $this->data['rag'] = ['strategy' => $strategy, 'available' => $available,
+            'context_bytes' => $bytes, 'context_limit_bytes' => AssistantRagContext::INPUT_BYTES, 'composer_usage' => null,
+            'facts' => array_values(array_filter(array_map(
             fn ($fact) => $references->has($fact['source_ref']) ? [
                 ...$fact, 'artwork_id' => $references->get($fact['source_ref']),
                 'value' => $fact['fact_ref'] === 'f7' ? '[атрибуция скрыта]' : self::plain($fact['value'], 240),
             ] : null, $facts,
         ))), 'composer_action' => null, 'selected' => [], 'transport_attempted' => null];
+    }
+
+    public function composerUsage(Response $response): void
+    {
+        $usage = [];
+        foreach (['Context-Bytes', 'Prompt-Bytes', 'Prompt-Tokens', 'Output-Tokens'] as $metric) {
+            $value = $response->header('X-Assistant-'.$metric);
+            if (is_string($value) && preg_match('/\A[0-9]{1,4}\z/', $value)) {
+                $usage[strtolower(str_replace('-', '_', $metric))] = (int) $value;
+            }
+        }
+        $this->data['rag']['composer_usage'] = $usage ?: null;
     }
 
     public function retainMetadata(Collection $works): void
@@ -225,6 +246,9 @@ final class AssistantSearchDiagnostics
         if ($trace['rag'] !== null) {
             $trace['rag']['facts'] = $filter($trace['rag']['facts']);
             $trace['rag']['selected'] = $filter($trace['rag']['selected']);
+            if (isset($trace['rag']['available'])) {
+                $trace['rag']['available'] = $filter($trace['rag']['available']);
+            }
         }
 
         return $trace;

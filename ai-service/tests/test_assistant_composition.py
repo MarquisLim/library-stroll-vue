@@ -81,6 +81,31 @@ def test_insufficient_evidence_is_a_valid_empty_plan(assistant, generate):
     assert result.status_code == 200 and result.json() == expected
 
 
+def test_visual_context_groups_facts_in_the_same_composer_prompt_and_reports_usage(assistant, generate):
+    palette = {"source_ref": "s2", "fact_ref": "f8"}
+    facts = [FACT, {**palette, "value": 'жёлтый <золото>', "origin": "ai_analysis"},
+             {"source_ref": "s1", "fact_ref": "f11", "value": "birds", "origin": "ai_analysis"}]
+    expected = {"action": "compose", "selections": [palette]}
+    generate.mock(return_value=response_for(expected))
+    result = assistant.post(PATH, headers={**HEADERS, "X-Assistant-Debug": "1"},
+                            json={"query": QUERY, "facts": facts, "packing": "visual_priority"})
+    assert result.status_code == 200 and result.json() == expected
+
+    prompt = json.loads(generate.calls[0].request.content)["prompt"]
+    assert f"<|im_start|>system\n{ASSISTANT_COMPOSE_PROMPT}<|im_end|>" in prompt
+    context = prompt.split("<|im_start|>user\n", 1)[1].split("<|im_end|>", 1)[0]
+    assert json.loads(context) == {"query": QUERY, "facts": [
+        {"source_ref": "s1", "f1": "Birds over waves", "f11": "birds"},
+        {"source_ref": "s2", "f8": "Palette colors: жёлтый <золото>"},
+    ]}
+    assert "<золото>" not in context
+    assert result.headers["X-Assistant-Context-Bytes"] == str(len(context.encode("utf-8")))
+    assert result.headers["X-Assistant-Prompt-Bytes"] == str(len(prompt.encode("utf-8")))
+    assert result.headers["X-Assistant-Prompt-Tokens"] == "300"
+    assert result.headers["X-Assistant-Output-Tokens"] == "55"
+    assert "X-Assistant-Prompt-Tokens" not in post(assistant).headers
+
+
 @pytest.mark.parametrize("headers", [{}, {"X-AI-Service-Key": "wrong"}])
 def test_requires_internal_key(assistant, mock_ollama, headers):
     assert post(assistant, headers=headers).status_code == 401
@@ -124,6 +149,14 @@ def test_rejects_extra_top_level_request_fields(assistant, mock_ollama):
     result = assistant.post(PATH, headers=HEADERS, json={"query": QUERY, "facts": [FACT], "history": []})
     assert result.status_code == 422
     assert not mock_ollama.mock_calls
+
+
+def test_debug_keeps_usage_when_the_composer_selects_an_unknown_ref(assistant, generate):
+    generate.mock(return_value=response_for({"action": "compose", "selections": [{**REF, "fact_ref": "f11"}]}))
+    result = post(assistant, headers={**HEADERS, "X-Assistant-Debug": "1"})
+    assert result.status_code == 502
+    assert result.headers["X-Assistant-Prompt-Tokens"] == "300"
+    assert result.json() == {"detail": "assistant_composition_unavailable"}
 
 
 @pytest.mark.parametrize("query,value", [("𠮷" * 400, "x"), (QUERY, "<" * 240), (QUERY, "𠮷" * 240)])

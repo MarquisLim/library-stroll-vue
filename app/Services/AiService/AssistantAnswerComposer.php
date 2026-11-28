@@ -12,7 +12,7 @@ class AssistantAnswerComposer
 {
     private const MAX_SELECTIONS = 5;
 
-    public function compose(string $query, array $facts): ?array
+    public function compose(string $query, array $facts, string $strategy = AssistantRagContext::LEGACY): ?array
     {
         $trace = AssistantSearchDiagnostics::current();
         $key = config('ai.api_key');
@@ -40,8 +40,13 @@ class AssistantAnswerComposer
                 $trace->data['rag']['transport_attempted'] = true;
             }
 
-            $response = $request->post('/api/v1/assistant/compose', ['query' => $query, 'facts' => $facts]);
+            $payload = ['query' => $query, 'facts' => $facts];
+            if ($strategy === AssistantRagContext::VISUAL) {
+                $payload['packing'] = $strategy;
+            }
+            $response = $request->post('/api/v1/assistant/compose', $payload);
             $trace?->observe('composer', $response);
+            $trace?->composerUsage($response);
             $plan = $response->ok() ? json_decode($response->body()) : null;
         } catch (Throwable $error) {
             $trace?->error('composer', 'transport_failure');

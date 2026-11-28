@@ -5,6 +5,7 @@ namespace App\Services\Search;
 use App\Models\AssistantConversation;
 use App\Models\AssistantTurn;
 use App\Models\User;
+use App\Services\AiService\AssistantRagContext;
 use Closure;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -98,7 +99,7 @@ class AssistantConversationHistory
             'source_references' => ['present', 'array', 'list', 'max:5'],
             'source_references.*' => ['required', 'array:artwork_id,fact_ref,revision_hash,fact_sha256'],
             'source_references.*.artwork_id' => ['required', 'integer:strict', 'min:1'],
-            'source_references.*.fact_ref' => ['required', 'string', 'regex:/\Af[1-7]\z/'],
+            'source_references.*.fact_ref' => ['required', 'string', 'regex:'.AssistantRagContext::FACT_REF_PATTERN],
             'source_references.*.revision_hash' => ['required', 'string', 'regex:/\A[a-f0-9]{64}\z/'],
             'source_references.*.fact_sha256' => ['required', 'string', 'regex:/\A[a-f0-9]{64}\z/'],
         ])->validate();

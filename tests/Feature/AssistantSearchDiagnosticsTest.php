@@ -68,7 +68,7 @@ class AssistantSearchDiagnosticsTest extends TestCase
             'http://ai.test/api/v1/assistant/compose' => Http::response([
                 'action' => 'compose',
                 'selections' => [['source_ref' => 's1', 'fact_ref' => 'f1']],
-            ], headers: ['X-Assistant-Model' => 'test-chat']),
+            ], headers: ['X-Assistant-Model' => 'test-chat', 'X-Assistant-Prompt-Tokens' => '123']),
         ]);
 
         $this->actingAs($this->owner);
@@ -86,6 +86,8 @@ class AssistantSearchDiagnosticsTest extends TestCase
         $this->assertSame('vision', $byId[$bird->id]['metadata']['analysis_source']);
         $this->assertSame('test-chat', $debug['configuration']['models']['composer']);
         $this->assertSame(2, $debug['dense_service']['qdrant_count']);
+        $this->assertSame('legacy', $debug['rag']['strategy']);
+        $this->assertSame(['prompt_tokens' => 123], $debug['rag']['composer_usage']);
         $this->assertSame($bird->id, $debug['rag']['selected'][0]['artwork_id']);
         $this->assertSame('Bird', $debug['query']['used']);
         $this->assertStringNotContainsString('seaside', AssistantTurn::findOrFail($captured->json('turn_id'))->getRawOriginal('diagnostics'));
@@ -137,6 +139,8 @@ class AssistantSearchDiagnosticsTest extends TestCase
         $this->assertSame([$available->id], array_column($export['sources'][$last], 'artwork_id'));
         $this->assertSame([$available->id], array_column($export['diagnostics'][$last]['candidates'], 'artwork_id'));
         $this->assertNotContains($work->id, array_column($export['rag'][$last]['facts'], 'artwork_id'));
+        $this->assertSame('legacy', $export['rag'][$last]['strategy']);
+        $this->assertSame([$available->id], array_column($export['rag'][$last]['available'], 'artwork_id'));
         $this->assertSame('service_timeout', $export['errors'][$last]['events'][0]['code']);
         $this->assertStringNotContainsString('test-never-export', $response->streamedContent());
         $this->getJson($url, ['X-Assistant-Debug' => '1'])->assertOk()

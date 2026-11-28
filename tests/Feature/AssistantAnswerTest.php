@@ -4,7 +4,9 @@ namespace Tests\Feature;
 
 use App\Models\Artwork;
 use App\Models\User;
+use App\Services\AiService\AssistantRagContext;
 use App\Services\AiService\ArtworkIndexingService;
+use App\Services\Search\AssistantRagAnswer;
 use App\Services\Search\HybridSearchService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -128,6 +130,39 @@ class AssistantAnswerTest extends TestCase
         $this->postJson(self::URL, ['query' => self::QUERY, 'limit' => 1])
             ->assertOk()->assertJsonCount(1, 'sources');
         $this->assertSame([['s1', 's2', 's3', 's4', 's5'], ['s1']], $sent);
+    }
+
+    public function test_visual_packing_represents_each_source_and_uses_verified_visual_facts(): void
+    {
+        $this->app->when(AssistantRagAnswer::class)->needs('$packing')->give(AssistantRagContext::VISUAL);
+        $works = [];
+        foreach (range(1, 6) as $index) {
+            $work = $this->image(['title' => str_repeat('Long title ', 30).$index, 'description' => str_repeat('License text ', 30)]);
+            $this->aiFor($work, ['vision_model' => 'test-vision', 'summary' => 'A small bird on the branch of a tree.', 'objects' => ['bird', 'branch'],
+                'colors' => ['yellow', 'green'], 'styles' => ['watercolor'], 'themes' => ['wildlife'],
+                'tags_ru' => ['птица'], 'tags_en' => ['bird']]);
+            $works[] = $work;
+        }
+        $this->mockCandidates($works);
+        Http::fake([self::COMPOSE => function ($request) {
+            $this->assertSame(AssistantRagContext::VISUAL, $request['packing']);
+            $facts = collect($request['facts'])->groupBy('source_ref');
+            $this->assertSame(['s1', 's2', 's3', 's4', 's5'], $facts->keys()->all());
+            foreach ($facts as $sourceFacts) {
+                $this->assertSame(['f3', 'f5', 'f8', 'f9', 'f4', 'f10', 'f11'], $sourceFacts->pluck('fact_ref')->all());
+            }
+            $this->assertLessThanOrEqual(AssistantRagContext::INPUT_BYTES,
+                AssistantRagContext::inputBytes($request['query'], $request['facts'], $request['packing']));
+
+            return Http::response($this->plan(['s5', 'f8']));
+        }]);
+
+        $this->actingAs(User::factory()->create())->postJson(self::URL, ['query' => self::QUERY])
+            ->assertOk()->assertJsonPath('status', 'ok')->assertJsonPath('sources.0.artwork_id', $works[4]->id)
+            ->assertJsonPath('answer.0.text', 'Цвета палитры по данным AI-анализа: «yellow, green».');
+
+        [$facts] = app(AssistantRagContext::class)->prepare(str_repeat('𠮷', 330), collect($works), AssistantRagContext::VISUAL);
+        $this->assertSame([], $facts);
     }
 
     public function test_does_not_send_private_blocked_or_policy_denied_dense_candidates(): void
