@@ -83,7 +83,7 @@ export function loadQueue() {
 }
 
 export function loadCatalogQueue(directory, split) {
-    if (!['evaluation', 'regression'].includes(split)) throw new Error('Неизвестная очередь каталога.');
+    if (!['evaluation', 'regression', 'regression-1c', 'regression-1d1'].includes(split)) throw new Error('Неизвестная очередь каталога.');
     const queueBytes = readFileSync(join(directory, 'review-queue-' + split + '.json'));
     const root = realpathSync(join(directory, 'review-images'));
     const seen = new Set();
@@ -246,16 +246,21 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const options = process.argv.slice(2);
     const testMode = options.includes('--test');
     const catalog = options.includes('--assistant-colbert');
-    const regression = options.includes('--regression');
-    if ((regression && !catalog) || options.some(option => !['--test', '--assistant-colbert', '--regression'].includes(option))) {
-        throw new Error('Использование: node server.mjs [--test] [--assistant-colbert [--regression]]');
+    const constraints = options.includes('--assistant-constraints');
+    const selections = options.filter(option => ['--regression', '--regression-1c', '--regression-1d1'].includes(option));
+    const split = selections[0]?.slice(2) ?? 'evaluation';
+    const ports = constraints ? { evaluation: 48089, 'regression-1c': 48091, 'regression-1d1': 48093 }
+        : { evaluation: 48085, regression: 48087 };
+    if ((catalog && constraints) || selections.length > 1 || (selections.length > 0 && !(catalog || constraints))
+        || !ports[split] || options.some(option => !['--test', '--assistant-colbert', '--assistant-constraints', ...selections].includes(option))) {
+        throw new Error('Использование: node server.mjs [--test] [--assistant-colbert [--regression] | --assistant-constraints [--regression-1c | --regression-1d1]]');
     }
-    const split = regression ? 'regression' : 'evaluation';
-    const catalogDir = join(repo, 'storage/app/ai-stage-05-04/5.4-1d-1');
-    const queue = catalog ? loadCatalogQueue(catalogDir, split) : loadQueue();
+    const newQueue = catalog || constraints;
+    const catalogDir = join(repo, 'storage/app/ai-stage-05-04', constraints ? '5.4-1d-2' : '5.4-1d-1');
+    const queue = newQueue ? loadCatalogQueue(catalogDir, split) : loadQueue();
     const stateDir = testMode ? mkdtempSync(join(tmpdir(), 'library-stroll-review-test-'))
-        : (catalog ? join(catalogDir, 'human-review', split) : workspace);
-    const port = catalog ? (regression ? 48087 : 48085) + Number(testMode) : (testMode ? 48084 : 48083);
+        : (newQueue ? join(catalogDir, 'human-review', split) : workspace);
+    const port = (newQueue ? ports[split] : 48083) + Number(testMode);
     reviewServer({ queue, stateDir, testMode }).listen(port, '127.0.0.1', () => {
         console.log(`${testMode ? 'Тестовый режим. ' : ''}Ручная оценка, ${queue.pairs.length} пар. http://127.0.0.1:${port}/`);
     }).on('error', error => {

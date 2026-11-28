@@ -33,6 +33,7 @@ class HybridSearchService
         int $perPage = 20,
         ?Closure $assistantVisibility = null,
         ?Closure $assistantDocuments = null,
+        ?Closure $assistantConstraintOrder = null,
     ): array {
         $trace = AssistantSearchDiagnostics::current();
         $lexicalLimit = config('ai.search.lexical_limit', 50);
@@ -94,10 +95,17 @@ class HybridSearchService
             return ['artworks' => collect(), 'total' => 0];
         }
 
+        $baseline = $lexicalDetails['strategy'];
         if ($assistantDocuments !== null) {
             $result = $this->assistantReranker->rerank($query, $fusedIds, $assistantDocuments, config('ai.assistant_colbert_depth'), 'post_rrf');
             $fusedIds = $result['ids'];
             $trace?->colbert($result);
+            if ($result['fallback_reason'] === null) {
+                $baseline .= '+colbert_post_rrf';
+            }
+        }
+        if ($assistantConstraintOrder !== null) {
+            $fusedIds = $assistantConstraintOrder($fusedIds, $baseline);
         }
 
         $start = $trace ? hrtime(true) : 0;

@@ -35,6 +35,7 @@ final class AssistantSearchDiagnostics
             'assistant_query_understanding_enabled',
             'assistant_lexical_metadata_enabled',
             'assistant_colbert_post_rrf_enabled',
+            'assistant_constraint_reranking_enabled',
             'colbert_sync.enabled', 'colbert_sync.auto_enabled'];
         $this->data = [
             'schema_version' => 1,
@@ -47,7 +48,7 @@ final class AssistantSearchDiagnostics
             'llm_calls' => array_fill_keys(['intent', 'normalizer', 'resolver', 'composer'], 0),
             'filters' => null,
             'stages' => array_fill_keys(['recent_history', 'intent', 'query_understanding', 'resolver_context', 'resolver', 'normalizer', 'lexical', 'dense',
-                'rrf', 'colbert', 'hybrid', 'assistant_visibility', 'previous_sources', 'rag_pack', 'composer', 'rag_recheck', 'final'], null),
+                'rrf', 'colbert', 'constraints', 'hybrid', 'assistant_visibility', 'previous_sources', 'rag_pack', 'composer', 'rag_recheck', 'final'], null),
             'dense_service' => null,
             'rag' => null,
             'performance' => ['total_ms' => null, 'capture_ms' => null],
@@ -182,6 +183,27 @@ final class AssistantSearchDiagnostics
         $this->model('colbert', $result['model']);
         foreach ($result['ranks'] as $id => $ranks) {
             $this->candidate($id, ['colbert' => $ranks]);
+        }
+    }
+
+    public function constraints(string $query, ?array $structure, array $result): void
+    {
+        $redacted = self::publicText($query, 2000) !== $query;
+        $this->data['stages']['constraints'] = [
+            ...array_diff_key($result, array_flip(['ids', 'ranks', 'conditions'])),
+            'count' => count($result['ranks']),
+            'structure' => $redacted || in_array($result['fallback_reason'], ['invalid_structure', 'evaluation_unavailable'], true) ? null : $structure,
+            'conditions' => $redacted ? [] : $result['conditions'],
+            'decision_limit' => 5,
+            'fragment_rank_limit' => 5,
+        ];
+        foreach ($result['ranks'] as $id => $rank) {
+            $sample = $redacted ? [] : array_slice($rank['evidence'], 0, 5, true);
+            if ($rank['after'] > 5) {
+                $sample = array_map(fn ($decision) => array_intersect_key($decision, ['state' => true, 'reason' => true])
+                    + ['fields' => array_column($decision['evidence'], 'field')], $sample);
+            }
+            $this->candidate($id, ['constraints' => [...$rank, 'evidence' => $sample]]);
         }
     }
 

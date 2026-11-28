@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "depths": [20, 30, 50],
+  "strengths": [0.5, 1],
+  "development_objective": "Mean observed nDCG@5 over Oracle E, F and G. Ties prefer smaller depth, then smaller strength.",
+  "colbert_depth": 20,
+  "repeats": 3,
+  "pool_depth": 20,
+  "relevance": {"full": 2, "partial": 1, "zero": 0, "unjudged": null},
+  "evidence": {"2": "confirmed", "0": "contradicted", "1": "insufficient_evidence"},
+  "metric_policy": "Macro over queries with known positives, nDCG based on known grades and 2^grade-1 gain. Count the unjudged separately at each depth. Strict Hit/MRR/Recall use grade 2. Bootstrap samples whole paired queries.",
+  "architecture": {"A": "legacy hybrid", "B": "metadata hybrid", "C": "Dense+ColBERT", "D": "B+post-RRF ColBERT", "E": "A+constraints", "F": "B+constraints", "G": "D+constraints"},
+  "oracle": "Constrain development and independent evaluation with the frozen human-readable structured annotations.",
+  "end_to_end": "Use one real validated Query Understanding result per query for E, F and G. Missing or rejected extraction preserves the input order.",
+  "regression": "Replay immutable A–D rankings from 5.4-1D-1 separately for its 40 evaluation queries and the 18 queries from 5.4-1C. Rerun extraction and evaluation with current read-only metadata."
+}

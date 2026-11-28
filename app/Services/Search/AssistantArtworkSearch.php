@@ -12,17 +12,29 @@ class AssistantArtworkSearch
 {
     private const CANDIDATE_LIMIT = 20;
 
-    public function __construct(private HybridSearchService $search) {}
+    public function __construct(private HybridSearchService $search, private AssistantConstraintReranker $constraints) {}
 
     /** @return Collection<int, Artwork> */
-    public function retrieve(string $query, User $user, bool $withMetadata = false): Collection
+    public function retrieve(string $query, User $user, bool $withMetadata = false, ?array $structure = null): Collection
     {
+        $loadMetadata = fn (Collection $ids) => $this->visible($ids, $user, withMetadata: true);
+        $ordering = config('ai.assistant_constraint_reranking_enabled')
+            ? function (array $ids, string $baseline) use ($query, $structure, $loadMetadata): array {
+                $ranked = $this->constraints->rerank($query, $structure, $ids, $loadMetadata,
+                    config('ai.assistant_constraint_depth'), config('ai.assistant_constraint_strength'), $baseline);
+                AssistantSearchDiagnostics::current()?->constraints($query, $structure, $ranked);
+
+                return $ranked['ids'];
+            }
+            : null;
         if (config('ai.assistant_lexical_metadata_enabled')) {
-            $documents = config('ai.assistant_colbert_post_rrf_enabled')
-                ? fn (Collection $ids) => $this->visible($ids, $user, withMetadata: true)
-                : null;
+            $documents = config('ai.assistant_colbert_post_rrf_enabled') ? $loadMetadata : null;
             $candidates = $this->search->search($query, ['type' => 'image'], page: 1, perPage: self::CANDIDATE_LIMIT,
-                assistantVisibility: fn (Collection $ids) => $this->visible($ids, $user)->pluck('id'), assistantDocuments: $documents);
+                assistantVisibility: fn (Collection $ids) => $this->visible($ids, $user)->pluck('id'),
+                assistantDocuments: $documents, assistantConstraintOrder: $ordering);
+        } elseif ($ordering !== null) {
+            $candidates = $this->search->search($query, ['type' => 'image'], page: 1, perPage: self::CANDIDATE_LIMIT,
+                assistantConstraintOrder: $ordering);
         } else {
             $candidates = $this->search->search($query, ['type' => 'image'], page: 1, perPage: self::CANDIDATE_LIMIT);
         }

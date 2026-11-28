@@ -76,16 +76,18 @@ class AssistantTurnController extends Controller
                     $trace->intent($classification, $action, $depends ? $contextReason : null);
                 }
             }
+            $structure = null;
             if ($intent === AssistantIntent::SearchMedia && config('ai.assistant_query_understanding_enabled')) {
                 $started = $trace ? hrtime(true) : 0;
                 $parsed = $understanding->extract($query);
                 $trace?->queryUnderstanding($query, $parsed, $started);
+                $structure = $parsed['structure'];
             }
             $replyCode = $action === 'informational' ? AssistantInformationalReply::code($intent, $query) : null;
             $selected = $action === 'use_previous' ? array_intersect_key($allowed, array_fill_keys($plan['source_refs'], true)) : [];
             $result = match ($action) {
                 'use_previous' => $rag->previous($query, $limit, $user, array_merge(...array_values($selected))),
-                'new_search' => $rag->search($query, $limit, $user),
+                'new_search' => $rag->search($query, $limit, $user, $structure),
                 default => ['status' => $replyCode === null ? 'clarification_required' : 'informational',
                     'answer' => [], 'sources' => [], 'references' => [], 'scope' => []],
             };

@@ -7,7 +7,7 @@ const stages = {
     recent_history: 'История', intent: 'Классификация намерения', query_understanding: 'Структура запроса',
     resolver_context: 'Контекст диалога', resolver: 'Выбор прежних источников',
     normalizer: 'Нормализация', lexical: 'Лексический поиск', dense: 'Dense Search',
-    rrf: 'Объединение RRF', colbert: 'Ранжирование ColBERT', hybrid: 'Hybrid Search', assistant_visibility: 'Доступные изображения',
+    rrf: 'Объединение RRF', colbert: 'Ранжирование ColBERT', constraints: 'Проверка условий', hybrid: 'Hybrid Search', assistant_visibility: 'Доступные изображения',
     previous_sources: 'Источники из диалога', rag_pack: 'Подготовка фактов', composer: 'Выбор фактов',
     rag_recheck: 'Проверка источников', final: 'Итоговые карточки',
 }
@@ -22,6 +22,14 @@ const colbert = computed(() => trace?.stages?.colbert)
 const reranked = computed(() => (trace?.candidates ?? []).filter(row => row.colbert)
     .sort((left, right) => left.colbert.before - right.colbert.before))
 const ragSources = computed(() => new Set((trace?.rag?.available ?? []).map(row => row.artwork_id)))
+const constraints = computed(() => trace?.stages?.constraints)
+const checkedCandidates = computed(() => (trace?.candidates ?? []).filter(row => row.constraints)
+    .sort((left, right) => left.constraints.after - right.constraints.after))
+const evidenceStates = {
+    confirmed: 'Подтверждено метаданными',
+    contradicted: 'Метаданные противоречат',
+    insufficient_evidence: 'Недостаточно данных',
+}
 const ranked = computed(() => [...(trace?.candidates ?? [])].filter(row => row.lexical_rank != null || row.dense_rank != null)
     .sort((left, right) => (left.rrf_rank ?? Infinity) - (right.rrf_rank ?? Infinity) || left.artwork_id - right.artwork_id))
 </script>
@@ -130,6 +138,40 @@ const ranked = computed(() => [...(trace?.candidates ?? [])].filter(row => row.l
                                 <td>{{ number(row.colbert.score) }}</td>
                                 <td>{{ row.colbert.document }}</td>
                                 <td>{{ trace.rag ? (ragSources.has(row.artwork_id) ? 'Да' : 'Нет') : '—' }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+            <details v-if="constraints" class="space-y-2">
+                <summary class="cursor-pointer font-semibold">Ранжирование по условиям</summary>
+                <dl class="grid gap-x-4 gap-y-1 sm:grid-cols-[auto_1fr]">
+                    <dt>Исходная стратегия</dt><dd>{{ constraints.baseline }}</dd>
+                    <dt>Глубина / коэффициент</dt><dd>{{ number(constraints.depth) }} / {{ number(constraints.strength) }}</dd>
+                    <dt>Задержка</dt><dd>{{ number(constraints.ms) }} мс</dd>
+                    <dt>Причина fallback</dt><dd>{{ constraints.fallback_reason ?? '—' }}</dd>
+                </dl>
+                <ul v-if="Object.keys(constraints.conditions ?? {}).length" class="space-y-1 [overflow-wrap:anywhere]">
+                    <li v-for="(condition, key) in constraints.conditions" :key="key">{{ condition.text }} · {{ condition.kind }} · {{ condition.mode }}</li>
+                </ul>
+                <div v-if="checkedCandidates.length" class="overflow-x-auto">
+                    <table class="table table-xs w-full">
+                        <thead><tr><th>Работа</th><th>Ранг до / после</th><th>Поправка</th><th>Источник RAG</th><th>Доказательства</th></tr></thead>
+                        <tbody>
+                            <tr v-for="row in checkedCandidates" :key="row.artwork_id">
+                                <th scope="row">#{{ row.artwork_id }}</th>
+                                <td>{{ number(row.constraints.before) }} / {{ number(row.constraints.after) }}</td>
+                                <td>{{ number(row.constraints.delta) }}</td>
+                                <td>{{ trace.rag ? (ragSources.has(row.artwork_id) ? 'Да' : 'Нет') : '—' }}</td>
+                                <td>
+                                    <ul class="space-y-1">
+                                        <li v-for="(item, key) in row.constraints.evidence" :key="key">
+                                            {{ constraints.conditions?.[key]?.text ?? key }} · {{ evidenceStates[item.state] }} · {{ item.reason }}
+                                            <span v-for="(part, index) in item.evidence ?? []" :key="index" class="block">{{ part.field }} · {{ part.fragment }}</span>
+                                            <span v-if="item.fields?.length" class="block">{{ item.fields.join(', ') }}</span>
+                                        </li>
+                                    </ul>
+                                </td>
                             </tr>
                         </tbody>
                     </table>

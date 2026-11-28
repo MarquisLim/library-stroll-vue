@@ -20,9 +20,9 @@ class AssistantRagAnswer
         private string $packing = AssistantRagContext::LEGACY,
     ) {}
 
-    public function search(string $query, int $limit, User $user): array
+    public function search(string $query, int $limit, User $user, ?array $structure = null): array
     {
-        return $this->compose($query, $limit, $user, $this->search->retrieve($query, $user, withMetadata: true));
+        return $this->compose($query, $limit, $user, $this->search->retrieve($query, $user, withMetadata: true, structure: $structure));
     }
 
     public function previous(string $query, int $limit, User $user, array $scope): array
