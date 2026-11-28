@@ -143,12 +143,6 @@ final class AssistantConversationExport
         if (! is_string($value)) {
             return $value;
         }
-        foreach ([config('app.key'), config('ai.api_key'), config('database.connections.mysql.password')] as $secret) {
-            if (is_string($secret) && $secret !== '') {
-                $value = str_replace($secret, '[скрыто]', $value);
-            }
-        }
-
         return AssistantSearchDiagnostics::redactSecrets($value);
     }
 

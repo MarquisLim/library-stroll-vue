@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\AssistantArtworkRequest;
 use App\Models\User;
 use App\Services\AiService\AssistantFollowupResolver;
+use App\Services\AiService\AssistantQueryUnderstanding;
 use App\Services\Search\AssistantConversationHistory;
 use App\Services\Search\AssistantArtworkSearch;
 use App\Services\Search\AssistantInformationalReply;
@@ -33,6 +34,7 @@ class AssistantTurnController extends Controller
         AssistantSavedSources $sources,
         AssistantArtworkSearch $artworks,
         AssistantIntentRouter $router,
+        AssistantQueryUnderstanding $understanding,
     ): JsonResponse {
         $user = $request->user();
         $data = $request->validated('payload');
@@ -73,6 +75,11 @@ class AssistantTurnController extends Controller
                 if ($classification !== null) {
                     $trace->intent($classification, $action, $depends ? $contextReason : null);
                 }
+            }
+            if ($intent === AssistantIntent::SearchMedia && config('ai.assistant_query_understanding_enabled')) {
+                $started = $trace ? hrtime(true) : 0;
+                $parsed = $understanding->extract($query);
+                $trace?->queryUnderstanding($query, $parsed, $started);
             }
             $replyCode = $action === 'informational' ? AssistantInformationalReply::code($intent, $query) : null;
             $selected = $action === 'use_previous' ? array_intersect_key($allowed, array_fill_keys($plan['source_refs'], true)) : [];

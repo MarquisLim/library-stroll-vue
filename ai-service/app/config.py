@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     ai_assistant_rag_enabled: bool = False
     ai_assistant_context_enabled: bool = False
     ai_assistant_intent_routing_enabled: bool = False
+    ai_assistant_query_understanding_enabled: bool = False
 
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_chat_model: str = "qwen3:8b"

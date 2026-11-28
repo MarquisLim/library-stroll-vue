@@ -32,6 +32,7 @@ final class AssistantSearchDiagnostics
         $this->started = hrtime(true);
         $flags = ['enabled', 'assistant_enabled', 'assistant_llm_enabled', 'assistant_rag_enabled',
             'assistant_history_enabled', 'assistant_context_enabled', 'assistant_intent_routing_enabled', 'assistant_debug_enabled', 'rerank_enabled',
+            'assistant_query_understanding_enabled',
             'colbert_sync.enabled', 'colbert_sync.auto_enabled'];
         $this->data = [
             'schema_version' => 1,
@@ -39,10 +40,11 @@ final class AssistantSearchDiagnostics
             'query' => ['original' => self::plain($query, 2000), 'used' => null],
             'dialogue' => null,
             'intent' => null,
+            'query_understanding' => null,
             'execution' => null,
             'llm_calls' => array_fill_keys(['intent', 'normalizer', 'resolver', 'composer'], 0),
             'filters' => null,
-            'stages' => array_fill_keys(['recent_history', 'intent', 'resolver_context', 'resolver', 'normalizer', 'lexical', 'dense',
+            'stages' => array_fill_keys(['recent_history', 'intent', 'query_understanding', 'resolver_context', 'resolver', 'normalizer', 'lexical', 'dense',
                 'rrf', 'hybrid', 'assistant_visibility', 'previous_sources', 'rag_pack', 'composer', 'rag_recheck', 'final'], null),
             'dense_service' => null,
             'rag' => null,
@@ -136,6 +138,16 @@ final class AssistantSearchDiagnostics
         $this->data['intent'] = [...$classification, 'intent' => $classification['intent']->value, 'action' => $action,
             'context_reason' => $contextReason, 'ms' => $this->data['stages']['intent']['ms']];
         $this->data['llm_calls']['intent'] = $classification['llm_calls'];
+    }
+
+    public function queryUnderstanding(string $query, array $parsed, int $started): void
+    {
+        $this->stage('query_understanding', $started, $parsed['llm_calls']);
+        $safe = self::publicText($query, 2000);
+        $redacted = $safe !== $query;
+        $this->data['query_understanding'] = [...$parsed, 'source_query' => $safe, 'redacted' => $redacted,
+            'structure' => $redacted ? null : $parsed['structure'], 'ms' => $this->data['stages']['query_understanding']['ms']];
+        $this->data['llm_calls']['query_understanding'] = $parsed['llm_calls'];
     }
 
     public function candidate(int $id, array $fields): void
@@ -326,6 +338,12 @@ final class AssistantSearchDiagnostics
 
     public static function redactSecrets(string $value): string
     {
+        foreach ([config('app.key'), config('ai.api_key'), config('database.connections.mysql.password')] as $secret) {
+            if (is_string($secret) && $secret !== '') {
+                $value = str_replace($secret, '[скрыто]', $value);
+            }
+        }
+
         return preg_replace('~(?:sk|ghp|github_pat)[_-][a-z0-9_-]{12,}|\bBearer\s+[a-z0-9._=-]+|\b[\w-]*(?:password|api[_-]?key|secret|access[_-]?token|app[_-]?key)\s*[:=]\s*(?:"[^"]*"|\x27[^\x27]*\x27|\S+)~iu',
             '[скрыто]', $value) ?? '';
     }

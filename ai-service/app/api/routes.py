@@ -28,6 +28,7 @@ from app.schemas.requests import (
     SearchRequest,
     SimilarRequest,
 )
+from app.schemas.query_understanding import QueryUnderstandingPlan, QueryUnderstandingRequest
 from app.schemas.responses import (
     AnalyzeResponse,
     ArtworkIndexInspection,
@@ -192,6 +193,39 @@ async def classify_assistant_intent(
     except ValueError:
         raise HTTPException(status_code=502, detail="assistant_intent_invalid_result",
                             headers=assistant_usage_headers(usage)) from None
+
+
+@router.post(
+    "/api/v1/assistant/understand-query",
+    response_model=QueryUnderstandingPlan,
+    response_model_exclude_defaults=True,
+    dependencies=[Depends(require_api_key)],
+)
+async def understand_assistant_query(
+    body: QueryUnderstandingRequest,
+    svc: Annotated[ArtworkService, Depends(get_artwork_service)],
+    request: Request,
+    response: Response,
+) -> QueryUnderstandingPlan:
+    if not (settings.ai_assistant_enabled and settings.ai_assistant_rag_enabled
+            and settings.ai_assistant_intent_routing_enabled and settings.ai_assistant_query_understanding_enabled):
+        raise HTTPException(status_code=404, detail="assistant_query_understanding_disabled")
+    usage = {"model_calls": 0} if request.headers.get("X-Assistant-Debug") == "1" else None
+    try:
+        plan = await svc.ollama.understand_assistant_query(body, usage)
+        record_assistant_model(request, response)
+        response.headers.update(assistant_usage_headers(usage))
+        return plan
+    except AssistantComposeBudgetError:
+        status, reason = 422, "context_too_large"
+    except (TimeoutError, httpx.TimeoutException):
+        status, reason = 504, "timeout"
+    except httpx.HTTPError:
+        status, reason = 502, "unavailable"
+    except ValueError:
+        status, reason = 502, "invalid_result"
+    raise HTTPException(status_code=status, detail=f"assistant_query_understanding_{reason}",
+                        headers=assistant_usage_headers(usage))
 
 
 @router.get("/api/v1/diagnostics", dependencies=[Depends(verify_api_key)])

@@ -9,6 +9,7 @@ return [
     'assistant_history_enabled' => (bool) env('AI_ASSISTANT_HISTORY_ENABLED', false),
     'assistant_context_enabled' => (bool) env('AI_ASSISTANT_CONTEXT_ENABLED', false),
     'assistant_intent_routing_enabled' => (bool) env('AI_ASSISTANT_INTENT_ROUTING_ENABLED', false),
+    'assistant_query_understanding_enabled' => (bool) env('AI_ASSISTANT_QUERY_UNDERSTANDING_ENABLED', false),
     'assistant_debug_enabled' => (bool) env('AI_ASSISTANT_DEBUG_ENABLED', false),
     'assistant_llm_timeout' => (float) env('AI_ASSISTANT_LLM_TIMEOUT', 15),
     'assistant_history' => [

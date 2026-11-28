@@ -4,7 +4,8 @@ import { computed } from 'vue'
 const { trace } = defineProps({ trace: Object })
 
 const stages = {
-    recent_history: 'История', intent: 'Классификация намерения', resolver_context: 'Контекст диалога', resolver: 'Выбор прежних источников',
+    recent_history: 'История', intent: 'Классификация намерения', query_understanding: 'Структура запроса',
+    resolver_context: 'Контекст диалога', resolver: 'Выбор прежних источников',
     normalizer: 'Нормализация', lexical: 'Лексический поиск по названию', dense: 'Dense Search',
     rrf: 'Объединение RRF', hybrid: 'Hybrid Search', assistant_visibility: 'Доступные изображения',
     previous_sources: 'Источники из диалога', rag_pack: 'Подготовка фактов', composer: 'Выбор фактов',
@@ -47,6 +48,18 @@ const executed = computed(() => Object.entries(trace?.stages ?? {}).filter(([, d
                     <dt>Токены composer</dt><dd>{{ number(trace.rag.composer_usage?.prompt_tokens) }} вход, {{ number(trace.rag.composer_usage?.output_tokens) }} выход</dd>
                 </template>
             </dl>
+            <details v-if="trace.query_understanding">
+                <summary class="cursor-pointer font-semibold">Структура запроса</summary>
+                <dl class="mt-2 grid gap-x-4 gap-y-1 sm:grid-cols-[auto_1fr]">
+                    <dt>Извлечение</dt><dd>{{ methods[trace.query_understanding.method] }} · {{ number(trace.query_understanding.ms) }} мс</dd>
+                    <dt>Валидация</dt><dd>{{ trace.query_understanding.validation }}</dd>
+                    <dt>Причина fallback</dt><dd>{{ trace.query_understanding.fallback_reason ?? '—' }}</dd>
+                    <dt>Токены извлечения</dt><dd>{{ number(trace.query_understanding.tokens?.prompt_tokens) }} вход, {{ number(trace.query_understanding.tokens?.output_tokens) }} выход</dd>
+                </dl>
+                <p v-if="trace.query_understanding.would_clarify" class="mt-2">Экспериментальная проверка предлагает уточнить запрос.</p>
+                <p v-if="trace.query_understanding.redacted" class="mt-2">Структура скрыта при очистке исходного текста.</p>
+                <pre v-else-if="trace.query_understanding.structure" class="mt-2 whitespace-pre-wrap [overflow-wrap:anywhere]">{{ JSON.stringify(trace.query_understanding.structure, null, 2) }}</pre>
+            </details>
             <div v-if="executed.length" class="overflow-x-auto">
                 <table class="table table-xs w-full">
                     <thead><tr><th>Этап</th><th>Количество</th><th>Время, мс</th></tr></thead>
