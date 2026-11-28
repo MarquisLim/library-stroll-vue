@@ -3,11 +3,13 @@ import { ArrowPathIcon, SparklesIcon } from '@heroicons/vue/24/outline'
 import { Link } from '@inertiajs/vue3'
 import { computed } from 'vue'
 import AssistantArtworkCard from './AssistantArtworkCard.vue'
+import AssistantSearchTrace from './AssistantSearchTrace.vue'
 
-const { reply } = defineProps({ reply: { type: Object, required: true }, pending: Boolean })
+const { reply } = defineProps({ reply: { type: Object, required: true }, pending: Boolean, debug: Boolean })
 defineEmits(['retry'])
 
 const plural = new Intl.PluralRules('ru')
+const candidates = computed(() => new Map(reply.diagnostics?.candidates.map(row => [row.artwork_id, row])))
 const noun = { one: 'работа', few: 'работы', many: 'работ', other: 'работ' }
 const summary = computed(() => {
     switch (reply.status) {
@@ -53,7 +55,7 @@ const summary = computed(() => {
             </ul>
             <ul v-if="reply.results?.length" class="mt-4 grid gap-3 border-t border-base-300/70 pt-4 sm:grid-cols-2" :class="{ 'xl:grid-cols-3': reply.results[0].number }" aria-label="Найденные работы">
                 <li v-for="artwork in reply.results" :key="`${artwork.artwork_id}-${artwork.number ?? ''}`" class="min-w-0">
-                    <AssistantArtworkCard :artwork="artwork" />
+                    <AssistantArtworkCard :artwork="artwork" :diagnostics="debug ? candidates.get(artwork.artwork_id) : undefined" />
                 </li>
             </ul>
             <button
@@ -66,6 +68,7 @@ const summary = computed(() => {
                 <ArrowPathIcon class="h-4 w-4" aria-hidden="true" />
                 Повторить запрос
             </button>
+            <AssistantSearchTrace v-if="debug && !['pending', 'error', 'cancelled'].includes(reply.status)" :trace="reply.diagnostics" />
         </div>
     </div>
 </template>

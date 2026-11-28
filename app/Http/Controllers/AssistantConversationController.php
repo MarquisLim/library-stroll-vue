@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\AssistantConversation;
 use App\Models\AssistantTurn;
 use App\Services\Search\AssistantConversationHistory;
+use App\Services\Search\AssistantConversationExport;
 use App\Services\Search\AssistantSavedSources;
+use App\Services\Search\AssistantSearchDiagnostics;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\Paginator;
@@ -43,15 +45,18 @@ class AssistantConversationController extends Controller
         ]);
     }
 
-    public function show(Request $request, string $conversation, AssistantSavedSources $sources): JsonResponse
+    public function show(Request $request, string $conversation, AssistantSavedSources $sources, AssistantConversationExport $export): JsonResponse
     {
         try {
             $owned = $this->history->findOwned($request->user(), $conversation);
+            $debug = AssistantSearchDiagnostics::requested($request);
             [$page, $size] = $this->pagination($request);
             $turns = $owned->turns()->useWritePdo()->orderByDesc('sequence')->simplePaginate($size, [
                 'id', 'sequence', 'user_query', 'result_status', 'requested_limit', 'source_references', 'created_at', 'updated_at',
+                ...($debug ? ['diagnostics'] : []),
             ], 'page', $page);
             $resolved = $sources->resolve($turns->getCollection()->flatMap(fn (AssistantTurn $turn) => $turn->citations())->all(), $request->user());
+            $diagnostics = $debug ? $export->historyDiagnostics($turns->getCollection(), $request->user()) : [];
 
             return response()->json([
                 'conversation' => $this->conversationData($owned),
@@ -64,6 +69,7 @@ class AssistantConversationController extends Controller
                     'created_at' => $turn->created_at->toISOString(),
                     'updated_at' => $turn->updated_at->toISOString(),
                     ...$sources->restore($turn->citations(), $resolved),
+                    ...($debug ? $this->debugHistory($turn, $diagnostics[$turn->id] ?? null) : []),
                 ])->all(),
                 'pagination' => $this->paginationData($turns),
             ]);
@@ -74,6 +80,33 @@ class AssistantConversationController extends Controller
 
             return response()->json(['message' => 'Assistant history could not be verified.'], 503);
         }
+    }
+
+    public function export(Request $request, string $conversation, AssistantConversationExport $export): Response
+    {
+        $user = $request->user();
+        $owned = $this->history->findOwned($user, $conversation);
+        $extended = $request->query('debug') === '1';
+        abort_if($extended && ! AssistantSearchDiagnostics::allowed($user), 403);
+
+        $now = now();
+        $header = ['export_schema_version' => 1, 'exported_at' => $now->toISOString(), 'conversation' => $this->conversationData($owned)];
+
+        return response()->streamDownload(fn () => $export->write($owned, $user, $header, $extended),
+            'library-stroll-chat-'.$now->format('Y-m-d').'-'.$owned->id.'.json',
+            ['Content-Type' => 'application/json; charset=UTF-8', 'X-Content-Type-Options' => 'nosniff']);
+    }
+
+    private function debugHistory(AssistantTurn $turn, ?array $trace): array
+    {
+        $data = ['diagnostics' => $trace];
+        if ($trace !== null && in_array($turn->result_status, ['search_fallback', 'insufficient_evidence'], true)) {
+            $sources = collect($trace['candidates'])->where('final', true)->sortBy('final_rank')->values()
+                ->map(fn ($candidate, $index) => ['source_ref' => 's'.($index + 1), ...$candidate['source']])->all();
+            $data += ['sources' => $sources, 'source_status' => $sources === [] ? 'none' : 'available'];
+        }
+
+        return $data;
     }
 
     public function destroy(Request $request, string $conversation): Response

@@ -6,6 +6,7 @@ use App\Contracts\AiServiceClient;
 use App\DTOs\AiAnalysisResult;
 use App\DTOs\AiHealthResult;
 use App\DTOs\AiSearchResult;
+use App\Services\Search\AssistantSearchDiagnostics;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -135,14 +136,30 @@ class HttpAiServiceClient implements AiServiceClient
 
     public function search(string $query, int $limit = 20, array $filters = []): AiSearchResult
     {
-        $response = $this->client()
+        $trace = AssistantSearchDiagnostics::current();
+        $request = $this->client()
             ->timeout(15)
-            ->retry(0)
-            ->post('/api/v1/search', [
-                'query' => $query,
-                'limit' => $limit,
-                'filters' => (object) $filters,
-            ]);
+            ->retry(0);
+        if ($trace) {
+            $request->withHeader('X-Assistant-Debug', '1');
+        }
+        $response = $request->post('/api/v1/search', [
+            'query' => $query,
+            'limit' => $limit,
+            'filters' => (object) $filters,
+        ]);
+        if ($trace && $response->ok()) {
+            $stages = json_decode($response->header('X-Assistant-Dense-Stages'), true);
+            $trace->data['dense_service'] = [];
+            foreach (['embedding_ms', 'qdrant_ms', 'visibility_ms', 'qdrant_count'] as $field) {
+                $value = $stages[$field] ?? null;
+                $trace->data['dense_service'][$field] = is_numeric($value) ? $value + 0 : null;
+            }
+            $filters = $stages['qdrant_filters'] ?? null;
+            $trace->data['filters']['qdrant'] = is_array($filters)
+                ? array_intersect_key($filters, array_flip(['media_type', 'is_published', 'is_private', 'is_blocked', 'has_ai']))
+                : null;
+        }
 
         $response->throw();
 

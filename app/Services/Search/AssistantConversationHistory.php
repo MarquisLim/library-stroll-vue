@@ -57,10 +57,12 @@ class AssistantConversationHistory
         array $references,
         ?int $expectedSequence = null,
         ?Closure $verify = null,
+        ?array $diagnostics = null,
+        ?array $fallbackSourceIds = null,
     ): AssistantTurn {
         abort_unless(config('ai.assistant_enabled') && config('ai.assistant_history_enabled'), 404);
 
-        return DB::transaction(function () use ($owner, $id, $query, $status, $requestedLimit, $references, $expectedSequence, $verify) {
+        return DB::transaction(function () use ($owner, $id, $query, $status, $requestedLimit, $references, $expectedSequence, $verify, $diagnostics, $fallbackSourceIds) {
             $conversation = $owner->assistantConversations()->lockForUpdate()->find($id) ?? abort(404);
             $data = $this->validatedTurn($query, $status, $requestedLimit, $references);
             $turns = $conversation->turns();
@@ -69,7 +71,8 @@ class AssistantConversationHistory
             $verify?->__invoke();
             $this->checkTurnLimit($turns->count());
 
-            $turn = $turns->create(['sequence' => $last + 1, ...$data]);
+            $turn = $turns->create(['sequence' => $last + 1, ...$data,
+                'diagnostics' => $diagnostics, 'fallback_source_ids' => $fallbackSourceIds]);
             $conversation->touch();
 
             return $turn;

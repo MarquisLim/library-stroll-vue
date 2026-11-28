@@ -120,12 +120,20 @@ class ArtworkService:
         query: str,
         limit: int = 20,
         filters: dict | None = None,
+        diagnostics: bool = False,
     ) -> dict:
         start = time.monotonic()
 
         vector = await self.ollama.embed(query)
-        results = await self.qdrant.search(vector=vector, limit=limit, filters=filters)
+        embedded = time.monotonic() if diagnostics else 0
+        dense_trace = {}
+        results = await self.qdrant.search(
+            vector=vector, limit=limit, filters=filters,
+            **({"diagnostics": dense_trace} if diagnostics else {}),
+        )
+        retrieved = time.monotonic() if diagnostics else 0
         visible = await self.visibility.visible_ids(self._candidate_ids(results))
+        checked = time.monotonic() if diagnostics else 0
 
         latency_ms = int((time.monotonic() - start) * 1000)
 
@@ -133,6 +141,13 @@ class ArtworkService:
             "results": self._rank_visible(results, visible),
             "model": settings.ollama_embedding_model,
             "latency_ms": latency_ms,
+            **({"diagnostics": {
+                **dense_trace,
+                "embedding_ms": round((embedded - start) * 1000, 3),
+                "qdrant_ms": round((retrieved - embedded) * 1000, 3),
+                "visibility_ms": round((checked - retrieved) * 1000, 3),
+                "qdrant_count": len(results),
+            }} if diagnostics else {}),
         }
 
     async def similar(

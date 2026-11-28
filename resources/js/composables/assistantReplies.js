@@ -8,7 +8,7 @@ export function assistantPreviewUrl(artworkId) {
 
 const errors = {
     401: 'Войдите в аккаунт, чтобы продолжить.',
-    403: 'Для доступа к ассистенту подтвердите адрес электронной почты.',
+    403: 'У вашего аккаунта нет прав на это действие.',
     404: 'Этот раздел ассистента сейчас недоступен.',
     409: 'Диалог изменился, достигнут лимит или источники больше не актуальны.',
     413: 'Запрос слишком большой. Сократите его и попробуйте ещё раз.',
@@ -63,5 +63,6 @@ export function ragReply(data, fromHistory = false) {
         }
     }
 
-    return { status, fragments, results: sources, sourceStatus, message: status === 'clarification_required' ? clarification(data.clarification_code) : null }
+    return { status, fragments, results: sources, sourceStatus, message: status === 'clarification_required' ? clarification(data.clarification_code) : null,
+        ...(Object.hasOwn(data, 'diagnostics') ? { diagnostics: data.diagnostics } : {}) }
 }

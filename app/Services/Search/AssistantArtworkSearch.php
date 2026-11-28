@@ -20,7 +20,20 @@ class AssistantArtworkSearch
         $candidates = $this->search->search($query, ['type' => 'image'], page: 1, perPage: self::CANDIDATE_LIMIT);
         $ids = $candidates['artworks']->take(self::CANDIDATE_LIMIT)->pluck('id')->unique();
 
-        return $this->visible($ids, $user, $withMetadata);
+        $trace = AssistantSearchDiagnostics::current();
+        $started = $trace ? hrtime(true) : 0;
+        $visible = $this->visible($ids, $user, $withMetadata);
+        if ($trace) {
+            $trace->stage('assistant_visibility', $started, $visible->count(), ['input_count' => $ids->count()]);
+            foreach ($visible as $work) {
+                $trace->candidate($work->id, ['retrieved' => true]);
+            }
+            foreach ($ids->diff($visible->pluck('id')) as $id) {
+                $trace->exclude($id, 'assistant_visibility_or_media');
+            }
+        }
+
+        return $visible;
     }
 
     /** @return Collection<int, Artwork> */

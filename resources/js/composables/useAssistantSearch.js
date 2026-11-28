@@ -4,8 +4,10 @@ import { assistantError, assistantQueryLimit, clarification, isArtworkCard } fro
 
 export { assistantQueryLimit } from './assistantReplies.js'
 
-async function requestSearch(query, signal) {
-    const { data } = await axios.post('/assistant/search', { query, limit: 10 }, { signal })
+async function requestSearch(query, signal, debug) {
+    const { data } = await axios.post('/assistant/search', { query, limit: 10 }, {
+        signal, ...(debug ? { headers: { 'X-Assistant-Debug': '1' } } : {}),
+    })
     return data
 }
 
@@ -23,6 +25,7 @@ function searchResult(data) {
 }
 
 export function useAssistantSearch(search = requestSearch) {
+    const debug = ref(false)
     const draft = ref('')
     const turns = ref([])
     const active = ref(null)
@@ -40,8 +43,10 @@ export function useAssistantSearch(search = requestSearch) {
         turn.reply = { status: 'pending' }
 
         try {
-            const data = await search(turn.query, controller.signal)
-            if (active.value?.requestId === requestId) turn.reply = searchResult(data)
+            const data = await search(turn.query, controller.signal, debug.value)
+            if (active.value?.requestId === requestId) turn.reply = {
+                ...searchResult(data), ...(Object.hasOwn(data ?? {}, 'diagnostics') ? { diagnostics: data.diagnostics } : {}),
+            }
         } catch (error) {
             if (active.value?.requestId === requestId) {
                 turn.reply = {
@@ -82,5 +87,5 @@ export function useAssistantSearch(search = requestSearch) {
 
     onScopeDispose(cancel)
 
-    return { draft, turns, pending, canSend, send, cancel, retry, reset }
+    return { debug, draft, turns, pending, canSend, send, cancel, retry, reset }
 }

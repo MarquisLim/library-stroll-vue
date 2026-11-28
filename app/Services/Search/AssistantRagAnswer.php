@@ -26,7 +26,10 @@ class AssistantRagAnswer
 
     public function previous(string $query, int $limit, User $user, array $scope): array
     {
+        $trace = AssistantSearchDiagnostics::current();
+        $started = $trace ? hrtime(true) : 0;
         $entries = $this->saved->resolve($scope, $user);
+        $trace?->stage('previous_sources', $started, count($entries), ['reference_count' => count($scope)]);
         if ($entries === []) {
             return ['status' => 'clarification_required', 'answer' => [], 'sources' => [], 'references' => [], 'scope' => []];
         }
@@ -35,6 +38,11 @@ class AssistantRagAnswer
         $evidence = collect($this->dates->evidence($query, $entries))->groupBy('reference.artwork_id');
         if ($evidence->isNotEmpty()) {
             // When the question has a supported period constraint, only matches enter composition.
+            if ($trace) {
+                foreach ($candidates->pluck('id')->diff($evidence->keys()) as $id) {
+                    $trace->exclude($id, 'outside_previous_date_scope');
+                }
+            }
             $candidates = $candidates->filter(fn (Artwork $work) => $evidence->has($work->id))->values();
         }
 
@@ -48,6 +56,8 @@ class AssistantRagAnswer
 
     private function compose(string $query, int $limit, User $user, Collection $candidates, ?array $scope = null, ?Collection $evidence = null): array
     {
+        $trace = AssistantSearchDiagnostics::current();
+        $packing = $trace ? hrtime(true) : 0;
         $initial = $candidates->mapWithKeys(fn (Artwork $artwork, int $index) => ['s'.($index + 1) => $artwork]);
         if ($evidence === null) {
             [$facts, $snapshots] = $this->context->prepare($query, $candidates->take($limit));
@@ -62,19 +72,55 @@ class AssistantRagAnswer
             }
             $facts = $this->context->packFacts($query, $snapshots);
         }
+        if ($trace) {
+            $trace->retainMetadata($candidates);
+            $refs = $initial->map(fn (Artwork $artwork) => $artwork->id);
+            $sent = array_column($facts, 'source_ref');
+            $trace->facts($facts, $refs);
+            $trace->stage('rag_pack', $packing, count(array_unique($sent)), [
+                'input_count' => $initial->count(), 'snapshot_count' => count($snapshots), 'fact_count' => count($facts),
+                'snapshot_fact_count' => array_sum(array_map(fn ($snapshot) => count($snapshot['facts']), $snapshots)),
+            ]);
+            foreach ($refs as $ref => $id) {
+                $trace->candidate($id, ['retrieved' => true]);
+                if (! isset($snapshots[$ref])) {
+                    $trace->exclude($id, 'outside_rag_source_limit');
+                } elseif (! in_array($ref, $sent, true)) {
+                    $trace->exclude($id, 'no_fact_packed');
+                }
+            }
+        }
         if ($facts === []) {
             return $this->result('insufficient_evidence', [], $initial->take($limit), [], $scope ?? []);
         }
 
         $started = hrtime(true);
         $plan = $this->composer->compose($query, $facts);
+        $trace?->stage('composer', $started, $plan === null ? null : count($plan['selections']));
+        if ($trace) {
+            $trace->plan($plan, $refs);
+            if ($plan === null) {
+                $trace->error('composer', 'search_fallback');
+            } elseif ($plan['action'] === 'compose') {
+                foreach (array_diff(array_unique($sent), array_column($plan['selections'], 'source_ref')) as $ref) {
+                    $trace->exclude($refs[$ref], 'not_selected_by_composer');
+                }
+            }
+        }
         Log::debug('Assistant composition completed.', ['elapsed_ms' => (hrtime(true) - $started) / 1e6, 'valid_plan' => $plan !== null]);
+        $checking = $trace ? hrtime(true) : 0;
         $current = $this->search->visible($candidates->pluck('id'), $user, withMetadata: true)->keyBy('id');
         if ($scope !== null) {
             $scope = array_column($this->saved->resolve($scope, $user, $current), 'reference');
             $current = $current->only(array_column($scope, 'artwork_id'));
         }
         $sources = $initial->map(fn (Artwork $artwork) => $current->get($artwork->id))->filter();
+        if ($trace) {
+            $trace->stage('rag_recheck', $checking, $sources->count(), ['input_count' => $initial->count()]);
+            foreach ($refs->diff($sources->pluck('id')) as $id) {
+                $trace->exclude($id, 'failed_rag_source_recheck');
+            }
+        }
         if (($plan['action'] ?? null) !== 'compose') {
             return $this->result($plan['action'] ?? 'search_fallback', [], $sources->take($limit), [], $scope ?? []);
         }
@@ -85,6 +131,7 @@ class AssistantRagAnswer
         foreach ($plan['selections'] as ['source_ref' => $source, 'fact_ref' => $ref]) {
             $artwork = $sources->get($source);
             if ($artwork === null) {
+                $trace?->error('rag_recheck', 'selected_source_unavailable');
                 return $this->result('search_fallback', [], $sources->take($limit), [], $scope ?? []);
             }
             $actual = $checked[$source] ??= $this->context->snapshot($artwork);
@@ -93,6 +140,8 @@ class AssistantRagAnswer
                 ? $actual === $old
                 : ($actual['revision'] === $old['revision'] && ($actual['facts'][$ref] ?? null) === $old['facts'][$ref]);
             if (! $matches) {
+                $trace?->exclude($artwork->id, 'revision_or_fact_changed');
+                $trace?->error('rag_recheck', 'revision_or_fact_changed');
                 return $this->result('search_fallback', [], $sources->take($limit), [], $scope ?? []);
             }
 

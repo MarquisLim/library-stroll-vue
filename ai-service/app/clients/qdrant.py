@@ -176,8 +176,13 @@ class QdrantService:
         vector: list[float],
         limit: int = 20,
         filters: dict | None = None,
+        diagnostics: dict | None = None,
     ) -> list[dict]:
         qdrant_filter = self._build_filter(filters or {})
+        if diagnostics is not None:
+            diagnostics["qdrant_filters"] = {
+                condition.key: condition.match.value for condition in qdrant_filter.must
+            }
 
         results = await self._client.query_points(
             collection_name=self.collection,

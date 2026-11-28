@@ -1,6 +1,6 @@
 <script setup>
 import { ChatBubbleLeftRightIcon, ClockIcon, MagnifyingGlassIcon, PlusIcon } from '@heroicons/vue/24/outline'
-import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import AppLayout from '@/Layouts/AppLayout.vue'
 import AssistantComposer from '@/Components/Assistant/AssistantComposer.vue'
 import AssistantMessage from '@/Components/Assistant/AssistantMessage.vue'
@@ -9,9 +9,11 @@ import AssistantWelcome from '@/Components/Assistant/AssistantWelcome.vue'
 import { useAssistantConversation } from '@/composables/useAssistantConversation.js'
 import { useAssistantSearch } from '@/composables/useAssistantSearch.js'
 
-const props = defineProps({ historyEnabled: Boolean, dialogueEnabled: Boolean, contextEnabled: Boolean, dialogueQueryLimit: { type: Number, default: 500 } })
+const props = defineProps({ historyEnabled: Boolean, dialogueEnabled: Boolean, contextEnabled: Boolean, debugAvailable: Boolean, dialogueQueryLimit: { type: Number, default: 500 } })
 const local = reactive(useAssistantSearch())
 const history = reactive(useAssistantConversation(undefined, props.dialogueQueryLimit))
+const debug = ref(false)
+const exportUrl = computed(() => history.activeId && `/assistant/conversations/${history.activeId}/export${debug.value ? '?debug=1' : ''}`)
 const chat = computed(() => props.dialogueEnabled ? history : local)
 const readOnly = computed(() => !!history.activeId && !props.dialogueEnabled)
 const turns = computed(() => readOnly.value ? history.turns : chat.value.turns)
@@ -33,12 +35,20 @@ function fitViewport() {
 }
 
 onMounted(() => {
+    if (props.debugAvailable) debug.value = sessionStorage.getItem('assistant-search-debug') === '1'
     viewport = window.visualViewport
     viewport?.addEventListener('resize', fitViewport)
     fitViewport()
     desktop = window.matchMedia('(min-width: 1024px)')
     desktop.addEventListener('change', closeDrawerOnDesktop)
     if (props.historyEnabled) void history.loadList()
+})
+
+watch(debug, enabled => {
+    local.debug = history.debug = enabled
+    if (!props.debugAvailable) return
+    sessionStorage.setItem('assistant-search-debug', enabled ? '1' : '0')
+    if (history.activeId && !history.pending) void refreshHistory()
 })
 onUnmounted(() => {
     viewport?.removeEventListener('resize', fitViewport)
@@ -157,25 +167,34 @@ const sidebarProps = computed(() => ({
             </dialog>
             <section class="flex min-h-0 min-w-0 flex-1 flex-col">
                 <header class="shrink-0 border-b border-base-300/75 bg-base-100">
-                    <div class="mx-auto flex w-full max-w-[66rem] items-center justify-between gap-3 px-4 py-3 sm:px-7 sm:py-4">
+                    <div class="mx-auto flex w-full max-w-[66rem] flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 py-3 sm:px-7 sm:py-4">
                         <div class="flex min-w-0 items-center gap-2 sm:gap-3">
                             <button v-if="historyEnabled" ref="historyToggle" type="button" class="btn btn-ghost min-h-11 w-11 shrink-0 rounded-xl px-0 text-primary"
                                     aria-label="Открыть или свернуть историю" @click="toggleHistory">
                                 <ClockIcon class="h-5 w-5" aria-hidden="true" />
                             </button>
                             <div class="min-w-0">
-                                <h1 class="text-lg font-extrabold leading-tight tracking-tight sm:text-xl">Library Stroll <span class="text-primary">AI</span></h1>
+                                <h1 class="whitespace-nowrap text-lg font-extrabold leading-tight tracking-tight sm:text-xl">Library Stroll <span class="text-primary">AI</span></h1>
                                 <p class="mt-1 flex items-center gap-1.5 text-xs font-medium text-base-content/70 sm:text-sm">
                                     <component :is="dialogueEnabled ? ChatBubbleLeftRightIcon : MagnifyingGlassIcon" class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                                     {{ readOnly ? 'Сохранённый диалог' : dialogueEnabled ? 'Диалог с источниками' : 'Поиск изображений' }}
                                 </p>
                             </div>
                         </div>
-                        <button type="button" class="btn btn-ghost min-h-11 shrink-0 gap-1.5 rounded-xl border-base-300 bg-base-100 px-2.5 text-xs sm:gap-2 sm:px-3.5 sm:text-sm" @click="newConversation">
-                            <PlusIcon class="h-4 w-4 shrink-0" aria-hidden="true" />
-                            Новый диалог
-                        </button>
+                        <div class="ml-auto flex shrink-0 flex-wrap justify-end gap-1 sm:gap-2">
+                            <a v-if="exportUrl" :href="exportUrl" class="btn btn-ghost min-h-11 rounded-xl px-2 text-xs sm:px-3 sm:text-sm" download>
+                                Экспорт JSON
+                            </a>
+                            <button type="button" class="btn btn-ghost min-h-11 gap-1.5 rounded-xl border-base-300 bg-base-100 px-2.5 text-xs sm:gap-2 sm:px-3.5 sm:text-sm" @click="newConversation">
+                                <PlusIcon class="h-4 w-4 shrink-0" aria-hidden="true" />
+                                Новый диалог
+                            </button>
+                        </div>
                     </div>
+                    <label v-if="debugAvailable" class="mx-auto flex min-h-10 w-full max-w-[66rem] items-center gap-2 px-4 pb-2 text-sm sm:px-7">
+                        <input v-model="debug" type="checkbox" class="toggle toggle-sm toggle-primary" :disabled="chat.pending">
+                        Диагностика поиска
+                    </label>
                 </header>
 
                 <div ref="conversation" class="min-h-0 flex-1 overflow-y-auto overscroll-y-contain" role="region" aria-label="Диалог с ассистентом" tabindex="0">
@@ -195,7 +214,7 @@ const sidebarProps = computed(() => ({
                                 <p class="mb-4 ml-auto w-fit max-w-[92%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-primary/10 px-4 py-3 text-sm font-semibold leading-relaxed [overflow-wrap:anywhere] sm:max-w-[80%] sm:text-base">
                                     <span class="sr-only">Вы: </span>{{ turn.query }}
                                 </p>
-                                <AssistantMessage :reply="turn.reply" :pending="chat.pending" @retry="local.retry(turn)" />
+                                <AssistantMessage :reply="turn.reply" :pending="chat.pending" :debug="debug" @retry="local.retry(turn)" />
                             </li>
                         </ol>
                     </div>

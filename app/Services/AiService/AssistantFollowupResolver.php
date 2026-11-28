@@ -2,6 +2,7 @@
 
 namespace App\Services\AiService;
 
+use App\Services\Search\AssistantSearchDiagnostics;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use stdClass;
@@ -13,8 +14,10 @@ class AssistantFollowupResolver
 
     public function resolve(array $payload): ?array
     {
+        $trace = AssistantSearchDiagnostics::current();
         $key = config('ai.api_key');
         if (! is_string($key) || trim($key) === '') {
+            $trace?->error('resolver', 'service_key_missing');
             return null;
         }
 
@@ -30,13 +33,18 @@ class AssistantFollowupResolver
             if (defined('CURLOPT_QUICK_EXIT')) {
                 $request->withOptions(['curl' => [CURLOPT_QUICK_EXIT => true]]);
             }
+            if ($trace) {
+                $request->withHeader('X-Assistant-Debug', '1');
+            }
 
             $response = $request->post('/api/v1/assistant/resolve-followup', $payload);
+            $trace?->observe('resolver', $response);
             if (! $response->ok()) {
                 return in_array($response->status(), [503, 504], true) ? null : self::CLARIFY;
             }
             $plan = json_decode($response->body());
         } catch (Throwable $error) {
+            $trace?->error('resolver', 'transport_failure');
             Log::warning('Assistant follow-up resolution unavailable.', ['exception_type' => $error::class]);
 
             return null;

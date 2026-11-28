@@ -5,12 +5,14 @@ import { assistantError, assistantQueryLimit, ragReply } from './assistantReplie
 const endpoint = '/assistant/conversations'
 const uuid = /^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i
 const validId = (id) => typeof id === 'string' && uuid.test(id)
-const options = (signal) => ({ signal, timeout: 90_000, headers: { Accept: 'application/json' } })
+const options = (signal, debug) => ({ signal, timeout: 90_000, headers: {
+    Accept: 'application/json', ...(debug ? { 'X-Assistant-Debug': '1' } : {}),
+} })
 const api = {
     list: (page, signal) => axios.get(endpoint, { ...options(signal), params: { page } }).then(response => response.data),
-    show: (id, page, signal) => axios.get(`${endpoint}/${id}`, { ...options(signal), params: { page } }).then(response => response.data),
+    show: (id, page, signal, debug) => axios.get(`${endpoint}/${id}`, { ...options(signal, debug), params: { page } }).then(response => response.data),
     create: (signal) => axios.post(endpoint, {}, options(signal)).then(response => response.data),
-    send: (id, query, signal) => axios.post(`${endpoint}/${id}/turns`, { query, limit: 10 }, options(signal)).then(response => response.data),
+    send: (id, query, signal, debug) => axios.post(`${endpoint}/${id}/turns`, { query, limit: 10 }, options(signal, debug)).then(response => response.data),
     remove: (id, signal) => axios.delete(`${endpoint}/${id}`, options(signal)),
 }
 
@@ -27,6 +29,7 @@ function historyTurn(turn) {
 }
 
 export function useAssistantConversation(client = api, queryLimit = assistantQueryLimit) {
+    const debug = ref(false)
     const draft = ref('')
     const activeId = ref(null)
     const rows = ref([])
@@ -90,7 +93,7 @@ export function useAssistantConversation(client = api, queryLimit = assistantQue
         }
         const current = () => historyRequest.value === operation && activeId.value === id
         try {
-            const data = await client.show(id, page, operation.signal)
+            const data = await client.show(id, page, operation.signal, debug.value)
             if (!current()) return false
             if (data.conversation.id !== id) throw new Error('Unexpected conversation')
             const incoming = data.turns.filter(turn => validId(turn.id) && Number.isSafeInteger(turn.sequence)).map(historyTurn)
@@ -173,7 +176,7 @@ export function useAssistantConversation(client = api, queryLimit = assistantQue
                 conversations.value = mergeById([conversation], conversations.value.filter(item => item.id !== conversation.id))
                 void loadList()
             }
-            const data = await client.send(operation.id, operation.query, operation.controller.signal)
+            const data = await client.send(operation.id, operation.query, operation.controller.signal, debug.value)
             if (!current()) return
             if (!validId(data.turn_id) || !Number.isSafeInteger(data.sequence)) throw new Error('Unconfirmed turn')
             rows.value = sortTurns(mergeById(rows.value, [{ id: data.turn_id, sequence: data.sequence, query: operation.query, reply: ragReply(data) }]))
@@ -227,6 +230,6 @@ export function useAssistantConversation(client = api, queryLimit = assistantQue
         post.value = null
     })
 
-    return { draft, activeId, turns, conversations, listMore, listError, listRequest, historyMore, historyError,
+    return { debug, draft, activeId, turns, conversations, listMore, listError, listRequest, historyMore, historyError,
         historyRequest, pending, canSend, notice, deletion, deleteError, loadList, loadHistory, open, refresh, send, cancel, restoreDraft, remove }
 }

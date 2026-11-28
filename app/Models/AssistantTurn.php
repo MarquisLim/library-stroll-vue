@@ -19,9 +19,9 @@ class AssistantTurn extends Model
         'clarification_required',
     ];
 
-    protected $fillable = ['sequence', 'user_query', 'result_status', 'requested_limit', 'source_references'];
+    protected $fillable = ['sequence', 'user_query', 'result_status', 'requested_limit', 'source_references', 'diagnostics', 'fallback_source_ids'];
 
-    protected $hidden = ['user_query', 'source_references'];
+    protected $hidden = ['user_query', 'source_references', 'diagnostics', 'fallback_source_ids'];
 
     protected function casts(): array
     {
@@ -30,6 +30,8 @@ class AssistantTurn extends Model
             'user_query' => 'encrypted',
             'requested_limit' => 'integer',
             'source_references' => 'array',
+            'diagnostics' => 'encrypted:array',
+            'fallback_source_ids' => 'array',
         ];
     }
 

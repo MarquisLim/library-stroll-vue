@@ -2,6 +2,7 @@
 
 namespace App\Services\AiService;
 
+use App\Services\Search\AssistantSearchDiagnostics;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -16,8 +17,10 @@ class AssistantQueryNormalizer
      */
     public function normalize(string $query): ?array
     {
+        $trace = AssistantSearchDiagnostics::current();
         $key = config('ai.api_key');
         if (! is_string($key) || trim($key) === '') {
+            $trace?->error('normalizer', 'service_key_missing');
             return null;
         }
 
@@ -32,10 +35,15 @@ class AssistantQueryNormalizer
             if (defined('CURLOPT_QUICK_EXIT')) {
                 $request->withOptions(['curl' => [CURLOPT_QUICK_EXIT => true]]);
             }
+            if ($trace) {
+                $request->withHeader('X-Assistant-Debug', '1');
+            }
 
             $response = $request->post('/api/v1/assistant/normalize', ['query' => $query]);
+            $trace?->observe('normalizer', $response);
             $result = $response->ok() ? $response->json() : null;
         } catch (Throwable $error) {
+            $trace?->error('normalizer', 'transport_failure');
             Log::warning('Assistant query normalization unavailable.', ['exception_type' => $error::class]);
 
             return null;

@@ -2,6 +2,7 @@
 
 namespace App\Services\AiService;
 
+use App\Services\Search\AssistantSearchDiagnostics;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use stdClass;
@@ -13,8 +14,13 @@ class AssistantAnswerComposer
 
     public function compose(string $query, array $facts): ?array
     {
+        $trace = AssistantSearchDiagnostics::current();
         $key = config('ai.api_key');
         if (! is_string($key) || trim($key) === '') {
+            if ($trace) {
+                $trace->data['rag']['transport_attempted'] = false;
+            }
+            $trace?->error('composer', 'service_key_missing');
             return null;
         }
 
@@ -29,10 +35,16 @@ class AssistantAnswerComposer
             if (defined('CURLOPT_QUICK_EXIT')) {
                 $request->withOptions(['curl' => [CURLOPT_QUICK_EXIT => true]]);
             }
+            if ($trace) {
+                $request->withHeader('X-Assistant-Debug', '1');
+                $trace->data['rag']['transport_attempted'] = true;
+            }
 
             $response = $request->post('/api/v1/assistant/compose', ['query' => $query, 'facts' => $facts]);
+            $trace?->observe('composer', $response);
             $plan = $response->ok() ? json_decode($response->body()) : null;
         } catch (Throwable $error) {
+            $trace?->error('composer', 'transport_failure');
             Log::warning('Assistant answer composition unavailable.', ['exception_type' => $error::class]);
 
             return null;

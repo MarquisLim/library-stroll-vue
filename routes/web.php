@@ -30,6 +30,7 @@ use App\Http\Controllers\StudioController;
 use App\Http\Controllers\User\BlockController;
 use App\Http\Controllers\User\UserController;
 use App\Http\Middleware\AuthorizeAssistantSearch;
+use App\Services\Search\AssistantSearchDiagnostics;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -63,6 +64,7 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'auth:web',
             'dialogueEnabled' => config('ai.assistant_history_enabled') && config('ai.assistant_rag_enabled'),
             'contextEnabled' => config('ai.assistant_history_enabled') && config('ai.assistant_rag_enabled') && config('ai.assistant_context_enabled'),
             'dialogueQueryLimit' => config('ai.assistant_history.max_query_chars'),
+            ...(AssistantSearchDiagnostics::allowed(request()->user()) ? ['debugAvailable' => true] : []),
         ]))
             ->name('assistant.index');
         Route::get('/assistant/artworks/{artwork}/preview', AssistantArtworkPreviewController::class)
@@ -79,6 +81,7 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'auth:web',
                 Route::post('/', 'store')->name('store');
                 Route::get('/', 'index')->name('index');
                 Route::get('/{conversation}', 'show')->whereUuid('conversation')->name('show');
+                Route::get('/{conversation}/export', 'export')->whereUuid('conversation')->name('export');
                 Route::delete('/{conversation}', 'destroy')->whereUuid('conversation')->name('destroy');
                 Route::post('/{conversation}/turns', AssistantTurnController::class)
                     ->whereUuid('conversation')->name('turns.store');

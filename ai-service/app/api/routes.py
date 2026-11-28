@@ -1,10 +1,11 @@
 import asyncio
+import json
 import logging
 from typing import Annotated
 from uuid import UUID
 
 import httpx
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Path, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Path, Request, Response, UploadFile
 from fastapi.responses import JSONResponse
 
 from app.api.dependencies import require_api_key, verify_api_key
@@ -52,6 +53,11 @@ def get_artwork_service() -> ArtworkService:
     return get_service()
 
 
+def record_assistant_model(request: Request, response: Response) -> None:
+    if request.headers.get("X-Assistant-Debug") == "1":
+        response.headers["X-Assistant-Model"] = settings.ollama_chat_model
+
+
 @router.post(
     "/api/v1/assistant/normalize",
     response_model=AssistantNormalizeResponse,
@@ -60,11 +66,15 @@ def get_artwork_service() -> ArtworkService:
 async def normalize_assistant_query(
     body: AssistantNormalizeRequest,
     svc: Annotated[ArtworkService, Depends(get_artwork_service)],
+    request: Request,
+    response: Response,
 ) -> AssistantNormalizeResponse:
     if not (settings.ai_assistant_enabled and settings.ai_assistant_llm_enabled):
         raise HTTPException(status_code=404, detail="assistant_normalization_disabled")
     try:
-        return await svc.ollama.normalize_assistant_query(body.query)
+        plan = await svc.ollama.normalize_assistant_query(body.query)
+        record_assistant_model(request, response)
+        return plan
     except (TimeoutError, httpx.TimeoutException):
         logger.warning("Assistant normalization timed out")
         raise HTTPException(status_code=504, detail="assistant_normalization_timeout") from None
@@ -81,6 +91,8 @@ async def normalize_assistant_query(
 async def compose_assistant_answer(
     body: AssistantComposeRequest,
     svc: Annotated[ArtworkService, Depends(get_artwork_service)],
+    request: Request,
+    response: Response,
 ) -> AssistantComposePlan:
     if not (settings.ai_assistant_enabled and settings.ai_assistant_rag_enabled):
         raise HTTPException(status_code=404, detail="assistant_composition_disabled")
@@ -89,6 +101,7 @@ async def compose_assistant_answer(
         allowed = {fact.pair() for fact in body.facts}
         if any(selection.pair() not in allowed for selection in plan.selections):
             raise ValueError("Unknown assistant fact")
+        record_assistant_model(request, response)
         return plan
     except AssistantComposeBudgetError:
         raise HTTPException(status_code=422, detail="assistant_context_too_large") from None
@@ -108,6 +121,8 @@ async def compose_assistant_answer(
 async def resolve_assistant_followup(
     body: AssistantFollowupRequest,
     svc: Annotated[ArtworkService, Depends(get_artwork_service)],
+    request: Request,
+    response: Response,
 ) -> AssistantFollowupPlan:
     if not (settings.ai_assistant_enabled and settings.ai_assistant_rag_enabled and settings.ai_assistant_context_enabled):
         raise HTTPException(status_code=404, detail="assistant_followup_disabled")
@@ -118,6 +133,7 @@ async def resolve_assistant_followup(
         allowed = {fact.source_ref for fact in body.facts}
         if not set(plan.source_refs).issubset(allowed):
             raise ValueError("Unknown follow-up source")
+        record_assistant_model(request, response)
         return plan
     except AssistantComposeBudgetError:
         raise HTTPException(status_code=422, detail="assistant_context_too_large") from None
@@ -319,11 +335,17 @@ async def delete_artwork_index(
 async def search(
     body: SearchRequest,
     svc: Annotated[ArtworkService, Depends(get_artwork_service)],
+    request: Request,
+    response: Response,
 ):
     try:
+        debug = request.headers.get("X-Assistant-Debug") == "1"
         result = await svc.search(
-            query=body.query, limit=body.limit, filters=body.filters
+            query=body.query, limit=body.limit, filters=body.filters,
+            **({"diagnostics": True} if debug else {}),
         )
+        if debug and "diagnostics" in result:
+            response.headers["X-Assistant-Dense-Stages"] = json.dumps(result["diagnostics"])
         return SearchResponse(
             results=[SearchResultItem(**r) for r in result["results"]],
             model=result["model"],

@@ -5,6 +5,7 @@ namespace App\Services\Search;
 use App\Contracts\AiServiceClient;
 use App\Models\Artwork;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -28,11 +29,22 @@ class HybridSearchService
         int $page = 1,
         int $perPage = 20,
     ): array {
+        $trace = AssistantSearchDiagnostics::current();
         $lexicalLimit = config('ai.search.lexical_limit', 50);
         $semanticLimit = config('ai.search.semantic_limit', 50);
         $rrfK = config('ai.search.rrf_k', 60);
 
+        $trace?->used($query);
+        $start = $trace ? hrtime(true) : 0;
         $lexicalIds = $this->lexicalSearch($query, $filters, $lexicalLimit);
+        if ($trace) {
+            $trace->data['filters'] = ['lexical_and_hybrid' => $filters, 'dense' => null, 'qdrant' => null,
+                'assistant_visibility' => ['public', 'policy_view', 'ai_indexing_enabled', 'available_image']];
+            $trace->stage('lexical', $start, count($lexicalIds), ['match' => 'title_like', 'limit' => $lexicalLimit]);
+            foreach ($lexicalIds as $rank => $id) {
+                $trace->candidate($id, ['lexical_rank' => $rank + 1]);
+            }
+        }
 
         $semanticIds = [];
         if (config('ai.enabled')) {
@@ -55,13 +67,21 @@ class HybridSearchService
         }
 
         $finalLimit = $lexicalLimit + $semanticLimit;
+        $start = $trace ? hrtime(true) : 0;
         $fused = $this->rrf->fuse($rankedLists, $rrfK, $finalLimit);
+        if ($trace) {
+            $trace->stage('rrf', $start, count($fused), ['k' => $rrfK, 'limit' => $finalLimit]);
+            foreach ($fused as $rank => $row) {
+                $trace->candidate($row['id'], ['rrf_score' => $row['score'], 'rrf_rank' => $rank + 1]);
+            }
+        }
         $fusedIds = array_column($fused, 'id');
 
         if (empty($fusedIds)) {
             return ['artworks' => collect(), 'total' => 0];
         }
 
+        $start = $trace ? hrtime(true) : 0;
         $query_builder = Artwork::publiclyVisible()
             ->whereIn('id', $fusedIds)
             ->with(['user', 'media', 'likes', 'tags', 'collections'])
@@ -86,6 +106,19 @@ class HybridSearchService
                     ->where('user_id', $userId)
                     ->pluck('id')
                     ->toArray();
+            }
+        }
+
+        if ($trace) {
+            $trace->stage('hybrid', $start, $total, ['page_count' => $paged->count(), 'page' => $page, 'page_size' => $perPage]);
+            foreach ($sorted as $rank => $work) {
+                $trace->candidate($work->id, ['hybrid_rank' => $rank + 1]);
+            }
+            foreach (array_diff($sorted->pluck('id')->all(), $paged->pluck('id')->all()) as $id) {
+                $trace->exclude($id, 'outside_hybrid_page');
+            }
+            foreach (array_diff($fusedIds, $sorted->pluck('id')->all()) as $id) {
+                $trace->exclude($id, 'hybrid_public_scope_or_filters');
             }
         }
 
@@ -115,6 +148,8 @@ class HybridSearchService
      */
     private function semanticSearch(string $query, array $filters, int $limit): array
     {
+        $trace = AssistantSearchDiagnostics::current();
+        $start = $trace ? hrtime(true) : 0;
         try {
             $aiClient = app(AiServiceClient::class);
             $semanticFilters = [];
@@ -127,10 +162,25 @@ class HybridSearchService
                     };
                 }
             }
+            if ($trace) {
+                $trace->data['filters']['dense'] = $semanticFilters;
+            }
             $result = $aiClient->search($query, $limit, $semanticFilters);
+            if ($trace) {
+                $trace->stage('dense', $start, count($result->results),
+                    ['limit' => $limit, 'service_ms' => $result->latencyMs, 'scope' => 'after_fastapi_visibility']);
+                $trace->model('dense', $result->model);
+                foreach ($result->results as $row) {
+                    if (is_int($row['artwork_id'] ?? null)) {
+                        $trace->candidate($row['artwork_id'], ['dense_rank' => $row['rank'] ?? null, 'dense_score' => $row['score'] ?? null]);
+                    }
+                }
+            }
 
             return $result->artworkIds();
         } catch (\Throwable $e) {
+            $trace?->stage('dense', $start);
+            $trace?->error('dense', 'lexical_only_fallback', $e instanceof RequestException ? $e->response->status() : null);
             Log::warning('Semantic search failed, using lexical only.', [
                 'exception_type' => $e::class,
             ]);
