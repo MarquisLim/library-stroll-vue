@@ -4,15 +4,17 @@ import { computed } from 'vue'
 const { trace } = defineProps({ trace: Object })
 
 const stages = {
-    recent_history: 'История', resolver_context: 'Контекст диалога', resolver: 'Определение намерения',
+    recent_history: 'История', intent: 'Классификация намерения', resolver_context: 'Контекст диалога', resolver: 'Выбор прежних источников',
     normalizer: 'Нормализация', lexical: 'Лексический поиск по названию', dense: 'Dense Search',
     rrf: 'Объединение RRF', hybrid: 'Hybrid Search', assistant_visibility: 'Доступные изображения',
     previous_sources: 'Источники из диалога', rag_pack: 'Подготовка фактов', composer: 'Выбор фактов',
     rag_recheck: 'Проверка источников', final: 'Итоговые карточки',
 }
-const actions = { new_search: 'Новый поиск', use_previous: 'Источники предыдущих ответов', clarify: 'Уточнение' }
+const actions = { new_search: 'Новый поиск', use_previous: 'Источники предыдущих ответов', clarify: 'Уточнение', informational: 'Информационный ответ' }
+const methods = { rule: 'Локальное правило', llm: 'LLM', fallback: 'Резервное правило' }
 const packing = { legacy: 'Стандартная', visual_priority: 'Приоритет визуальных фактов' }
 const number = value => Number.isFinite(value) ? value.toLocaleString('ru-RU', { maximumFractionDigits: 3 }) : '—'
+const execution = value => value === true ? 'Запущен' : value === false ? 'Пропущен' : '—'
 const executed = computed(() => Object.entries(trace?.stages ?? {}).filter(([, details]) => details != null))
 </script>
 
@@ -25,6 +27,17 @@ const executed = computed(() => Object.entries(trace?.stages ?? {}).filter(([, d
                 <dt>Поисковый запрос</dt><dd>{{ trace.query.used ?? '—' }}</dd>
                 <dt>Обработка диалога</dt><dd>{{ actions[trace.dialogue?.action] ?? '—' }}</dd>
                 <dt>Решение обработчика</dt><dd>{{ actions[trace.dialogue?.resolver_action] ?? '—' }}</dd>
+                <template v-if="trace.intent">
+                    <dt>Намерение</dt><dd>{{ trace.intent.intent }}</dd>
+                    <dt>Классификация</dt><dd>{{ methods[trace.intent.method] }} · {{ number(trace.intent.ms) }} мс</dd>
+                    <dt>Причина fallback</dt><dd>{{ trace.intent.fallback_reason ?? trace.intent.context_reason ?? '—' }}</dd>
+                    <dt>Токены классификации</dt><dd>{{ number(trace.intent.tokens?.prompt_tokens) }} вход, {{ number(trace.intent.tokens?.output_tokens) }} выход</dd>
+                </template>
+                <template v-if="trace.execution">
+                    <dt>Поиск кандидатов</dt><dd>{{ execution(trace.execution.retrieval_started) }}</dd>
+                    <dt>Composer</dt><dd>{{ execution(trace.execution.composer_started) }}</dd>
+                    <dt>Вызовы LLM</dt><dd>{{ Object.entries(trace.llm_calls ?? {}).map(([stage, count]) => `${stages[stage]}: ${number(count)}`).join(' · ') }}</dd>
+                </template>
                 <dt>Фильтры</dt><dd>{{ trace.filters ? JSON.stringify(trace.filters) : '—' }}</dd>
                 <dt>Время запроса</dt><dd>{{ number(trace.performance.total_ms) }} мс</dd>
                 <dt>Запись диагностики</dt><dd>{{ number(trace.performance.capture_ms) }} мс</dd>

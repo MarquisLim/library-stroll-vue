@@ -52,7 +52,7 @@ class AssistantConversationController extends Controller
             $debug = AssistantSearchDiagnostics::requested($request);
             [$page, $size] = $this->pagination($request);
             $turns = $owned->turns()->useWritePdo()->orderByDesc('sequence')->simplePaginate($size, [
-                'id', 'sequence', 'user_query', 'result_status', 'requested_limit', 'source_references', 'created_at', 'updated_at',
+                'id', 'sequence', 'user_query', 'result_status', 'requested_limit', 'source_references', 'reply_code', 'created_at', 'updated_at',
                 ...($debug ? ['diagnostics'] : []),
             ], 'page', $page);
             $resolved = $sources->resolve($turns->getCollection()->flatMap(fn (AssistantTurn $turn) => $turn->citations())->all(), $request->user());
@@ -69,6 +69,7 @@ class AssistantConversationController extends Controller
                     'created_at' => $turn->created_at->toISOString(),
                     'updated_at' => $turn->updated_at->toISOString(),
                     ...$sources->restore($turn->citations(), $resolved),
+                    ...$turn->replyPayload(),
                     ...($debug ? $this->debugHistory($turn, $diagnostics[$turn->id] ?? null) : []),
                 ])->all(),
                 'pagination' => $this->paginationData($turns),

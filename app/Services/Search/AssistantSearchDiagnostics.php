@@ -31,22 +31,25 @@ final class AssistantSearchDiagnostics
     {
         $this->started = hrtime(true);
         $flags = ['enabled', 'assistant_enabled', 'assistant_llm_enabled', 'assistant_rag_enabled',
-            'assistant_history_enabled', 'assistant_context_enabled', 'assistant_debug_enabled', 'rerank_enabled',
+            'assistant_history_enabled', 'assistant_context_enabled', 'assistant_intent_routing_enabled', 'assistant_debug_enabled', 'rerank_enabled',
             'colbert_sync.enabled', 'colbert_sync.auto_enabled'];
         $this->data = [
             'schema_version' => 1,
             'captured_at' => now()->toISOString(),
             'query' => ['original' => self::plain($query, 2000), 'used' => null],
             'dialogue' => null,
+            'intent' => null,
+            'execution' => null,
+            'llm_calls' => array_fill_keys(['intent', 'normalizer', 'resolver', 'composer'], 0),
             'filters' => null,
-            'stages' => array_fill_keys(['recent_history', 'resolver_context', 'resolver', 'normalizer', 'lexical', 'dense',
+            'stages' => array_fill_keys(['recent_history', 'intent', 'resolver_context', 'resolver', 'normalizer', 'lexical', 'dense',
                 'rrf', 'hybrid', 'assistant_visibility', 'previous_sources', 'rag_pack', 'composer', 'rag_recheck', 'final'], null),
             'dense_service' => null,
             'rag' => null,
             'performance' => ['total_ms' => null, 'capture_ms' => null],
             'configuration' => [
                 'flags' => array_combine($flags, array_map(fn ($flag) => (bool) config('ai.'.$flag), $flags)),
-                'models' => ['dense' => null, 'normalizer' => null, 'resolver' => null, 'composer' => null],
+                'models' => ['dense' => null, 'intent' => null, 'normalizer' => null, 'resolver' => null, 'composer' => null],
                 'metadata_schema_version' => config('ai.schema_version'),
                 'prompt_version' => config('ai.prompt_version'),
                 'search' => array_intersect_key(config('ai.search'), array_flip(['lexical_limit', 'semantic_limit', 'rrf_k'])),
@@ -112,11 +115,27 @@ final class AssistantSearchDiagnostics
 
     public function observe(string $stage, Response $response): void
     {
+        if (array_key_exists($stage, $this->data['llm_calls'])) {
+            $calls = self::usage($response, ['Model-Calls'])['model_calls'] ?? null;
+            $this->data['llm_calls'][$stage] = $calls === 0 || $calls === 1 ? $calls : ($response->ok() ? 1 : null);
+        }
         if ($response->ok()) {
             $this->model($stage, $response->header('X-Assistant-Model'));
         } else {
             $this->error($stage, $response->status() === 504 ? 'service_timeout' : 'service_rejected', $response->status());
         }
+    }
+
+    public function modelRequest(string $stage): void
+    {
+        $this->data['llm_calls'][$stage] = null;
+    }
+
+    public function intent(array $classification, string $action, ?string $contextReason): void
+    {
+        $this->data['intent'] = [...$classification, 'intent' => $classification['intent']->value, 'action' => $action,
+            'context_reason' => $contextReason, 'ms' => $this->data['stages']['intent']['ms']];
+        $this->data['llm_calls']['intent'] = $classification['llm_calls'];
     }
 
     public function candidate(int $id, array $fields): void
@@ -159,14 +178,21 @@ final class AssistantSearchDiagnostics
 
     public function composerUsage(Response $response): void
     {
+        $usage = self::usage($response, ['Context-Bytes', 'Prompt-Bytes', 'Prompt-Tokens', 'Output-Tokens']);
+        $this->data['rag']['composer_usage'] = $usage ?: null;
+    }
+
+    public static function usage(Response $response, array $metrics): array
+    {
         $usage = [];
-        foreach (['Context-Bytes', 'Prompt-Bytes', 'Prompt-Tokens', 'Output-Tokens'] as $metric) {
+        foreach ($metrics as $metric) {
             $value = $response->header('X-Assistant-'.$metric);
             if (is_string($value) && preg_match('/\A[0-9]{1,4}\z/', $value)) {
                 $usage[strtolower(str_replace('-', '_', $metric))] = (int) $value;
             }
         }
-        $this->data['rag']['composer_usage'] = $usage ?: null;
+
+        return $usage;
     }
 
     public function retainMetadata(Collection $works): void
@@ -192,6 +218,8 @@ final class AssistantSearchDiagnostics
     {
         $capture = hrtime(true);
         $this->stage('final', $capture, count($sources), ['status' => $status]);
+        $this->data['execution'] = ['retrieval_started' => $this->data['stages']['lexical'] !== null,
+            'composer_started' => $this->data['stages']['composer'] !== null];
         foreach ($sources as $index => $source) {
             $this->candidate($source['artwork_id'], ['final' => true, 'final_rank' => $index + 1]);
         }

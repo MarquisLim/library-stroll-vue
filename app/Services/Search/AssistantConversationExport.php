@@ -31,7 +31,7 @@ final class AssistantConversationExport
                 $row = $this->turn($turn, $user, $extended);
                 $assistant = ['role' => 'assistant', 'turn_id' => $turn->id, 'sequence' => $turn->sequence,
                     'created_at' => $turn->created_at->toISOString(), 'status' => $turn->result_status,
-                    'answer' => $row['answer'], 'source_status' => $row['source_status']];
+                    'answer' => $row['answer'], 'source_status' => $row['source_status'], ...$turn->replyPayload()];
                 $userMessage = ['role' => 'user', 'turn_id' => $turn->id, 'sequence' => $turn->sequence,
                     'created_at' => $turn->created_at->toISOString(), 'query' => AssistantSearchDiagnostics::redactSecrets($turn->user_query),
                     'requested_limit' => $turn->requested_limit];

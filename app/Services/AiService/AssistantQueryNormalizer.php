@@ -39,6 +39,7 @@ class AssistantQueryNormalizer
                 $request->withHeader('X-Assistant-Debug', '1');
             }
 
+            $trace?->modelRequest('normalizer');
             $response = $request->post('/api/v1/assistant/normalize', ['query' => $query]);
             $trace?->observe('normalizer', $response);
             $result = $response->ok() ? $response->json() : null;

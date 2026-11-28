@@ -17,6 +17,8 @@ from app.schemas.assistant import (
     AssistantComposeRequest,
     AssistantFollowupPlan,
     AssistantFollowupRequest,
+    AssistantIntentPlan,
+    AssistantIntentRequest,
 )
 from app.schemas.requests import (
     AssistantNormalizeRequest,
@@ -100,7 +102,7 @@ async def compose_assistant_answer(
 ) -> AssistantComposePlan:
     if not (settings.ai_assistant_enabled and settings.ai_assistant_rag_enabled):
         raise HTTPException(status_code=404, detail="assistant_composition_disabled")
-    usage = {} if request.headers.get("X-Assistant-Debug") == "1" else None
+    usage = {"model_calls": 0} if request.headers.get("X-Assistant-Debug") == "1" else None
     try:
         plan = await svc.ollama.compose_assistant_answer(body, usage)
         allowed = {fact.pair() for fact in body.facts}
@@ -110,7 +112,8 @@ async def compose_assistant_answer(
         response.headers.update(assistant_usage_headers(usage))
         return plan
     except AssistantComposeBudgetError:
-        raise HTTPException(status_code=422, detail="assistant_context_too_large") from None
+        raise HTTPException(status_code=422, detail="assistant_context_too_large",
+                            headers=assistant_usage_headers(usage)) from None
     except (TimeoutError, httpx.TimeoutException):
         logger.warning("Assistant composition timed out")
         raise HTTPException(status_code=504, detail="assistant_composition_timeout",
@@ -136,21 +139,59 @@ async def resolve_assistant_followup(
         raise HTTPException(status_code=404, detail="assistant_followup_disabled")
     if not body.previous_queries and not body.facts:
         return AssistantFollowupPlan(action="clarify", source_refs=[])
+    usage = {"model_calls": 0} if request.headers.get("X-Assistant-Debug") == "1" else None
     try:
-        plan = await svc.ollama.resolve_assistant_followup(body)
+        plan = await svc.ollama.resolve_assistant_followup(body, usage)
         allowed = {fact.source_ref for fact in body.facts}
         if not set(plan.source_refs).issubset(allowed):
             raise ValueError("Unknown follow-up source")
         record_assistant_model(request, response)
+        response.headers.update(assistant_usage_headers(usage))
         return plan
     except AssistantComposeBudgetError:
-        raise HTTPException(status_code=422, detail="assistant_context_too_large") from None
+        raise HTTPException(status_code=422, detail="assistant_context_too_large",
+                            headers=assistant_usage_headers(usage)) from None
     except (TimeoutError, httpx.TimeoutException):
         logger.warning("Assistant follow-up resolution timed out")
-        raise HTTPException(status_code=504, detail="assistant_followup_timeout") from None
+        raise HTTPException(status_code=504, detail="assistant_followup_timeout",
+                            headers=assistant_usage_headers(usage)) from None
     except (httpx.HTTPError, ValueError) as exc:
         logger.warning("Assistant follow-up resolution failed (%s)", type(exc).__name__)
-        raise HTTPException(status_code=502, detail="assistant_followup_unavailable") from None
+        raise HTTPException(status_code=502, detail="assistant_followup_unavailable",
+                            headers=assistant_usage_headers(usage)) from None
+
+
+@router.post(
+    "/api/v1/assistant/classify-intent",
+    response_model=AssistantIntentPlan,
+    dependencies=[Depends(require_api_key)],
+)
+async def classify_assistant_intent(
+    body: AssistantIntentRequest,
+    svc: Annotated[ArtworkService, Depends(get_artwork_service)],
+    request: Request,
+    response: Response,
+) -> AssistantIntentPlan:
+    if not (settings.ai_assistant_enabled and settings.ai_assistant_rag_enabled and settings.ai_assistant_intent_routing_enabled):
+        raise HTTPException(status_code=404, detail="assistant_intent_disabled")
+    usage = {"model_calls": 0} if request.headers.get("X-Assistant-Debug") == "1" else None
+    try:
+        plan = await svc.ollama.classify_assistant_intent(body, usage)
+        record_assistant_model(request, response)
+        response.headers.update(assistant_usage_headers(usage))
+        return plan
+    except AssistantComposeBudgetError:
+        raise HTTPException(status_code=422, detail="assistant_intent_context_too_large",
+                            headers=assistant_usage_headers(usage)) from None
+    except (TimeoutError, httpx.TimeoutException):
+        raise HTTPException(status_code=504, detail="assistant_intent_timeout",
+                            headers=assistant_usage_headers(usage)) from None
+    except httpx.HTTPError:
+        raise HTTPException(status_code=502, detail="assistant_intent_unavailable",
+                            headers=assistant_usage_headers(usage)) from None
+    except ValueError:
+        raise HTTPException(status_code=502, detail="assistant_intent_invalid_result",
+                            headers=assistant_usage_headers(usage)) from None
 
 
 @router.get("/api/v1/diagnostics", dependencies=[Depends(verify_api_key)])

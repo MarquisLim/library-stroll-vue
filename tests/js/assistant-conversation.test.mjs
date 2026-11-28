@@ -4,6 +4,18 @@ import { effectScope } from 'vue'
 import { assistantPreviewUrl, ragReply } from '../../resources/js/composables/assistantReplies.js'
 import { useAssistantConversation } from '../../resources/js/composables/useAssistantConversation.js'
 
+test('renders informational turns consistently after reopening, without artwork cards', () => {
+    const data = { reply: { code: 'en.greeting', text: 'Hello! Describe the image you would like to find.' },
+        answer: [], sources: [{ source_ref: 's1', artwork_id: 12, title: 'Bird', url: '/artworks/12' }] }
+    const fresh = ragReply({ ...data, status: 'informational' })
+    const history = ragReply({ ...data, result_status: 'informational', source_status: 'none' }, true)
+    assert.deepEqual(fresh, history)
+    assert.equal(history.message, data.reply.text)
+    assert.deepEqual(history.results, [])
+    assert.deepEqual(history.fragments, [])
+    assert.equal(ragReply({ ...data, status: 'informational', reply: { code: 'unknown', text: 'Invalid' } }).message, 'Ответ недоступен.')
+})
+
 const id = number => `00000000-0000-4000-8000-${String(number).padStart(12, '0')}`
 const first = id(1)
 const second = id(2)

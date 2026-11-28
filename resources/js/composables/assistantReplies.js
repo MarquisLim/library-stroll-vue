@@ -39,9 +39,10 @@ export function isArtworkCard(card) {
 export function ragReply(data, fromHistory = false) {
     const sourceStatus = fromHistory ? data.source_status : null
     const status = fromHistory ? data.result_status : data.status
+    const informational = status === 'informational'
     const sources = []
     const references = new Map()
-    if (sourceStatus !== 'unavailable' && sourceStatus !== 'none' && Array.isArray(data.sources)) {
+    if (!informational && sourceStatus !== 'unavailable' && sourceStatus !== 'none' && Array.isArray(data.sources)) {
         const counts = new Map()
         for (const source of data.sources) counts.set(source?.source_ref, (counts.get(source?.source_ref) ?? 0) + 1)
         for (const source of data.sources) {
@@ -63,6 +64,15 @@ export function ragReply(data, fromHistory = false) {
         }
     }
 
-    return { status, fragments, results: sources, sourceStatus, message: status === 'clarification_required' ? clarification(data.clarification_code) : null,
+    let message = null
+    if (informational) {
+        const { code, text } = data.reply ?? {}
+        const valid = typeof code === 'string' && /^(ru|en)\.(greeting|capabilities|help|unsupported_media|organize_media|out_of_scope)$/.test(code)
+        message = valid && typeof text === 'string' && text.trim() ? text : 'Ответ недоступен.'
+    } else if (status === 'clarification_required') {
+        message = clarification(data.clarification_code)
+    }
+
+    return { status, fragments, results: sources, sourceStatus: informational ? 'none' : sourceStatus, message,
         ...(Object.hasOwn(data, 'diagnostics') ? { diagnostics: data.diagnostics } : {}) }
 }

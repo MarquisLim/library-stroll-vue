@@ -37,6 +37,7 @@ class AssistantFollowupResolver
                 $request->withHeader('X-Assistant-Debug', '1');
             }
 
+            $trace?->modelRequest('resolver');
             $response = $request->post('/api/v1/assistant/resolve-followup', $payload);
             $trace?->observe('resolver', $response);
             if (! $response->ok()) {

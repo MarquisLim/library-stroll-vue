@@ -7,6 +7,21 @@ from app.schemas.requests import AssistantQuery
 AssistantSourceRef = Annotated[str, StringConstraints(pattern=r"^s[1-5]$", min_length=2, max_length=2)]
 
 
+class AssistantIntentRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    query: AssistantQuery
+
+
+class AssistantIntentPlan(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    intent: Literal[
+        "search_media", "greeting", "capabilities", "help", "followup", "media_question",
+        "unsupported_media", "organize_media", "out_of_scope", "clarify",
+    ]
+
+
 class AssistantFactRef(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 

@@ -44,6 +44,7 @@ class AssistantAnswerComposer
             if ($strategy === AssistantRagContext::VISUAL) {
                 $payload['packing'] = $strategy;
             }
+            $trace?->modelRequest('composer');
             $response = $request->post('/api/v1/assistant/compose', $payload);
             $trace?->observe('composer', $response);
             $trace?->composerUsage($response);
