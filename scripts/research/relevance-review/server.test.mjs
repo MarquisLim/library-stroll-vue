@@ -1,17 +1,17 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { once } from 'node:events';
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmdirSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { loadQueue, reviewServer } from './server.mjs';
+import { loadCatalogQueue, loadQueue, reviewServer } from './server.mjs';
 
 const queue = loadQueue();
 const stateFile = 'reviewer-synthetic-qa.json';
 
-async function start(stateDir) {
-    const server = reviewServer({ queue, stateDir, testMode: true });
+async function start(stateDir, inputs = queue) {
+    const server = reviewServer({ queue: inputs, stateDir, testMode: true });
     server.listen(0, '127.0.0.1');
     await once(server, 'listening');
     const base = `http://127.0.0.1:${server.address().port}`;
@@ -22,6 +22,42 @@ async function start(stateDir) {
         close: () => new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve())),
     };
 }
+
+test('the catalog queue exposes the criterion and image, with independent saved progress', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'catalog-review-test-'));
+    const images = join(dir, 'review-images');
+    const source = join(images, '1.jpg');
+    const queuePath = join(dir, 'review-queue-evaluation.json');
+    const bytes = readFileSync(queue.pairs[0].path);
+    mkdirSync(images);
+    writeFileSync(source, bytes);
+    writeFileSync(queuePath, JSON.stringify([{ query_id: 'R01', artwork_id: 1,
+        query: { text: 'Чашка', lang: 'ru', criterion: 'Видна чашка' },
+        sha256: createHash('sha256').update(bytes).digest('hex'), score: 123, strategy: 'F' }]));
+    const inputs = loadCatalogQueue(dir, 'evaluation');
+    const { request, close } = await start(dir, inputs);
+    try {
+        const initial = await (await request('/api/session?reviewer=catalog-test')).json();
+        assert.equal(initial.total, inputs.pairs.length);
+        assert.deepEqual(Object.keys(initial.pair).sort(), ['criterion', 'image_url', 'lang', 'text']);
+        assert.equal((await request('/review-queue-evaluation.json')).status, 404);
+        const image = await request(initial.pair.image_url);
+        assert.deepEqual(Buffer.from(await image.arrayBuffer()), readFileSync(inputs.pairs[0].path));
+        await request('/api/session', { reviewer_id: 'catalog-test', position: 0, answer: { position: 0, value: 'unsure' } });
+        const exportData = await (await request('/api/export?reviewer=catalog-test')).json();
+        assert.equal(exportData.source, 'synthetic_test');
+        assert.equal(exportData.queue_sha256, inputs.fingerprint);
+        assert.equal(exportData.ratings[0].relevance, null);
+    } finally {
+        await close();
+        const saved = join(dir, 'reviewer-catalog-test.json');
+        if (existsSync(saved)) unlinkSync(saved);
+        unlinkSync(queuePath);
+        unlinkSync(source);
+        rmdirSync(images);
+        rmdirSync(dir);
+    }
+});
 
 test('607 distinct pairs in the expected three tiers', () => {
     const plan = queue.pairs.map(({ query_id, artwork_id }) => [query_id, artwork_id]);

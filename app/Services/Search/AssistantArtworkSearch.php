@@ -17,10 +17,15 @@ class AssistantArtworkSearch
     /** @return Collection<int, Artwork> */
     public function retrieve(string $query, User $user, bool $withMetadata = false): Collection
     {
-        $candidates = config('ai.assistant_lexical_metadata_enabled')
-            ? $this->search->search($query, ['type' => 'image'], page: 1, perPage: self::CANDIDATE_LIMIT,
-                assistantVisibility: fn (Collection $ids) => $this->visible($ids, $user)->pluck('id'))
-            : $this->search->search($query, ['type' => 'image'], page: 1, perPage: self::CANDIDATE_LIMIT);
+        if (config('ai.assistant_lexical_metadata_enabled')) {
+            $documents = config('ai.assistant_colbert_post_rrf_enabled')
+                ? fn (Collection $ids) => $this->visible($ids, $user, withMetadata: true)
+                : null;
+            $candidates = $this->search->search($query, ['type' => 'image'], page: 1, perPage: self::CANDIDATE_LIMIT,
+                assistantVisibility: fn (Collection $ids) => $this->visible($ids, $user)->pluck('id'), assistantDocuments: $documents);
+        } else {
+            $candidates = $this->search->search($query, ['type' => 'image'], page: 1, perPage: self::CANDIDATE_LIMIT);
+        }
         $ids = $candidates['artworks']->take(self::CANDIDATE_LIMIT)->pluck('id')->unique();
 
         $trace = AssistantSearchDiagnostics::current();

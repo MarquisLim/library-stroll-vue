@@ -1,4 +1,5 @@
 import hashlib
+import json
 import unittest
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from pathlib import Path
@@ -14,7 +15,10 @@ import colbert_state
 
 
 def fake_encode(model, documents, ids):
-    return {artwork_id: SimpleNamespace(shape=(len(documents[artwork_id].split()), 128)) for artwork_id in ids}
+    def vector(text):
+        tokens = len(text.split())
+        return SimpleNamespace(shape=(tokens, 128), numel=lambda: tokens * 128, element_size=lambda: 4)
+    return {artwork_id: vector(documents[artwork_id]) for artwork_id in ids}
 
 
 def fake_rerank(model, query, hits, vectors, synchronize):
@@ -86,6 +90,43 @@ class ColbertDocumentTest(unittest.TestCase):
         self.assertEqual(self.upsert(client, 441101, "new document").status_code, 404)
         self.assertEqual(self.rank(client, 441101).json(), {"detail": "Candidate ID is outside the frozen corpus"})
         self.assertNotIn("encoded_documents_total", client.get("/ready").json())
+
+    def test_frozen_catalog_checks_manifest_and_per_candidate_keys_and_disables_mutation(self):
+        directory = self.state_dir()
+        digest = colbert_state.content_hash
+        text = "a painting with delicate strokes"
+        revision = "a" * 64
+        key = digest(f"{revision}:{digest(text)}")
+        corpus = [{"id": i, "text": text, "revision": revision, "text_sha256": digest(text), "document_key": key}
+                  for i in range(1, 512)]
+        raw = json.dumps(corpus).encode()
+        document_path = directory / "documents.json"
+        document_path.write_bytes(raw)
+        (directory / "documents-manifest.json").write_text(json.dumps({
+            "schema_version": 1, "documents_sha256": hashlib.sha256(raw).hexdigest(),
+            "documents_bytes": len(raw), "document_count": 511,
+        }), encoding="utf-8")
+        app = colbert_http.create_app(directory, directory, "cpu", frozen_catalog=True)
+        with TestClient(app) as client:
+            payload = {"query": "a painting", "artwork_ids": list(range(1, 51)), "document_keys": [key] * 50, "limit": 50}
+            valid = client.post("/api/v1/rerank", json=payload)
+            self.assertEqual(valid.status_code, 200)
+            self.assertEqual([hit["artwork_id"] for hit in valid.json()["results"]], payload["artwork_ids"])
+            self.assertEqual(self.upsert(client, 1, "new text").status_code, 404)
+            for patch_values, code in [
+                ({"artwork_ids": [999, *range(2, 51)]}, 404),
+                ({"document_keys": ["0" * 64, *([key] * 49)]}, 409),
+                ({"artwork_ids": [2, *range(2, 51)]}, 422),
+                ({"document_keys": [key]}, 422),
+                ({"limit": 49}, 422),
+                ({"extra": True}, 422),
+            ]:
+                self.assertEqual(client.post("/api/v1/rerank", json=payload | patch_values).status_code, code)
+            self.rerank.assert_called_once()
+            self.assertEqual(client.get("/ready").json()["document_count"], 511)
+        document_path.write_bytes(raw + b" ")
+        with self.assertRaisesRegex(ValueError, "checksum mismatch"):
+            colbert_http.load_catalog(directory)
 
     def test_dynamic_routes_require_loopback_client_and_host(self):
         app = colbert_http.create_app(Path("."), Path("."), "cpu", dynamic_documents=True)

@@ -184,7 +184,21 @@ class HttpAiServiceClient implements AiServiceClient
 
     public function rerank(string $query, array $artworkIds, int $limit = 20): AiSearchResult
     {
-        $url = config('ai.colbert_url');
+        return $this->requestRerank(config('ai.colbert_url'), [
+            'query' => $query, 'artwork_ids' => $artworkIds, 'limit' => $limit,
+        ]);
+    }
+
+    public function rerankCatalog(string $query, array $documentKeys): AiSearchResult
+    {
+        return $this->requestRerank(config('ai.assistant_colbert_url'), [
+            'query' => $query, 'artwork_ids' => array_keys($documentKeys), 'limit' => count($documentKeys),
+            'document_keys' => array_values($documentKeys),
+        ]);
+    }
+
+    private function requestRerank(?string $url, array $body): AiSearchResult
+    {
         if (! is_string($url) || trim($url) === '') {
             throw new \LogicException('ColBERT URL is not configured.');
         }
@@ -202,11 +216,7 @@ class HttpAiServiceClient implements AiServiceClient
             $request->withOptions(['curl' => [CURLOPT_QUICK_EXIT => true]]);
         }
 
-        $response = $request->post('/api/v1/rerank', [
-            'query' => $query,
-            'artwork_ids' => $artworkIds,
-            'limit' => $limit,
-        ]);
+        $response = $request->post('/api/v1/rerank', $body);
 
         $data = $response->throw()->json();
         if (! $response->successful()

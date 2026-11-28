@@ -7,7 +7,7 @@ const stages = {
     recent_history: 'История', intent: 'Классификация намерения', query_understanding: 'Структура запроса',
     resolver_context: 'Контекст диалога', resolver: 'Выбор прежних источников',
     normalizer: 'Нормализация', lexical: 'Лексический поиск', dense: 'Dense Search',
-    rrf: 'Объединение RRF', hybrid: 'Hybrid Search', assistant_visibility: 'Доступные изображения',
+    rrf: 'Объединение RRF', colbert: 'Ранжирование ColBERT', hybrid: 'Hybrid Search', assistant_visibility: 'Доступные изображения',
     previous_sources: 'Источники из диалога', rag_pack: 'Подготовка фактов', composer: 'Выбор фактов',
     rag_recheck: 'Проверка источников', final: 'Итоговые карточки',
 }
@@ -18,6 +18,10 @@ const number = value => Number.isFinite(value) ? value.toLocaleString('ru-RU', {
 const execution = value => value === true ? 'Запущен' : value === false ? 'Пропущен' : '—'
 const executed = computed(() => Object.entries(trace?.stages ?? {}).filter(([, details]) => details != null))
 const lexical = computed(() => trace?.stages?.lexical)
+const colbert = computed(() => trace?.stages?.colbert)
+const reranked = computed(() => (trace?.candidates ?? []).filter(row => row.colbert)
+    .sort((left, right) => left.colbert.before - right.colbert.before))
+const ragSources = computed(() => new Set((trace?.rag?.available ?? []).map(row => row.artwork_id)))
 const ranked = computed(() => [...(trace?.candidates ?? [])].filter(row => row.lexical_rank != null || row.dense_rank != null)
     .sort((left, right) => (left.rrf_rank ?? Infinity) - (right.rrf_rank ?? Infinity) || left.artwork_id - right.artwork_id))
 </script>
@@ -103,6 +107,29 @@ const ranked = computed(() => [...(trace?.candidates ?? [])].filter(row => row.l
                                 <td>{{ number(row.dense_rank) }} / {{ number(row.dense_score) }}</td>
                                 <td>{{ number(row.rrf_rank) }} / {{ number(row.rrf_score) }}</td>
                                 <td>{{ row.exclusions?.join(', ') || '—' }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+            <details v-if="colbert" class="space-y-2">
+                <summary class="cursor-pointer font-semibold">Ранжирование ColBERT</summary>
+                <dl class="grid gap-x-4 gap-y-1 sm:grid-cols-[auto_1fr]">
+                    <dt>Стратегия</dt><dd>{{ colbert.strategy }}</dd>
+                    <dt>Глубина</dt><dd>{{ number(colbert.depth) }}</dd>
+                    <dt>Время общее / модели, мс</dt><dd>{{ number(colbert.ms) }} / {{ number(colbert.service_ms) }}</dd>
+                    <dt>Причина fallback</dt><dd>{{ colbert.fallback_reason ?? '—' }}</dd>
+                </dl>
+                <div v-if="reranked.length" class="overflow-x-auto">
+                    <table class="table table-xs w-full">
+                        <thead><tr><th>Работа</th><th>Ранг до / после</th><th>Оценка</th><th>Документ</th><th>Источник RAG</th></tr></thead>
+                        <tbody>
+                            <tr v-for="row in reranked" :key="row.artwork_id">
+                                <th scope="row">#{{ row.artwork_id }}</th>
+                                <td>{{ number(row.colbert.before) }} / {{ number(row.colbert.after) }}</td>
+                                <td>{{ number(row.colbert.score) }}</td>
+                                <td>{{ row.colbert.document }}</td>
+                                <td>{{ trace.rag ? (ragSources.has(row.artwork_id) ? 'Да' : 'Нет') : '—' }}</td>
                             </tr>
                         </tbody>
                     </table>

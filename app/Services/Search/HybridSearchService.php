@@ -18,6 +18,7 @@ class HybridSearchService
     public function __construct(
         private readonly ReciprocalRankFusion $rrf,
         private readonly MetadataLexicalSearch $metadataLexical,
+        private readonly AssistantCandidateReranker $assistantReranker,
     ) {}
 
     /**
@@ -31,6 +32,7 @@ class HybridSearchService
         int $page = 1,
         int $perPage = 20,
         ?Closure $assistantVisibility = null,
+        ?Closure $assistantDocuments = null,
     ): array {
         $trace = AssistantSearchDiagnostics::current();
         $lexicalLimit = config('ai.search.lexical_limit', 50);
@@ -54,7 +56,7 @@ class HybridSearchService
         $semanticIds = [];
         if (config('ai.enabled')) {
             $semanticIds = $this->semanticSearch($query, $filters, $semanticLimit);
-            if (config('ai.rerank_enabled') && $semanticIds !== []) {
+            if ($assistantDocuments === null && config('ai.rerank_enabled') && $semanticIds !== []) {
                 $semanticIds = $this->rerankSemanticResults($query, $semanticIds);
             }
         }
@@ -90,6 +92,12 @@ class HybridSearchService
 
         if (empty($fusedIds)) {
             return ['artworks' => collect(), 'total' => 0];
+        }
+
+        if ($assistantDocuments !== null) {
+            $result = $this->assistantReranker->rerank($query, $fusedIds, $assistantDocuments, config('ai.assistant_colbert_depth'), 'post_rrf');
+            $fusedIds = $result['ids'];
+            $trace?->colbert($result);
         }
 
         $start = $trace ? hrtime(true) : 0;

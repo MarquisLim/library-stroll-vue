@@ -34,6 +34,7 @@ final class AssistantSearchDiagnostics
             'assistant_history_enabled', 'assistant_context_enabled', 'assistant_intent_routing_enabled', 'assistant_debug_enabled', 'rerank_enabled',
             'assistant_query_understanding_enabled',
             'assistant_lexical_metadata_enabled',
+            'assistant_colbert_post_rrf_enabled',
             'colbert_sync.enabled', 'colbert_sync.auto_enabled'];
         $this->data = [
             'schema_version' => 1,
@@ -46,7 +47,7 @@ final class AssistantSearchDiagnostics
             'llm_calls' => array_fill_keys(['intent', 'normalizer', 'resolver', 'composer'], 0),
             'filters' => null,
             'stages' => array_fill_keys(['recent_history', 'intent', 'query_understanding', 'resolver_context', 'resolver', 'normalizer', 'lexical', 'dense',
-                'rrf', 'hybrid', 'assistant_visibility', 'previous_sources', 'rag_pack', 'composer', 'rag_recheck', 'final'], null),
+                'rrf', 'colbert', 'hybrid', 'assistant_visibility', 'previous_sources', 'rag_pack', 'composer', 'rag_recheck', 'final'], null),
             'dense_service' => null,
             'rag' => null,
             'performance' => ['total_ms' => null, 'capture_ms' => null],
@@ -170,6 +171,18 @@ final class AssistantSearchDiagnostics
     public function exclude(int $id, string $reason): void
     {
         $this->candidate($id, ['exclusions' => [...($this->candidates[$id]['exclusions'] ?? []), $reason]]);
+    }
+
+    public function colbert(array $result): void
+    {
+        $this->data['stages']['colbert'] = [
+            ...array_diff_key($result, array_flip(['ids', 'ranks', 'model'])),
+            'count' => count($result['ranks']),
+        ];
+        $this->model('colbert', $result['model']);
+        foreach ($result['ranks'] as $id => $ranks) {
+            $this->candidate($id, ['colbert' => $ranks]);
+        }
     }
 
     public function facts(array $facts, Collection $references, array $snapshots, string $strategy, int $bytes): void

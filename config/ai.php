@@ -45,6 +45,9 @@ return [
 
     'rerank_enabled' => (bool) env('AI_RERANK_ENABLED', false),
     'colbert_url' => env('AI_COLBERT_URL'),
+    'assistant_colbert_post_rrf_enabled' => (bool) env('AI_ASSISTANT_COLBERT_POST_RRF_ENABLED', false),
+    'assistant_colbert_url' => env('AI_ASSISTANT_COLBERT_URL'),
+    'assistant_colbert_depth' => (int) env('AI_ASSISTANT_COLBERT_DEPTH', 20),
     'colbert_timeout' => (float) env('AI_COLBERT_TIMEOUT', 0.5),
     'colbert_sync' => [
         'enabled' => (bool) env('AI_COLBERT_SYNC_ENABLED', false),

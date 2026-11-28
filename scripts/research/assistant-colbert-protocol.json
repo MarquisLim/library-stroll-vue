@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "dense_limit": 50,
+  "lexical_limit": 50,
+  "rrf_k": 60,
+  "rerank_depths": [20, 30, 50],
+  "depth_selection": "Maximize mean reciprocal rank of the first predeclared full match in F at depth 5 on development. In case of a tie use the smaller depth.",
+  "strategies": {
+    "A": "Dense",
+    "B": "Legacy title lexical plus Dense fused with RRF",
+    "C": "Metadata lexical plus Dense fused with RRF",
+    "D": "ColBERT on A",
+    "E": "The same permutation as D, then fused with the identical metadata lexical list from C",
+    "F": "ColBERT on C, before the assistant window"
+  },
+  "repeats": 3,
+  "review_depth": 20,
+  "assistant_window": 20,
+  "rag_window": 5,
+  "binary_relevance_grade": 2,
+  "ndcg_gain": "2^grade - 1",
+  "unknown_policy": "Unknown and unreviewed positions remain unknown. Report coverage and the observed nDCG, Hit, MRR and Recall based on known grades, separately from human judgment. No-known-positive queries are excluded from macro metrics with a positive denominator.",
+  "paired_ci": "Fixed-seed resampling by query, 10000 percentile bootstrap samples.",
+  "pool": "Union of top 20 from all six strategies plus predeclared good and control examples. Present without strategies, ranks, scores or prior labels.",
+  "notes": "The 5.4-1C pool and labels form a separate regression slice. Existing 4.8 outputs are never merged into the main catalog metrics."
+}

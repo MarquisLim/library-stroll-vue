@@ -82,6 +82,29 @@ export function loadQueue() {
     return { pairs, fingerprint: hash(JSON.stringify({ order: pairs.map(pairKey), hashes })) };
 }
 
+export function loadCatalogQueue(directory, split) {
+    if (!['evaluation', 'regression'].includes(split)) throw new Error('Неизвестная очередь каталога.');
+    const queueBytes = readFileSync(join(directory, 'review-queue-' + split + '.json'));
+    const root = realpathSync(join(directory, 'review-images'));
+    const seen = new Set();
+    const verified = new Map();
+    const pairs = JSON.parse(queueBytes).map(({ query_id, artwork_id, query, sha256 }) => {
+        if (!/^(?:G)?[RE]\d{2}$/.test(query_id) || !Number.isSafeInteger(artwork_id) || artwork_id <= 0
+            || !query || typeof query.text !== 'string' || typeof query.criterion !== 'string'
+            || !['ru', 'en'].includes(query.lang) || !/^[0-9a-f]{64}$/.test(sha256)) throw new Error('Некорректная пара в очереди.');
+        const key = pairKey({ query_id, artwork_id });
+        if (seen.has(key)) throw new Error('Повтор пары в очереди.');
+        seen.add(key);
+        const path = realpathSync(join(root, artwork_id + '.jpg'));
+        if (!path.startsWith(root + sep)) throw new Error('Изображение вне каталога.');
+        if (!verified.has(path)) verified.set(path, hash(readFileSync(path)));
+        if (verified.get(path) !== sha256) throw new Error(`Изменилось изображение ${artwork_id}`);
+        return { query_id, artwork_id, query: { text: query.text, lang: query.lang, criterion: query.criterion }, path };
+    });
+    if (!pairs.length) throw new Error('Очередь пуста.');
+    return { pairs, fingerprint: hash(queueBytes) };
+}
+
 class RequestError extends Error {
     constructor(status, message) {
         super(message);
@@ -220,11 +243,19 @@ export function reviewServer({ queue, stateDir, testMode = false }) {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-    const testMode = process.argv[2] === '--test';
-    if (process.argv.length > (testMode ? 3 : 2)) throw new Error('Использование: node server.mjs [--test]');
-    const queue = loadQueue();
-    const stateDir = testMode ? mkdtempSync(join(tmpdir(), 'library-stroll-review-test-')) : workspace;
-    const port = testMode ? 48084 : 48083;
+    const options = process.argv.slice(2);
+    const testMode = options.includes('--test');
+    const catalog = options.includes('--assistant-colbert');
+    const regression = options.includes('--regression');
+    if ((regression && !catalog) || options.some(option => !['--test', '--assistant-colbert', '--regression'].includes(option))) {
+        throw new Error('Использование: node server.mjs [--test] [--assistant-colbert [--regression]]');
+    }
+    const split = regression ? 'regression' : 'evaluation';
+    const catalogDir = join(repo, 'storage/app/ai-stage-05-04/5.4-1d-1');
+    const queue = catalog ? loadCatalogQueue(catalogDir, split) : loadQueue();
+    const stateDir = testMode ? mkdtempSync(join(tmpdir(), 'library-stroll-review-test-'))
+        : (catalog ? join(catalogDir, 'human-review', split) : workspace);
+    const port = catalog ? (regression ? 48087 : 48085) + Number(testMode) : (testMode ? 48084 : 48083);
     reviewServer({ queue, stateDir, testMode }).listen(port, '127.0.0.1', () => {
         console.log(`${testMode ? 'Тестовый режим. ' : ''}Ручная оценка, ${queue.pairs.length} пар. http://127.0.0.1:${port}/`);
     }).on('error', error => {

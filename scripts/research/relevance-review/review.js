@@ -13,7 +13,9 @@ const imageAction = element('image-action');
 const zoom = element('zoom');
 const zoomImage = element('zoom-image');
 const zoomViewport = element('zoom-viewport');
-const storageKey = 'library-stroll-48a31-reviewer';
+const storageKey = ['48083', '48084'].includes(location.port)
+    ? 'library-stroll-48a31-reviewer'
+    : 'library-stroll-reviewer-' + location.port;
 
 let state;
 let busy = false;
@@ -69,6 +71,8 @@ function render(data) {
     element('query').textContent = data.pair.text;
     element('query').lang = data.pair.lang;
     element('language').textContent = data.pair.lang.toUpperCase();
+    element('criterion').textContent = data.pair.criterion ?? '';
+    element('criterion').hidden = !data.pair.criterion;
     element('download').href = '/api/export?reviewer=' + encodeURIComponent(data.reviewer_id);
     if (image.getAttribute('src') !== data.pair.image_url) {
         showImage(false, 'Загрузка изображения…');

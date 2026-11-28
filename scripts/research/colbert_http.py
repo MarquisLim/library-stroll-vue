@@ -13,20 +13,24 @@ from uuid import uuid4
 
 import uvicorn
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Path as PathParam, Request
-from pydantic import BaseModel, Field, StrictInt, StringConstraints, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, StringConstraints, field_validator
 
 from app.schemas.requests import RerankRequest
 from app.schemas.responses import RerankResponse, SearchResultItem
 from colbert_rerank import (
     CANDIDATE_LIMIT,
+    CODE_REVISION,
     MODEL_ID,
     MODEL_REVISION,
+    WEIGHTS_SHA256,
     encode_documents,
     load_inputs,
     load_model,
     prepare_device,
+    read_json,
     rerank,
     runtime_memory,
+    sha256,
 )
 from colbert_state import ABSENT, DocumentRevision, DocumentState, Hash, Version, content_hash
 
@@ -44,6 +48,35 @@ class LocalRerankRequest(RerankRequest):
         if len(set(artwork_ids)) != len(artwork_ids):
             raise ValueError("Candidate IDs must be unique")
         return artwork_ids
+
+
+class CatalogRerankRequest(LocalRerankRequest):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    artwork_ids: list[Annotated[int, Field(gt=0)]] = Field(min_length=1, max_length=50)
+    document_keys: list[Hash] = Field(min_length=1, max_length=50)
+
+
+def load_catalog(directory: Path):
+    manifest = read_json(directory / "documents-manifest.json")
+    path = directory / "documents.json"
+    if (manifest["schema_version"] != 1 or sha256(path) != manifest["documents_sha256"]
+            or path.stat().st_size != manifest["documents_bytes"]):
+        raise ValueError("Frozen catalog checksum mismatch")
+    documents = {}
+    keys = {}
+    for row in read_json(path):
+        artwork_id, text = row["id"], row["text"]
+        digest = content_hash(text)
+        key = content_hash(f'{row["revision"]}:{digest}')
+        if type(artwork_id) is not int or artwork_id <= 0 or artwork_id in documents or not text.strip():
+            raise ValueError("Invalid frozen catalog document")
+        if digest != row["text_sha256"] or key != row["document_key"]:
+            raise ValueError("Frozen catalog document checksum mismatch")
+        documents[artwork_id] = text
+        keys[artwork_id] = key
+    if len(documents) != manifest["document_count"] or len(documents) != 511:
+        raise ValueError("Frozen catalog must contain 511 documents")
+    return documents, keys, manifest["documents_sha256"]
 
 
 ArtworkId = Annotated[int, PathParam(gt=0)]
@@ -149,10 +182,13 @@ def create_app(
     model_path: Path,
     device: str,
     *,
+    frozen_catalog: bool = False,
     dynamic_documents: bool = False,
     state_dir: Path | None = None,
     document_api_key: str | None = None,
 ) -> FastAPI:
+    if frozen_catalog and dynamic_documents:
+        raise ValueError("The frozen catalog cannot enable document mutations")
     if state_dir is not None and not dynamic_documents:
         raise ValueError("state_dir requires dynamic_documents")
     if document_api_key is not None:
@@ -165,7 +201,12 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app):
         started = time.perf_counter()
-        documents, _, candidates = load_inputs(directory)
+        if frozen_catalog:
+            documents, keys, catalog_hash = load_catalog(directory)
+            app.state.catalog_keys = keys
+            candidates = []
+        else:
+            documents, _, candidates = load_inputs(directory)
         base_hashes = {artwork_id: content_hash(text) for artwork_id, text in documents.items()} if dynamic_documents else {}
         store = DocumentState(state_dir, base_hashes) if state_dir is not None else None
         with store.exclusive() if store else nullcontext():
@@ -178,7 +219,7 @@ def create_app(
             candidate_ids = sorted({hit["id"] for row in candidates for hit in row["results"]})
             remaining_ids = sorted(documents.keys() - set(candidate_ids))
             encoding_started = time.perf_counter()
-            document_vectors = encode_documents(model, documents, candidate_ids)
+            document_vectors = encode_documents(model, documents, candidate_ids) if candidate_ids else {}
             if remaining_ids:
                 document_vectors.update(encode_documents(model, documents, remaining_ids))
             encoded_documents = len(documents)
@@ -218,6 +259,15 @@ def create_app(
                 "document_seconds": ready - encoding_started,
                 "startup_seconds": ready - started,
             }
+            if frozen_catalog:
+                app.state.startup.update({
+                    "code_revision": CODE_REVISION,
+                    "weights_sha256": WEIGHTS_SHA256,
+                    "documents_sha256": catalog_hash,
+                    "document_index_bytes": sum(v.numel() * v.element_size() for v in document_vectors.values()),
+                    "startup_memory": runtime_memory(device == "cuda"),
+                    "device": device,
+                })
             yield
 
     app = FastAPI(title="Library Stroll ColBERT research prototype", lifespan=lifespan)
@@ -235,8 +285,7 @@ def create_app(
                 }
         return {**app.state.startup, "memory": runtime_memory(device == "cuda")}
 
-    @app.post("/api/v1/rerank", response_model=RerankResponse)
-    def rerank_candidates(body: LocalRerankRequest) -> RerankResponse:
+    def rank(body: LocalRerankRequest) -> RerankResponse:
         with inference_lock:
             documents = app.state.document_vectors
             if any(artwork_id not in documents for artwork_id in body.artwork_ids):
@@ -256,6 +305,20 @@ def create_app(
             latency_ms=round(elapsed_ms),
         )
 
+    if frozen_catalog:
+        @app.post("/api/v1/rerank", response_model=RerankResponse)
+        def rerank_catalog(body: CatalogRerankRequest):
+            if body.limit != len(body.artwork_ids) or len(body.document_keys) != len(body.artwork_ids):
+                raise HTTPException(status_code=422, detail="A full verified permutation is required")
+            if any(artwork_id not in app.state.catalog_keys for artwork_id in body.artwork_ids):
+                raise HTTPException(status_code=404, detail="Candidate document is absent")
+            if any(not compare_digest(app.state.catalog_keys[artwork_id], key)
+                   for artwork_id, key in zip(body.artwork_ids, body.document_keys, strict=True)):
+                raise HTTPException(status_code=409, detail="Candidate document is stale")
+            return rank(body)
+    else:
+        app.post("/api/v1/rerank", response_model=RerankResponse)(rank)
+
     if dynamic_documents:
         add_document_routes(app, inference_lock, document_api_key)
     return app
@@ -266,6 +329,7 @@ def main():
     parser.add_argument("directory", type=Path)
     parser.add_argument("--model", type=Path, required=True)
     parser.add_argument("--device", choices=("cuda", "cpu"), default="cuda")
+    parser.add_argument("--frozen-catalog", action="store_true", help="Load the verified 511-document manifest")
     parser.add_argument("--port", type=int, default=8001)
     binding = parser.add_mutually_exclusive_group()
     binding.add_argument(
@@ -289,7 +353,7 @@ def main():
             parser.error("Cannot read the ColBERT document API key file")
     try:
         app = create_app(
-            args.directory, args.model, args.device, dynamic_documents=dynamic,
+            args.directory, args.model, args.device, frozen_catalog=args.frozen_catalog, dynamic_documents=dynamic,
             state_dir=args.state_dir, document_api_key=api_key,
         )
     except ValueError as error:
