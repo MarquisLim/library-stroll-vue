@@ -33,6 +33,7 @@ final class AssistantSearchDiagnostics
         $flags = ['enabled', 'assistant_enabled', 'assistant_llm_enabled', 'assistant_rag_enabled',
             'assistant_history_enabled', 'assistant_context_enabled', 'assistant_intent_routing_enabled', 'assistant_debug_enabled', 'rerank_enabled',
             'assistant_query_understanding_enabled',
+            'assistant_lexical_metadata_enabled',
             'colbert_sync.enabled', 'colbert_sync.auto_enabled'];
         $this->data = [
             'schema_version' => 1,
@@ -160,6 +161,7 @@ final class AssistantSearchDiagnostics
 
         $this->candidates[$id] = $fields + ($this->candidates[$id] ?? [
             'artwork_id' => $id, 'dense_score' => null, 'dense_rank' => null, 'lexical_rank' => null,
+            'lexical_score' => null, 'lexical_fields' => [], 'lexical_only' => false,
             'rrf_score' => null, 'rrf_rank' => null, 'hybrid_rank' => null, 'final_rank' => null,
             'retrieved' => false, 'final' => false, 'exclusions' => [],
         ]);

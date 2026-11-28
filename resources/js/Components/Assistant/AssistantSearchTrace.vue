@@ -6,7 +6,7 @@ const { trace } = defineProps({ trace: Object })
 const stages = {
     recent_history: 'История', intent: 'Классификация намерения', query_understanding: 'Структура запроса',
     resolver_context: 'Контекст диалога', resolver: 'Выбор прежних источников',
-    normalizer: 'Нормализация', lexical: 'Лексический поиск по названию', dense: 'Dense Search',
+    normalizer: 'Нормализация', lexical: 'Лексический поиск', dense: 'Dense Search',
     rrf: 'Объединение RRF', hybrid: 'Hybrid Search', assistant_visibility: 'Доступные изображения',
     previous_sources: 'Источники из диалога', rag_pack: 'Подготовка фактов', composer: 'Выбор фактов',
     rag_recheck: 'Проверка источников', final: 'Итоговые карточки',
@@ -17,6 +17,9 @@ const packing = { legacy: 'Стандартная', visual_priority: 'Приор
 const number = value => Number.isFinite(value) ? value.toLocaleString('ru-RU', { maximumFractionDigits: 3 }) : '—'
 const execution = value => value === true ? 'Запущен' : value === false ? 'Пропущен' : '—'
 const executed = computed(() => Object.entries(trace?.stages ?? {}).filter(([, details]) => details != null))
+const lexical = computed(() => trace?.stages?.lexical)
+const ranked = computed(() => [...(trace?.candidates ?? [])].filter(row => row.lexical_rank != null || row.dense_rank != null)
+    .sort((left, right) => (left.rrf_rank ?? Infinity) - (right.rrf_rank ?? Infinity) || left.artwork_id - right.artwork_id))
 </script>
 
 <template>
@@ -74,6 +77,37 @@ const executed = computed(() => Object.entries(trace?.stages ?? {}).filter(([, d
                 Embedding {{ number(trace.dense_service.embedding_ms) }} мс · Qdrant {{ number(trace.dense_service.qdrant_ms) }} мс
                 · Проверка доступности {{ number(trace.dense_service.visibility_ms) }} мс
             </p>
+            <details v-if="lexical?.strategy" class="space-y-2">
+                <summary class="cursor-pointer font-semibold">Лексическая выдача</summary>
+                <dl class="grid gap-x-4 gap-y-1 [overflow-wrap:anywhere] sm:grid-cols-[auto_1fr]">
+                    <dt>Стратегия</dt><dd>{{ lexical.strategy }}</dd>
+                    <dt>Термины</dt><dd>{{ lexical.terms_redacted ? 'Скрыты' : lexical.terms?.join(', ') || '—' }}</dd>
+                    <template v-if="lexical.fallback_reason">
+                        <dt>Запрошенная стратегия</dt><dd>{{ lexical.requested_strategy }}</dd>
+                    </template>
+                    <dt>Причина fallback</dt><dd>{{ lexical.fallback_reason ?? '—' }}</dd>
+                    <template v-if="lexical.scanned_documents != null">
+                        <dt>Проверено работ</dt><dd>{{ lexical.scanned_documents }}</dd>
+                        <dt>Чтение / оценки / доступ, мс</dt><dd>{{ number(lexical.load_ms) }} / {{ number(lexical.score_ms) }} / {{ number(lexical.visibility_ms) }}</dd>
+                        <dt>Исключено из-за доступа или отсутствия файла</dt><dd>{{ lexical.excluded_visibility_or_media }}</dd>
+                    </template>
+                </dl>
+                <div v-if="ranked.length" class="overflow-x-auto">
+                    <table class="table table-xs w-full">
+                        <thead><tr><th>Работа</th><th>Lexical ранг / оценка</th><th>Поля</th><th>Dense ранг / оценка</th><th>RRF ранг / оценка</th><th>Исключения</th></tr></thead>
+                        <tbody>
+                            <tr v-for="row in ranked" :key="row.artwork_id">
+                                <th scope="row">#{{ row.artwork_id }}<span v-if="row.lexical_only" class="block font-normal">Только Lexical</span></th>
+                                <td>{{ number(row.lexical_rank) }} / {{ number(row.lexical_score) }}</td>
+                                <td>{{ Object.entries(row.lexical_fields ?? {}).map(([field, match]) => `${field} (${match})`).join(', ') || '—' }}</td>
+                                <td>{{ number(row.dense_rank) }} / {{ number(row.dense_score) }}</td>
+                                <td>{{ number(row.rrf_rank) }} / {{ number(row.rrf_score) }}</td>
+                                <td>{{ row.exclusions?.join(', ') || '—' }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </details>
             <template v-if="trace.rag?.facts.length">
                 <h3 class="font-semibold">Факты RAG</h3>
                 <ul class="space-y-1 [overflow-wrap:anywhere]">

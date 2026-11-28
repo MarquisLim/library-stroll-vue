@@ -4,6 +4,7 @@ namespace App\Services\Search;
 
 use App\Contracts\AiServiceClient;
 use App\Models\Artwork;
+use Closure;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Collection;
@@ -16,6 +17,7 @@ class HybridSearchService
 
     public function __construct(
         private readonly ReciprocalRankFusion $rrf,
+        private readonly MetadataLexicalSearch $metadataLexical,
     ) {}
 
     /**
@@ -28,6 +30,7 @@ class HybridSearchService
         array $filters = [],
         int $page = 1,
         int $perPage = 20,
+        ?Closure $assistantVisibility = null,
     ): array {
         $trace = AssistantSearchDiagnostics::current();
         $lexicalLimit = config('ai.search.lexical_limit', 50);
@@ -36,13 +39,15 @@ class HybridSearchService
 
         $trace?->used($query);
         $start = $trace ? hrtime(true) : 0;
-        $lexicalIds = $this->lexicalSearch($query, $filters, $lexicalLimit);
+        [$lexicalIds, $lexicalRows, $lexicalDetails] = $this->lexicalCandidates($query, $filters, $lexicalLimit, $assistantVisibility);
         if ($trace) {
             $trace->data['filters'] = ['lexical_and_hybrid' => $filters, 'dense' => null, 'qdrant' => null,
                 'assistant_visibility' => ['public', 'policy_view', 'ai_indexing_enabled', 'available_image']];
-            $trace->stage('lexical', $start, count($lexicalIds), ['match' => 'title_like', 'limit' => $lexicalLimit]);
+            $trace->stage('lexical', $start, count($lexicalIds), ['limit' => $lexicalLimit, ...$lexicalDetails]);
             foreach ($lexicalIds as $rank => $id) {
-                $trace->candidate($id, ['lexical_rank' => $rank + 1]);
+                $row = $lexicalRows[$rank] ?? null;
+                $trace->candidate($id, ['lexical_rank' => $rank + 1,
+                    'lexical_score' => $row['score'] ?? null, 'lexical_fields' => $row['fields'] ?? ['title' => 'phrase']]);
             }
         }
 
@@ -51,6 +56,12 @@ class HybridSearchService
             $semanticIds = $this->semanticSearch($query, $filters, $semanticLimit);
             if (config('ai.rerank_enabled') && $semanticIds !== []) {
                 $semanticIds = $this->rerankSemanticResults($query, $semanticIds);
+            }
+        }
+
+        if ($trace) {
+            foreach (array_diff($lexicalIds, $semanticIds) as $id) {
+                $trace->candidate($id, ['lexical_only' => true]);
             }
         }
 
@@ -82,10 +93,10 @@ class HybridSearchService
         }
 
         $start = $trace ? hrtime(true) : 0;
-        $query_builder = Artwork::publiclyVisible()
-            ->whereIn('id', $fusedIds)
-            ->with(['user', 'media', 'likes', 'tags', 'collections'])
-            ->withCount('likes');
+        $query_builder = Artwork::publiclyVisible()->whereIn('id', $fusedIds);
+        if ($assistantVisibility === null) {
+            $query_builder->with(['user', 'media', 'likes', 'tags', 'collections'])->withCount('likes');
+        }
 
         $this->applyFilters($query_builder, $filters);
 
@@ -99,7 +110,7 @@ class HybridSearchService
         $paged = $sorted->forPage($page, $perPage)->values();
 
         $userId = Auth::id();
-        if ($userId) {
+        if ($userId && $assistantVisibility === null) {
             foreach ($paged as $a) {
                 $a->liked_by_user = $a->likes()->where('user_id', $userId)->exists();
                 $a->in_collections = $a->collections()
@@ -123,6 +134,41 @@ class HybridSearchService
         }
 
         return ['artworks' => $paged, 'total' => $total];
+    }
+
+    private function lexicalCandidates(string $query, array $filters, int $limit, ?Closure $assistantVisibility): array
+    {
+        $details = ['match' => 'title_like', 'strategy' => 'title_like',
+            'requested_strategy' => $assistantVisibility === null ? 'title_like' : MetadataLexicalSearch::STRATEGY,
+            'terms' => [], 'terms_redacted' => false, 'fallback_reason' => null];
+        if ($assistantVisibility !== null) {
+            try {
+                $scope = Artwork::publiclyVisible();
+                $this->applyFilters($scope, $filters);
+                $ranked = $this->metadataLexical->rank($query, $scope);
+                if ($ranked !== null) {
+                    $visibility = hrtime(true);
+                    $ids = collect(array_column($ranked['rows'], 'id'));
+                    $visible = $ids->isEmpty() ? [] : array_fill_keys($assistantVisibility($ids)->all(), true);
+                    $eligible = array_values(array_filter($ranked['rows'], fn ($row) => isset($visible[$row['id']])));
+                    $rows = array_slice($eligible, 0, $limit);
+                    $redacted = AssistantSearchDiagnostics::publicText($query, 2000) !== $query;
+
+                    return [array_column($rows, 'id'), $rows, [...$details, 'match' => MetadataLexicalSearch::STRATEGY,
+                        'strategy' => MetadataLexicalSearch::STRATEGY, 'terms' => $redacted ? [] : $ranked['terms'],
+                        'terms_redacted' => $redacted, 'scanned_documents' => $ranked['documents'],
+                        'load_ms' => $ranked['load_ms'], 'score_ms' => $ranked['score_ms'], 'visibility_ms' => AssistantSearchDiagnostics::ms($visibility),
+                        'excluded_visibility_or_media' => count($ranked['rows']) - count($eligible)]];
+                }
+                $details['fallback_reason'] = 'corpus_limit';
+            } catch (\Throwable $error) {
+                $details['fallback_reason'] = 'metadata_lexical_unavailable';
+                Log::warning('Metadata lexical search unavailable. Using title lookup.', ['exception_type' => $error::class]);
+            }
+            AssistantSearchDiagnostics::current()?->error('lexical', $details['fallback_reason']);
+        }
+
+        return [$this->lexicalSearch($query, $filters, $limit), [], $details];
     }
 
     /**

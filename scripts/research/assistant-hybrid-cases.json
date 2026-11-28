@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "columns": ["id", "language", "category", "query", "visual_criterion", "known_example_ids"],
+  "grading": {"2": "All central visual criteria are visible", "1": "A substantial part of the visual request is visible", "0": "The central subject is absent", "unknown": "The available image does not support a confident decision"},
+  "pool": "Union of the first 15 candidates per strategy and the listed visual examples, displayed in an order independent of rank and strategy. Recall is relative to known positives. Unjudged items contribute zero gain, with coverage reported separately.",
+  "development": [
+    ["D01","ru","object","Тарелка.","A plate or flat serving dish. Deep bowls or vessels are partial.",[419,53,83]],
+    ["D02","ru","animal","Хочу попугая.","Recognizable parrot. An unrelated bird is partial only if recognizably similar.",[294,291,298]],
+    ["D03","ru","background","Картинка с жёлтым фоном.","Yellow occupies the area behind the subject. A yellow object is insufficient.",[292,347,349]],
+    ["D04","ru","objects","Две птицы.","Exactly two recognizable birds. Other counts are partial.",[282,76,286,28]],
+    ["D05","en","style","A black and white photograph.","A photographic image in grayscale. Monochrome nonphotographic works are partial.",[282,353,319]],
+    ["D06","en","object","Find a red flower.","Recognizable red flower. A flower with a different color is partial.",[445,454,466]],
+    ["D07","en","wide","Paintings.","Painted work. Primarily line drawing is partial.",[174,445,419]],
+    ["D08","en","objects","A dragon with wings.","A dragon and visible wings. Wingless dragons are partial.",[506,499,174]]
+  ],
+  "evaluation": [
+    ["R01","ru","object","Плоская сервировочная тарелка для еды","A visible flat plate for serving food, including a plate in a still life. A visibly deep bowl or unrelated vessel is partial only if it functions as tableware.",[419,53,476,83,428]],
+    ["R02","ru","animal","Белая корелла с поднятым хохолком","A white cockatiel with a visible raised crest. Other parrots or a directly similar pale crested bird are partial.",[294]],
+    ["R03","ru","background","Снимок с преимущественно жёлтым фоном","A mostly yellow area behind the photographic subject. A yellow focal object on another background receives no credit for a yellow background.",[292,347,349,344,365,366]],
+    ["R04","ru","objects","Тигр и дракон на японском свитке","Both subjects on the same hanging scroll. One visible subject or an indistinct possible second subject is partial.",[174,180,176,506]],
+    ["R05","ru","wide","Графические наброски и рисунки","Drawn or sketched artworks. Paintings with substantial drawing or prints over linework may be partial.",[39,174,173,178,249]],
+    ["R06","ru","scene","Лодки у берега","Recognizable boats beside a recognizable shore. Watercraft at sea or a shoreline without boats is partial.",[394,397,51,400,408]],
+    ["R07","ru","color","Красный цветок на ветке","A recognizable red flower attached to a stem or branch. Flowers of other colors are partial.",[445,454,457,466,55]],
+    ["R08","ru","complex","Портрет маленького ребёнка с соской","A recognizable child's portrait with a visible pacifier. A child without a pacifier is partial.",[325,321,327,328,94]],
+    ["R09","ru","none","Фотография зебры в космическом скафандре","A recognizable zebra wearing a spacesuit. Only a zebra in a closely related setting can earn partial credit.",[47]],
+    ["E01","en","object","A shallow dish for serving food","A visible shallow plate or serving dish. A visibly deep bowl may be partial.",[419,53,476,83,428]],
+    ["E02","en","animal","Close-up portrait of a crested parrot","A recognizable crested parrot shown close up. Other close-up parrot portraits or a similar crested bird are partial.",[294,293,292]],
+    ["E03","en","background","A portrait with a predominantly yellow backdrop","The backdrop behind the visible portrait subject must be predominantly yellow. A yellow object or multicolored backdrop alone is insufficient.",[292,325,319,347,349]],
+    ["E04","en","objects","Stone arch bridge over a stream","A visible arched stone bridge crossing a stream. A stone bridge or a stream without the conjunction is partial if a meaningful visual component is visible.",[252,235,275]],
+    ["E05","en","style","A black and white repeating pattern","A repeating design in grayscale without strong hue. A color repeat or monochrome graphic without repetition can be partial.",[353,359,310,348]],
+    ["E06","en","complex","A person wearing a cap with a visible beard","A person wearing a cap or hat with a visible beard. A beard without a cap or a cap without a beard is partial.",[323,326,319,322,324,191,320]],
+    ["E07","en","wide","Soft watercolor landscapes","A recognizable landscape with characteristic soft watercolor rendering. Graphic landscapes or watercolor works of another subject are partial.",[249,178,39,385,260,3]],
+    ["E08","en","color","An embroidered blue costume","Visible costume whose substantial area is blue or turquoise with visible embroidery. Blue on a minor piece or embroidered garments of another color are partial.",[212,482,59,480,211,485]],
+    ["E09","en","none","An X-ray of a bicycle inside a volcano","A recognizable bicycle in an X-ray-like view inside a volcano. Only a bicycle or X-ray in a closely related depiction can earn partial credit.",[]]
+  ]
+}
